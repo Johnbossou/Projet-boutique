@@ -3,6 +3,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Models\MouvementStock;
 
 class Produit extends Model
 {
@@ -27,6 +28,11 @@ class Produit extends Model
     public function ligneVentes()
     {
         return $this->hasMany(LigneVente::class);
+    }
+
+    public function mouvementsStock()
+    {
+        return $this->hasMany(MouvementStock::class);
     }
 
     // Méthodes métier importantes

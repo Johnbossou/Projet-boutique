@@ -26,6 +26,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
+import { apiFetch } from '@/lib/api-client';
 import { toast } from 'sonner';
 
 // Types pour les données analytics
@@ -90,33 +91,20 @@ export default function AnalyticsPage() {
   const chargerAnalytics = async () => {
     try {
       setIsLoading(true);
-      const token = localStorage.getItem('auth_token');
 
       // 🎯 TOUS LES APPELS AVEC PÉRIODE DYNAMIQUE
       const [statsResponse, ventesResponse, populairesResponse, categoriesResponse] = await Promise.all([
-        fetch(`http://localhost:8000/api/analytics/stats-globales?periode=${periode}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Accept': 'application/json',
-          },
+        apiFetch(`/analytics/stats-globales?periode=${periode}`, {
+          headers: { 'Accept': 'application/json' }
         }),
-        fetch(`http://localhost:8000/api/analytics/ventes-quotidiennes?periode=${periode}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Accept': 'application/json',
-          },
+        apiFetch(`/analytics/ventes-quotidiennes?periode=${periode}`, {
+          headers: { 'Accept': 'application/json' }
         }),
-        fetch(`http://localhost:8000/api/analytics/produits-populaires?periode=${periode}&limit=5`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Accept': 'application/json',
-          },
+        apiFetch(`/analytics/produits-populaires?periode=${periode}&limit=5`, {
+          headers: { 'Accept': 'application/json' }
         }),
-        fetch(`http://localhost:8000/api/analytics/repartition-categories?periode=${periode}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Accept': 'application/json',
-          },
+        apiFetch(`/analytics/repartition-categories?periode=${periode}`, {
+          headers: { 'Accept': 'application/json' }
         })
       ]);
 
@@ -158,12 +146,8 @@ export default function AnalyticsPage() {
   // 🎯 FONCTION D'EXPORT DES DONNÉES
   const handleExport = async () => {
     try {
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch(`http://localhost:8000/api/analytics/export?periode=${periode}&format=json`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json',
-        },
+      const response = await apiFetch(`/analytics/export?periode=${periode}&format=json`, {
+        headers: { 'Accept': 'application/json' }
       });
       
       if (!response.ok) throw new Error('Erreur lors de l\'export');

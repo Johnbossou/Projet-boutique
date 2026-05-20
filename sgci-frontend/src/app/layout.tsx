@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google';
 import { Toaster } from 'sonner';
 import './globals.css';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { AuthGuard } from '@/components/AuthGuard';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -20,7 +21,7 @@ export default function RootLayout({
     <html lang="fr" className="dark">
       <body className={inter.className}>
         <AuthProvider>
-          {children}
+          <AuthGuard>{children}</AuthGuard>
           {/* 🔥 AJOUT CRITIQUE : Toaster pour les notifications */}
           <Toaster 
             position="top-right"

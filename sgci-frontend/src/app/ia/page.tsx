@@ -24,6 +24,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
+import { apiFetch } from '@/lib/api-client';
 import { toast } from 'sonner';
 
 // Types mis à jour pour correspondre à votre nouveau contrôleur
@@ -126,28 +127,11 @@ export default function IAPage() {
   const chargerDonneesIA = async () => {
     try {
       setIsLoading(true);
-      const token = localStorage.getItem('auth_token');
 
-      // Chargement en parallèle pour meilleures performances
       const [predictionsResponse, promosResponse, metricsResponse] = await Promise.all([
-        fetch('http://localhost:8000/api/ia/predictions-demande', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Accept': 'application/json',
-          },
-        }),
-        fetch('http://localhost:8000/api/ia/recommandations-promotions', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Accept': 'application/json',
-          },
-        }),
-        fetch('http://localhost:8000/api/ia/metrics-performance', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Accept': 'application/json',
-          },
-        })
+        apiFetch('/ia/predictions-demande'),
+        apiFetch('/ia/recommandations-promotions'),
+        apiFetch('/ia/metrics-performance'),
       ]);
 
       if (predictionsResponse.ok) {
@@ -157,7 +141,7 @@ export default function IAPage() {
 
       if (promosResponse.ok) {
         const promosData = await promosResponse.json();
-        setRecommandations(promosData || []);
+        setRecommandations(promosData.recommandations ?? promosData ?? []);
       }
 
       if (metricsResponse.ok) {
@@ -167,44 +151,32 @@ export default function IAPage() {
 
     } catch (error) {
       console.error('Erreur chargement IA:', error);
-      toast.error('Erreur lors du chargement des données IA');
+      toast.error('Erreur lors du chargement des analyses');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // 🎯 ENTRAÎNEMENT RÉEL DU MODÈLE IA
-  const entrainerModeleIA = async () => {
+  const recalculerAnalyses = async () => {
     try {
       setIsTraining(true);
-      toast.info('🧠 Entraînement du modèle IA en cours...');
-      
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch('http://localhost:8000/api/ia/entrainer-modele', {
+      toast.info('Recalcul des analyses en cours...');
+
+      const response = await apiFetch('/ia/recalculer-analyses', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          epochs: 100,
-          test_size: 0.2
-        })
+        body: JSON.stringify({}),
       });
 
       if (response.ok) {
         const result = await response.json();
-        toast.success(`✅ Modèle IA entraîné avec succès! Précision: ${(result.precision * 100).toFixed(1)}%`);
-        
-        // Recharger les données
+        toast.success(result.message || 'Analyses recalculées avec succès');
         await chargerDonneesIA();
       } else {
-        throw new Error('Erreur lors de l\'entraînement');
+        throw new Error('Erreur lors du recalcul');
       }
-
     } catch (error) {
-      console.error('Erreur entraînement:', error);
-      toast.error('Erreur lors de l\'entraînement du modèle');
+      console.error('Erreur recalcul:', error);
+      toast.error('Erreur lors du recalcul des analyses');
     } finally {
       setIsTraining(false);
     }
@@ -492,10 +464,10 @@ export default function IAPage() {
               </div>
               <div>
                 <h1 className="text-xl font-bold text-slate-900 dark:text-white">
-                  Intelligence Artificielle
+                  Assistant stock & promos
                 </h1>
                 <p className="text-sm text-slate-600 dark:text-slate-400">
-                  Prédictions et recommandations intelligentes
+                  Basé sur vos ventes des 7, 30 et 90 derniers jours
                 </p>
               </div>
             </div>
@@ -504,17 +476,17 @@ export default function IAPage() {
           <div className="flex items-center space-x-3">
             <Button 
               variant="outline" 
-              onClick={entrainerModeleIA}
+              onClick={recalculerAnalyses}
               disabled={isTraining}
               className="border-purple-300 text-purple-600 hover:bg-purple-50"
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${isTraining ? 'animate-spin' : ''}`} />
-              {isTraining ? 'Entraînement...' : 'Entraîner IA'}
+              {isTraining ? 'Recalcul...' : 'Recalculer les analyses'}
             </Button>
             
             <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20">
               <Sparkles className="w-3 h-3 mr-1" />
-              {performanceData?.statut_modele?.statut === 'entraine' ? 'IA Entraînée' : 'IA Active'}
+              {performanceData?.statut_modele?.libelle ?? 'Analyses actives'}
             </Badge>
           </div>
         </div>
@@ -534,13 +506,13 @@ export default function IAPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                      Précision IA
+                      Indice stock
                     </p>
                     <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
-                      {performanceData ? `${(performanceData.precision.precision_globale * 100).toFixed(1)}%` : '87.5%'}
+                      {performanceData ? `${(performanceData.precision.precision_globale * 100).toFixed(1)}%` : '—'}
                     </p>
                     <p className="text-xs text-green-500 font-medium mt-1">
-                      {performanceData?.precision.mode === 'algorithmique_avance' ? 'Mode Algorithmique' : 'Mode ML'}
+                      Assistant statistique
                     </p>
                   </div>
                   <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-500 rounded-2xl flex items-center justify-center">
@@ -646,7 +618,7 @@ export default function IAPage() {
             </TabsTrigger>
             <TabsTrigger value="analytics" className="flex items-center space-x-2">
               <BarChart3 className="w-4 h-4" />
-              <span>Analytics IA</span>
+              <span>Indicateurs</span>
             </TabsTrigger>
           </TabsList>
 
@@ -658,7 +630,7 @@ export default function IAPage() {
                   Prédictions de Demande
                 </h2>
                 <p className="text-slate-600 dark:text-slate-400">
-                  Prévisions intelligentes des besoins en stock pour les 7 prochains jours
+                  Estimation des besoins en stock (ventes récentes, pas un modèle ML)
                 </p>
               </div>
               <div className="flex items-center space-x-3">
@@ -875,25 +847,22 @@ export default function IAPage() {
                 {/* Statut du modèle */}
                 {performanceData && (
                   <div className="mt-8 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
-                    <h4 className="font-semibold text-slate-900 dark:text-white mb-2">Statut du Modèle</h4>
+                    <h4 className="font-semibold text-slate-900 dark:text-white mb-2">Statut des analyses</h4>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                       <div>
                         <span className="text-slate-500">Statut:</span>
-                        <Badge className={`ml-2 ${
-                          performanceData.statut_modele.statut === 'entraine' 
-                            ? 'bg-green-100 text-green-800' 
-                            : 'bg-yellow-100 text-yellow-800'
-                        }`}>
-                          {performanceData.statut_modele.statut === 'entraine' ? 'Entraîné' : 'Non entraîné'}
+                        <Badge className="ml-2 bg-green-100 text-green-800">
+                          {performanceData.statut_modele?.libelle ?? 'Analyses à jour'}
                         </Badge>
                       </div>
                       <div>
-                        <span className="text-slate-500">Dernier entraînement:</span>
+                        <span className="text-slate-500">Dernier recalcul:</span>
                         <span className="ml-2 text-slate-900 dark:text-white">
-                          {performanceData.statut_modele.dernier_entrainement 
+                          {performanceData.statut_modele?.dernier_recalcul?.date
+                            ? new Date(performanceData.statut_modele.dernier_recalcul.date).toLocaleDateString()
+                            : performanceData.statut_modele?.dernier_entrainement?.date
                             ? new Date(performanceData.statut_modele.dernier_entrainement.date).toLocaleDateString()
-                            : 'Jamais'
-                          }
+                            : '—'}
                         </span>
                       </div>
                       <div>

@@ -82,6 +82,19 @@ class CategorieController extends Controller
     /**
      * Statistiques des catégories
      */
+    public function produits($id): JsonResponse
+    {
+        $categorie = Categorie::findOrFail($id);
+        $produits = $categorie->produits()->with('categorie')->orderBy('nom')->get();
+
+        return response()->json($produits);
+    }
+
+    public function statistiquesOverview(): JsonResponse
+    {
+        return $this->statistiques();
+    }
+
     public function statistiques(): JsonResponse
     {
         $categories = Categorie::withCount('produits')->get();

@@ -9,6 +9,7 @@ use App\Http\Controllers\API\VenteController;
 use App\Http\Controllers\API\AnalyticsController;
 use App\Http\Controllers\API\AIController;
 use App\Http\Controllers\API\ClientController;
+use App\Http\Controllers\API\MouvementStockController;
 
 /*
 |--------------------------------------------------------------------------
@@ -38,6 +39,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // === AUTHENTIFICATION ===
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
+    Route::put('/me/profile', [AuthController::class, 'updateProfile']);
+    Route::put('/me/password', [AuthController::class, 'updatePassword']);
 
     // Route de test de l'API
     Route::get('/test', function () {
@@ -55,22 +58,29 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/produits/statistiques', [ProduitController::class, 'statistiques']);
     Route::get('/produits/search/{search}', [ProduitController::class, 'search']);
 
+    // === ROUTES MOUVEMENTS DE STOCK ===
+    Route::get('/mouvements-stock/statistiques', [MouvementStockController::class, 'statistiques']);
+    Route::get('/mouvements-stock/export', [MouvementStockController::class, 'export']);
+    Route::post('/mouvements-stock/{mouvement}/valider', [MouvementStockController::class, 'valider']);
+    Route::post('/mouvements-stock/{mouvement}/rejeter', [MouvementStockController::class, 'rejeter']);
+
     // ⚠️ apiResource DOIT ÊTRE APRÈS les routes spécifiques
     Route::apiResource('produits', ProduitController::class);
+    Route::apiResource('mouvements-stock', MouvementStockController::class);
 
     // === ROUTES CATÉGORIES ===
-    Route::apiResource('categories', CategorieController::class);
-    Route::get('/categories/{id}/produits', [CategorieController::class, 'produits']);
     Route::get('/categories/statistiques/overview', [CategorieController::class, 'statistiquesOverview']);
+    Route::get('/categories/{id}/produits', [CategorieController::class, 'produits']);
+    Route::apiResource('categories', CategorieController::class);
 
     // === ROUTES VENTES ===
-    Route::apiResource('ventes', VenteController::class);
+    Route::get('/ventes/aujourdhui/stats', [VenteController::class, 'statsVentesAujourdhui']);
+    Route::get('/ventes/statistiques/general', [VenteController::class, 'statistiques']);
+    Route::post('/ventes/checkout', [VenteController::class, 'checkout']);
     Route::post('/ventes/{vente}/terminer', [VenteController::class, 'terminer']);
     Route::post('/ventes/{vente}/annuler', [VenteController::class, 'annuler']);
-    Route::post('/ventes/checkout', [VenteController::class, 'checkout']);
-    Route::get('/ventes/aujourdhui/stats', [VenteController::class, 'statsVentesAujourdhui']);
     Route::get('/ventes/{vente}/facture', [VenteController::class, 'genererFacture']);
-    Route::get('/ventes/statistiques/general', [VenteController::class, 'statistiques']);
+    Route::apiResource('ventes', VenteController::class);
 
     // === ROUTES ANALYTICS & RAPPORTS ===
     Route::prefix('analytics')->group(function () {
@@ -107,6 +117,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // === ROUTES CLIENTS - MISE À JOUR COMPLÈTE ===
     Route::prefix('clients')->group(function () {
+        // 🎯 CORRECTION CRITIQUE : Routes spécifiques AVANT le pattern générique
+        Route::get('/statistiques/globales', [ClientController::class, 'statistiques']);
+        Route::get('/export/data', [ClientController::class, 'export']);
+        Route::get('/search/advanced', [ClientController::class, 'search']);
+
         // 🔄 ROUTES EXISTANTES AVEC CORRECTIONS
         Route::get('/', [ClientController::class, 'index']);
         Route::post('/', [ClientController::class, 'store']);
@@ -114,15 +129,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/{client}', [ClientController::class, 'update']);
         Route::delete('/{client}', [ClientController::class, 'destroy']);
 
-        // 🎯 CORRECTION CRITIQUE : Endpoint statistiques
-        Route::get('/statistiques/globales', [ClientController::class, 'statistiques']);
-
         // 🆕 NOUVELLES ROUTES POUR LES FONCTIONNALITÉS AVANCÉES
         Route::post('/{client}/promouvoir-vip', [ClientController::class, 'promouvoirVip']);
         Route::post('/{client}/retrograder-vip', [ClientController::class, 'retrograderVip']);
         Route::get('/{client}/commandes', [ClientController::class, 'commandes']);
-        Route::get('/export/data', [ClientController::class, 'export']);
-        Route::get('/search/advanced', [ClientController::class, 'search']);
     });
 
     // === ROUTES POUR L'IA ===
@@ -130,21 +140,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/predictions-demande', [AIController::class, 'predictionsDemande']);
         Route::get('/recommandations-promotions', [AIController::class, 'recommandationsPromotions']);
 
-        // Routes de développement
-        Route::get('/predictions-stock', function () {
-            return response()->json([
-                'message' => 'Module IA en développement',
-                'endpoint' => 'Prédictions des stocks',
-                'status' => 'active'
-            ]);
-        });
-
-        Route::get('/recommandations-promos', function () {
-            return response()->json([
-                'message' => 'Module IA en développement',
-                'endpoint' => 'Recommandations de promotions',
-                'status' => 'active'
-            ]);
-        });
+        // ⬇️ AJOUTEZ CES DEUX ROUTES MANQUANTES ⬇️
+        Route::get('/metrics-performance', [AIController::class, 'metricsPerformance']);
+        Route::post('/entrainer-modele', [AIController::class, 'entrainerModele']);
+        Route::post('/recalculer-analyses', [AIController::class, 'entrainerModele']);
     });
 });

@@ -25,6 +25,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
+import { apiFetch } from '@/lib/api-client';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -77,17 +78,9 @@ export default function Dashboard() {
   const fetchDashboardData = async () => {
     try {
       setIsLoading(true);
-      const token = localStorage.getItem('auth_token');
-
       console.log('🔄 Début du chargement des données...');
 
-      // Récupérer les stats globales
-      const statsResponse = await fetch('http://localhost:8000/api/analytics/stats-globales', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json',
-        },
-      });
+      const statsResponse = await apiFetch('/analytics/stats-globales');
       
       if (!statsResponse.ok) throw new Error('Erreur stats globales');
       const statsData = await statsResponse.json();
@@ -96,12 +89,7 @@ export default function Dashboard() {
 
       // Récupérer les produits en alerte - AVEC GESTION D'ERREUR
       try {
-        const alerteResponse = await fetch('http://localhost:8000/api/produits/alerte-stock', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Accept': 'application/json',
-          },
-        });
+        const alerteResponse = await apiFetch('/produits/alerte-stock');
         
         if (alerteResponse.ok) {
           const alerteData = await alerteResponse.json();
@@ -118,12 +106,7 @@ export default function Dashboard() {
       }
 
       // Récupérer les produits populaires
-      const populairesResponse = await fetch('http://localhost:8000/api/analytics/produits-populaires', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json',
-        },
-      });
+      const populairesResponse = await apiFetch('/analytics/produits-populaires');
       
       if (!populairesResponse.ok) throw new Error('Erreur produits populaires');
       const populairesData = await populairesResponse.json();
@@ -230,7 +213,7 @@ export default function Dashboard() {
               },
               { 
                 icon: Brain, 
-                label: 'Intelligence IA', 
+                label: 'Assistant stock', 
                 active: false,
                 href: '/ia'
               },
@@ -239,6 +222,18 @@ export default function Dashboard() {
                 label: 'Produits', 
                 active: false,
                 href: '/produits'
+              },
+              { 
+                icon: Store, 
+                label: 'Stock', 
+                active: false,
+                href: '/stock'
+              },
+              { 
+                icon: Package, 
+                label: 'Arrivage', 
+                active: false,
+                href: '/arrivage'
               },
               { 
                 icon: ShoppingCart, 
@@ -282,7 +277,7 @@ export default function Dashboard() {
                 <item.icon className="w-5 h-5" />
                 <span className="font-medium">{item.label}</span>
                 
-                {item.label === 'Intelligence IA' && (
+                {item.label === 'Assistant stock' && (
                   <Badge variant="secondary" className="ml-auto bg-purple-500/10 text-purple-600 border-purple-500/20 text-xs">
                     <Sparkles className="w-3 h-3 mr-1" />
                     IA

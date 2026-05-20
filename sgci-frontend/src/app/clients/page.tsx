@@ -31,6 +31,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
+import { apiFetch } from '@/lib/api-client';
 import { toast } from 'sonner';
 
 // Types pour les données clients
@@ -175,11 +176,8 @@ export default function ClientsPage() {
       if (filtreStatut !== 'tous') params.append('statut', filtreStatut);
       params.append('page', page.toString());
       
-      const response = await fetch(`http://localhost:8000/api/clients?${params}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json',
-        },
+      const response = await apiFetch(`/clients?${params}`, {
+        headers: { 'Accept': 'application/json' },
       });
       
       if (!response.ok) throw new Error(`Erreur API: ${response.status}`);
@@ -229,11 +227,8 @@ export default function ClientsPage() {
   const chargerStatistiques = async () => {
     try {
       const token = await getToken();
-      const response = await fetch('http://localhost:8000/api/clients/statistiques/globales', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json',
-        },
+      const response = await apiFetch('/clients/statistiques/globales', {
+        headers: { 'Accept': 'application/json' },
       });
       
       if (response.ok) {
@@ -251,11 +246,8 @@ export default function ClientsPage() {
       setLoadingCommandes(true);
       const token = await getToken();
       
-      const response = await fetch(`http://localhost:8000/api/clients/${clientId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json',
-        },
+      const response = await apiFetch(`/clients/${clientId}`, {
+        headers: { 'Accept': 'application/json' },
       });
       
       if (!response.ok) throw new Error('Erreur chargement détails client');
@@ -340,12 +332,9 @@ export default function ClientsPage() {
       setActionEnCours('creation');
       const token = await getToken();
       
-      const response = await fetch('http://localhost:8000/api/clients', {
+      const response = await apiFetch('/clients', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       });
       
@@ -385,12 +374,9 @@ export default function ClientsPage() {
       setActionEnCours('modification');
       const token = await getToken();
       
-      const response = await fetch(`http://localhost:8000/api/clients/${clientSelectionne.id}`, {
+      const response = await apiFetch(`/clients/${clientSelectionne.id}`, {
         method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       });
       
@@ -431,11 +417,8 @@ export default function ClientsPage() {
       setActionEnCours('suppression');
       const token = await getToken();
       
-      const response = await fetch(`http://localhost:8000/api/clients/${clientSelectionne.id}`, {
+      const response = await apiFetch(`/clients/${clientSelectionne.id}`, {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
       });
       
       if (!response.ok) {
@@ -470,11 +453,8 @@ export default function ClientsPage() {
       setActionEnCours(`promotion-${client.id}`);
       const token = await getToken();
       
-      const response = await fetch(`http://localhost:8000/api/clients/${client.id}/promouvoir-vip`, {
+      const response = await apiFetch(`/clients/${client.id}/promouvoir-vip`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
       });
       
       if (!response.ok) {
@@ -511,11 +491,8 @@ export default function ClientsPage() {
       setActionEnCours(`retrogradation-${client.id}`);
       const token = await getToken();
       
-      const response = await fetch(`http://localhost:8000/api/clients/${client.id}/retrograder-vip`, {
+      const response = await apiFetch(`/clients/${client.id}/retrograder-vip`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
       });
       
       if (!response.ok) {
@@ -556,10 +533,8 @@ export default function ClientsPage() {
       if (recherche) params.append('search', recherche);
       if (filtreStatut !== 'tous') params.append('statut', filtreStatut);
       
-      const response = await fetch(`http://localhost:8000/api/clients/export/data?${params}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+      const response = await apiFetch(`/clients/export/data?${params}`, {
+        headers: { 'Accept': 'application/json' },
       });
       
       if (!response.ok) throw new Error('Erreur export clients');

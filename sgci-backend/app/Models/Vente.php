@@ -11,7 +11,7 @@ class Vente extends Model
     use HasFactory;
 
     protected $fillable = [
-        'numero_vente', 'montant_total', 'tva', 'remise', 'user_id', 'statut', 'notes'
+        'numero_vente', 'montant_total', 'tva', 'remise', 'user_id', 'client_id', 'statut', 'notes',
     ];
 
     protected $casts = [

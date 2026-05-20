@@ -3,7 +3,7 @@ export interface User {
   name: string;
   email: string;
   role: 'gerant' | 'caissier';
-  telephone: string;
+  telephone?: string | null;
   derniere_connexion?: string;
   est_actif: boolean;
 }
@@ -62,6 +62,24 @@ export interface Vente {
   updated_at: string;
   user?: User;
   ligne_ventes?: LigneVente[];
+}
+
+export interface MouvementStock {
+  id: number;
+  produit_id: number;
+  quantite: number;
+  raison: 'arrivage' | 'vente' | 'ajustement' | 'retour' | 'casse';
+  type: 'entrée' | 'sortie';
+  reference_bon?: string | null;
+  user_id: number;
+  statut: 'en_attente' | 'accepté' | 'rejeté';
+  notes?: string | null;
+  quantite_avant?: number;
+  quantite_apres?: number;
+  produit?: Produit;
+  user?: User;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface AnalyticsData {

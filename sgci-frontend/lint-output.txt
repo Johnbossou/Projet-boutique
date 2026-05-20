@@ -1,0 +1,14 @@
+﻿node.exe : npm error code ENOSPC
+Au caractère C:\Program Files\nodejs\npm.ps1:29 : 3
++   & $NODE_EXE $NPM_CLI_JS $args
++   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (npm error code ENOSPC:String) [], 
+    RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+npm error syscall write
+npm error errno -4055
+npm error nospc ENOSPC: no space left on device, write
+npm error nospc There appears to be insufficient space on your system to 
+finish.
+npm error nospc Clear up some disk space and try again.

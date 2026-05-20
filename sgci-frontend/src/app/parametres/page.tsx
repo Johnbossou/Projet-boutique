@@ -33,6 +33,15 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
+import { apiFetch } from '@/lib/api-client';
+import {
+  loadBoutiqueSettings,
+  loadUserPreferences,
+  saveBoutiqueSettings,
+  saveUserPreferences,
+  defaultBoutique,
+  defaultPreferences,
+} from '@/lib/preferences';
 import { toast } from 'sonner';
 
 interface UserProfile {
@@ -65,23 +74,8 @@ export default function ParametresPage() {
     role: ''
   });
 
-  const [boutique, setBoutique] = useState<BoutiqueSettings>({
-    nom: 'SGCI Bénin - Boutique Principale',
-    adresse: 'Cotonou, Bénin',
-    telephone: '+229 01 02 03 04',
-    email: 'contact@sgci.bj',
-    tva: 18,
-    devise: 'FCFA'
-  });
-
-  const [preferences, setPreferences] = useState({
-    notificationsEmail: true,
-    notificationsSMS: false,
-    darkMode: true,
-    autoBackup: true,
-    rapportsAutomatiques: true,
-    alertesStock: true
-  });
+  const [boutique, setBoutique] = useState<BoutiqueSettings>(defaultBoutique);
+  const [preferences, setPreferences] = useState(defaultPreferences);
 
   const [securite, setSecurite] = useState({
     currentPassword: '',
@@ -101,21 +95,35 @@ export default function ParametresPage() {
       setProfile({
         name: user.name,
         email: user.email,
-        telephone: user.telephone,
-        role: user.role
+        telephone: user.telephone ?? '',
+        role: user.role,
       });
     }
+    setBoutique(loadBoutiqueSettings());
+    setPreferences(loadUserPreferences());
   }, [user]);
 
   // 🎯 FONCTIONS DE SAUVEGARDE
   const sauvegarderProfil = async () => {
     setSaving(true);
     try {
-      // Simulation sauvegarde API
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const response = await apiFetch('/me/profile', {
+        method: 'PUT',
+        body: JSON.stringify({
+          name: profile.name,
+          email: profile.email,
+          telephone: profile.telephone,
+        }),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.message || 'Erreur serveur');
+      }
+      const data = await response.json();
+      localStorage.setItem('user_data', JSON.stringify(data.user));
       toast.success('Profil mis à jour avec succès');
     } catch (error) {
-      toast.error('Erreur lors de la sauvegarde');
+      toast.error(error instanceof Error ? error.message : 'Erreur lors de la sauvegarde');
     } finally {
       setSaving(false);
     }
@@ -124,9 +132,9 @@ export default function ParametresPage() {
   const sauvegarderBoutique = async () => {
     setSaving(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      toast.success('Paramètres boutique mis à jour');
-    } catch (error) {
+      saveBoutiqueSettings(boutique);
+      toast.success('Paramètres boutique enregistrés sur cet appareil');
+    } catch {
       toast.error('Erreur lors de la sauvegarde');
     } finally {
       setSaving(false);
@@ -136,9 +144,9 @@ export default function ParametresPage() {
   const sauvegarderPreferences = async () => {
     setSaving(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 800));
-      toast.success('Préférences sauvegardées');
-    } catch (error) {
+      saveUserPreferences(preferences);
+      toast.success('Préférences enregistrées sur cet appareil');
+    } catch {
       toast.error('Erreur lors de la sauvegarde');
     } finally {
       setSaving(false);
@@ -158,16 +166,27 @@ export default function ParametresPage() {
 
     setSaving(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      const response = await apiFetch('/me/password', {
+        method: 'PUT',
+        body: JSON.stringify({
+          current_password: securite.currentPassword,
+          password: securite.newPassword,
+          password_confirmation: securite.confirmPassword,
+        }),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.message || 'Mot de passe non modifié');
+      }
       toast.success('Mot de passe changé avec succès');
-      setSecurite(prev => ({
+      setSecurite((prev) => ({
         ...prev,
         currentPassword: '',
         newPassword: '',
-        confirmPassword: ''
+        confirmPassword: '',
       }));
     } catch (error) {
-      toast.error('Erreur lors du changement de mot de passe');
+      toast.error(error instanceof Error ? error.message : 'Erreur lors du changement de mot de passe');
     } finally {
       setSaving(false);
     }

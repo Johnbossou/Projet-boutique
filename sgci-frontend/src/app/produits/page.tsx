@@ -1,35 +1,36 @@
 'use client';
+/* eslint-disable @next/next/no-img-element */
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import {
   Package,
   Plus,
   Search,
-  Filter,
   Edit,
   Trash2,
   Eye,
-  Upload,
   Image as ImageIcon,
   Tag,
   AlertTriangle,
   BarChart3,
   Grid,
   List,
-  Download,
   Save,
   X,
   ChevronLeft,
   ChevronRight,
-  MoreVertical
+  MoreVertical,
+  TrendingUp
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/AuthContext';
+import { apiFetch } from '@/lib/api-client';
 import { toast } from 'sonner';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -49,6 +50,8 @@ interface Produit {
   est_perissable: boolean;
   unite_mesure: string;
   created_at: string;
+  image_url?: string;
+  images?: string[];
   categorie?: {
     id: number;
     nom: string;
@@ -74,6 +77,42 @@ interface PaginationInfo {
   to: number;
 }
 
+interface Stats {
+  total_produits?: number;
+  produits_en_alerte?: number;
+  produits_en_rupture?: number;
+  valeur_stock_total?: number;
+}
+
+// 🎯 BIBLIOTHÈQUE D'IMAGES PAR DÉFAUT PAR CATÉGORIE
+const defaultImages = {
+  electronique: [
+    "https://images.unsplash.com/photo-1550009158-9ebf69173e03?w=400&h=300&fit=crop",
+    "https://images.unsplash.com/photo-1546868871-7041f2a55e12?w=400&h=300&fit=crop",
+    "https://images.unsplash.com/photo-1565849904461-04a58ad377e0?w=400&h=300&fit=crop"
+  ],
+  alimentation: [
+    "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&h=300&fit=crop",
+    "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=400&h=300&fit=crop",
+    "https://images.unsplash.com/photo-1565958011703-44f9829ba187?w=400&h=300&fit=crop"
+  ],
+  vetements: [
+    "https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?w=400&h=300&fit=crop",
+    "https://images.unsplash.com/photo-1489987707025-afc232f7ea0f?w=400&h=300&fit=crop",
+    "https://images.unsplash.com/photo-1434389677669-e08b4cac3105?w=400&h=300&fit=crop"
+  ],
+  maison: [
+    "https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=400&h=300&fit=crop",
+    "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=400&h=300&fit=crop",
+    "https://images.unsplash.com/photo-1493663284031-b7e3aefcae8e?w=400&h=300&fit=crop"
+  ],
+  default: [
+    "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=400&h=300&fit=crop",
+    "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&h=300&fit=crop",
+    "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400&h=300&fit=crop"
+  ]
+};
+
 export default function ProduitsPage() {
   const { user } = useAuth();
   const [produits, setProduits] = useState<Produit[]>([]);
@@ -92,7 +131,7 @@ export default function ProduitsPage() {
   const [produitToDelete, setProduitToDelete] = useState<Produit | null>(null);
   const [showCategoriesDialog, setShowCategoriesDialog] = useState(false);
   const [showStatsDialog, setShowStatsDialog] = useState(false);
-  const [stats, setStats] = useState<any>(null);
+  const [stats, setStats] = useState<Stats | null>(null);
   const [pagination, setPagination] = useState<PaginationInfo>({
     current_page: 1,
     last_page: 1,
@@ -109,7 +148,9 @@ export default function ProduitsPage() {
     seuil_alerte: '',
     categorie_id: '',
     est_perissable: false,
-    unite_mesure: 'unité'
+    unite_mesure: 'unité',
+    image_url: '',
+    images: [] as string[]
   });
 
   // 🎯 ÉTATS POUR LA GESTION DES CATÉGORIES
@@ -134,15 +175,9 @@ export default function ProduitsPage() {
   }, [recherche]);
 
   // 🎯 CHARGEMENT DES DONNÉES
-  useEffect(() => {
-    chargerDonnees();
-    chargerStats();
-  }, [rechercheTerm, filtreCategorie, filtreStock, pagination.current_page]);
-
-  const chargerDonnees = async () => {
+  const chargerDonnees = useCallback(async () => {
     try {
       setIsLoading(true);
-      const token = localStorage.getItem('auth_token');
 
       // Construction des paramètres
       const params = new URLSearchParams();
@@ -153,51 +188,53 @@ export default function ProduitsPage() {
       if (filtreStock !== 'all') params.append('statut_stock', filtreStock);
 
       // Charger les produits avec pagination
-      const produitsResponse = await fetch(`http://localhost:8000/api/produits?${params}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json',
-        },
+      const produitsResponse = await apiFetch(`/produits?${params}`, {
+        headers: { 'Accept': 'application/json' }
       });
 
       if (!produitsResponse.ok) throw new Error('Erreur lors du chargement des produits');
       
       const produitsData = await produitsResponse.json();
       
-      if (produitsData.data) {
-        setProduits(produitsData.data);
-        setPagination(produitsData);
-      } else {
-        setProduits(produitsData);
+      // 🔄 Gestion des formats de réponse
+      const produitsList = produitsData.data || produitsData;
+      setProduits(Array.isArray(produitsList) ? produitsList : []);
+      
+      // 📄 Pagination
+      if (produitsData.meta) {
+        setPagination({
+          current_page: produitsData.meta.current_page,
+          last_page: produitsData.meta.last_page,
+          per_page: produitsData.meta.per_page,
+          total: produitsData.meta.total,
+          from: produitsData.meta.from,
+          to: produitsData.meta.to
+        });
       }
 
       // Charger les catégories
-      const categoriesResponse = await fetch('http://localhost:8000/api/categories', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json',
-        },
+      const categoriesResponse = await apiFetch('/categories', {
+        headers: { 'Accept': 'application/json' }
       });
 
       if (!categoriesResponse.ok) throw new Error('Erreur lors du chargement des catégories');
       
       const categoriesData = await categoriesResponse.json();
-      setCategories(categoriesData.data || categoriesData);
+      setCategories(Array.isArray(categoriesData) ? categoriesData : (categoriesData.data || []));
 
-    } catch (error) {
-      console.error('Erreur chargement données:', error);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('Erreur chargement données:', message);
       toast.error('Erreur lors du chargement des données');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [rechercheTerm, filtreCategorie, filtreStock, pagination.current_page]);
 
-  const chargerStats = async () => {
+  const chargerStats = useCallback(async () => {
     try {
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch('http://localhost:8000/api/produits/statistiques', {
+      const response = await apiFetch('/produits/statistiques', {
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Accept': 'application/json',
         },
       });
@@ -206,20 +243,19 @@ export default function ProduitsPage() {
         const statsData = await response.json();
         setStats(statsData);
       }
-    } catch (error) {
-      console.error('Erreur chargement stats:', error);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('Erreur chargement stats:', message);
     }
-  };
+  }, []);
 
   // 🎯 GESTION PRODUITS (CRUD)
   const handleCreateProduit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch('http://localhost:8000/api/produits', {
+      const response = await apiFetch('/produits', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
@@ -229,6 +265,8 @@ export default function ProduitsPage() {
           quantite_stock: parseInt(formData.quantite_stock),
           seuil_alerte: parseInt(formData.seuil_alerte),
           categorie_id: parseInt(formData.categorie_id),
+          image_url: formData.image_url || null,
+          images: formData.images
         }),
       });
 
@@ -240,8 +278,9 @@ export default function ProduitsPage() {
       resetForm();
       toast.success('Produit créé avec succès');
       chargerStats();
-    } catch (error) {
-      toast.error('Erreur lors de la création du produit');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Erreur lors de la création du produit';
+      toast.error(message);
     }
   };
 
@@ -250,21 +289,25 @@ export default function ProduitsPage() {
     if (!editingProduit) return;
 
     try {
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch(`http://localhost:8000/api/produits/${editingProduit.id}`, {
+      const payload = {
+        nom: formData.nom,
+        description: formData.description,
+        prix: parseFloat(formData.prix),
+        seuil_alerte: parseInt(formData.seuil_alerte),
+        categorie_id: parseInt(formData.categorie_id),
+        est_perissable: formData.est_perissable,
+        unite_mesure: formData.unite_mesure,
+        image_url: formData.image_url || null,
+        images: formData.images,
+      };
+
+      const response = await apiFetch(`/produits/${editingProduit.id}`, {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        body: JSON.stringify({
-          ...formData,
-          prix: parseFloat(formData.prix),
-          quantite_stock: parseInt(formData.quantite_stock),
-          seuil_alerte: parseInt(formData.seuil_alerte),
-          categorie_id: parseInt(formData.categorie_id),
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) throw new Error('Erreur lors de la modification');
@@ -276,8 +319,9 @@ export default function ProduitsPage() {
       resetForm();
       toast.success('Produit modifié avec succès');
       chargerStats();
-    } catch (error) {
-      toast.error('Erreur lors de la modification du produit');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Erreur lors de la modification du produit';
+      toast.error(message);
     }
   };
 
@@ -285,11 +329,9 @@ export default function ProduitsPage() {
     if (!produitToDelete) return;
 
     try {
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch(`http://localhost:8000/api/produits/${produitToDelete.id}`, {
+      const response = await apiFetch(`/produits/${produitToDelete.id}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Accept': 'application/json',
         },
       });
@@ -301,8 +343,9 @@ export default function ProduitsPage() {
       setProduitToDelete(null);
       toast.success('Produit supprimé avec succès');
       chargerStats();
-    } catch (error) {
-      toast.error('Erreur lors de la suppression du produit');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Erreur lors de la suppression du produit';
+      toast.error(message);
     }
   };
 
@@ -315,7 +358,9 @@ export default function ProduitsPage() {
       seuil_alerte: '',
       categorie_id: '',
       est_perissable: false,
-      unite_mesure: 'unité'
+      unite_mesure: 'unité',
+      image_url: '',
+      images: []
     });
     setEditingProduit(null);
   };
@@ -330,7 +375,9 @@ export default function ProduitsPage() {
       seuil_alerte: produit.seuil_alerte.toString(),
       categorie_id: produit.categorie_id.toString(),
       est_perissable: produit.est_perissable,
-      unite_mesure: produit.unite_mesure
+      unite_mesure: produit.unite_mesure,
+      image_url: produit.image_url || '',
+      images: produit.images || []
     });
     setShowFormDialog(true);
   };
@@ -340,15 +387,48 @@ export default function ProduitsPage() {
     setShowDeleteDialog(true);
   };
 
+  // 🎯 GESTION DES IMAGES
+  const getDefaultImage = (produit: Produit) => {
+    const categorie = categories.find(c => c.id === produit.categorie_id);
+    const categorieNom = categorie?.nom.toLowerCase() || 'default';
+    
+    if (categorieNom.includes('electronique') || categorieNom.includes('tech')) {
+      return defaultImages.electronique[0];
+    } else if (categorieNom.includes('aliment') || categorieNom.includes('nourriture')) {
+      return defaultImages.alimentation[0];
+    } else if (categorieNom.includes('vetement') || categorieNom.includes('habillement')) {
+      return defaultImages.vetements[0];
+    } else if (categorieNom.includes('maison') || categorieNom.includes('décoration')) {
+      return defaultImages.maison[0];
+    } else {
+      return defaultImages.default[0];
+    }
+  };
+
+  const addImageUrl = () => {
+    if (formData.image_url.trim()) {
+      setFormData(prev => ({
+        ...prev,
+        images: [...prev.images, prev.image_url.trim()],
+        image_url: ''
+      }));
+    }
+  };
+
+  const removeImage = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      images: prev.images.filter((_, i) => i !== index)
+    }));
+  };
+
   // 🎯 GESTION CATÉGORIES (CRUD)
   const handleCreateCategorie = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch('http://localhost:8000/api/categories', {
+      const response = await apiFetch('/categories', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
@@ -375,11 +455,9 @@ export default function ProduitsPage() {
     if (!editingCategorie) return;
 
     try {
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch(`http://localhost:8000/api/categories/${editingCategorie.id}`, {
+      const response = await apiFetch(`/categories/${editingCategorie.id}`, {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
@@ -408,11 +486,9 @@ export default function ProduitsPage() {
     if (!categorieToDelete) return;
 
     try {
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch(`http://localhost:8000/api/categories/${categorieToDelete.id}`, {
+      const response = await apiFetch(`/categories/${categorieToDelete.id}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Accept': 'application/json',
         },
       });
@@ -458,6 +534,74 @@ export default function ProduitsPage() {
     return new Intl.NumberFormat('fr-FR').format(prix) + ' FCFA';
   };
 
+  // 🎯 COMPOSANT IMAGE AVEC FALLBACK
+  const ProductImage = ({ produit, className = "w-full h-full object-cover" }: { produit: Produit; className?: string }) => {
+    const [imageError, setImageError] = useState(false);
+    const [currentImageIndex, setCurrentImageIndex] = useState(0);
+    
+    const images = produit.images && produit.images.length > 0 
+      ? produit.images 
+      : produit.image_url 
+        ? [produit.image_url] 
+        : [getDefaultImage(produit)];
+
+    const currentImage = images[currentImageIndex];
+
+    if (imageError) {
+      return (
+        <div className={`${className} bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center`}>
+          <div className="text-center">
+            <ImageIcon className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+            <span className="text-xs text-slate-500">Image non disponible</span>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="relative group">
+        <img 
+          src={currentImage} 
+          alt={produit.nom}
+          className={className}
+          onError={() => setImageError(true)}
+        />
+        {images.length > 1 && (
+          <>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
+              }}
+              className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setCurrentImageIndex((prev) => (prev + 1) % images.length);
+              }}
+              className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+            <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex space-x-1">
+              {images.map((_, index) => (
+                <div
+                  key={index}
+                  className={`w-2 h-2 rounded-full ${
+                    index === currentImageIndex ? 'bg-white' : 'bg-white/50'
+                  }`}
+                />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    );
+  };
+
   // 🎯 COMPOSANT CARD PRODUIT GRID
   const ProductCard = ({ produit, index }: { produit: Produit; index: number }) => {
     const statut = getStatutStock(produit);
@@ -474,13 +618,8 @@ export default function ProduitsPage() {
         <Card className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm border-slate-200/50 dark:border-slate-700/50 hover:shadow-2xl transition-all duration-300 overflow-hidden">
           {/* Header avec image et statut */}
           <div className="relative">
-            <div className="h-48 bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center group-hover:from-blue-500/30 group-hover:to-purple-500/30 transition-all duration-300">
-              <div className="text-center">
-                <Package className="w-16 h-16 text-slate-400 group-hover:text-blue-500 transition-colors duration-300" />
-                <div className="mt-2 text-sm text-slate-500 group-hover:text-slate-700 dark:group-hover:text-slate-300">
-                  {produit.unite_mesure}
-                </div>
-              </div>
+            <div className="h-48 overflow-hidden">
+              <ProductImage produit={produit} />
             </div>
             
             {/* Badge Statut */}
@@ -516,6 +655,12 @@ export default function ProduitsPage() {
                   }}>
                     <Eye className="w-4 h-4 mr-2" />
                     Voir détails
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href={`/arrivage?produit_id=${produit.id}`} className="cursor-pointer">
+                      <TrendingUp className="w-4 h-4 mr-2" />
+                      Ajouter arrivage
+                    </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => openEditDialog(produit)}>
                     <Edit className="w-4 h-4 mr-2" />
@@ -603,8 +748,8 @@ export default function ProduitsPage() {
       >
         <td className="px-6 py-4">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-lg flex items-center justify-center">
-              <Package className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+            <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0">
+              <ProductImage produit={produit} className="w-10 h-10 object-cover" />
             </div>
             <div>
               <div className="font-semibold text-slate-900 dark:text-white group-hover:text-blue-600 transition-colors">
@@ -664,6 +809,15 @@ export default function ProduitsPage() {
             >
               <Eye className="w-3 h-3" />
             </Button>
+            <Link href={`/arrivage?produit_id=${produit.id}`}>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-green-600 hover:text-green-700"
+              >
+                <TrendingUp className="w-3 h-3" />
+              </Button>
+            </Link>
             <Button 
               variant="ghost" 
               size="icon" 
@@ -727,19 +881,121 @@ export default function ProduitsPage() {
           />
         </div>
 
-        <div className="grid grid-cols-3 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="quantite_stock">Quantité en stock *</Label>
-            <Input
-              id="quantite_stock"
-              type="number"
-              min="0"
-              value={formData.quantite_stock}
-              onChange={(e) => setFormData(prev => ({ ...prev, quantite_stock: e.target.value }))}
-              placeholder="0"
-              required
-            />
+        {/* 🎯 SECTION IMAGES */}
+        <div className="space-y-4">
+          <Label>Images du produit</Label>
+          
+          {/* Aperçu des images existantes */}
+          {formData.images.length > 0 && (
+            <div className="grid grid-cols-3 gap-2">
+              {formData.images.map((url, index) => (
+                <div key={index} className="relative group">
+                  <img 
+                    src={url} 
+                    alt={`Preview ${index + 1}`}
+                    className="w-full h-20 object-cover rounded-lg"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeImage(index)}
+                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Champ URL d'image */}
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <Input
+                value={formData.image_url}
+                onChange={(e) => setFormData(prev => ({ ...prev, image_url: e.target.value }))}
+                placeholder="https://example.com/image.jpg"
+                type="url"
+              />
+            </div>
+            <Button type="button" onClick={addImageUrl} variant="outline">
+              <Link className="w-4 h-4 mr-2" />
+              Ajouter
+            </Button>
           </div>
+          <p className="text-xs text-slate-500">
+            Collez l'URL d'une image existante sur le web. Vous pouvez ajouter plusieurs images.
+          </p>
+
+          {/* Suggestions d'images par défaut */}
+          <div className="space-y-2">
+            <Label className="text-sm">Images suggérées par catégorie</Label>
+            <div className="grid grid-cols-3 gap-2">
+              {formData.categorie_id && (() => {
+                const categorie = categories.find(c => c.id === parseInt(formData.categorie_id));
+                const categorieNom = categorie?.nom.toLowerCase() || 'default';
+                let suggestedImages = defaultImages.default;
+
+                if (categorieNom.includes('electronique') || categorieNom.includes('tech')) {
+                  suggestedImages = defaultImages.electronique;
+                } else if (categorieNom.includes('aliment') || categorieNom.includes('nourriture')) {
+                  suggestedImages = defaultImages.alimentation;
+                } else if (categorieNom.includes('vetement') || categorieNom.includes('habillement')) {
+                  suggestedImages = defaultImages.vetements;
+                } else if (categorieNom.includes('maison') || categorieNom.includes('décoration')) {
+                  suggestedImages = defaultImages.maison;
+                }
+
+                return suggestedImages.map((url, index) => (
+                  <button
+                    key={index}
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, images: [...prev.images, url] }))}
+                    className="relative group"
+                  >
+                    <img 
+                      src={url} 
+                      alt={`Suggestion ${index + 1}`}
+                      className="w-full h-16 object-cover rounded-lg border-2 border-transparent hover:border-blue-500 transition-colors"
+                    />
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+                      <Plus className="w-4 h-4 text-white" />
+                    </div>
+                  </button>
+                ));
+              })()}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-4">
+          {!editingProduit ? (
+            <div className="space-y-2">
+              <Label htmlFor="quantite_stock">Quantité en stock *</Label>
+              <Input
+                id="quantite_stock"
+                type="number"
+                min="0"
+                value={formData.quantite_stock}
+                onChange={(e) => setFormData(prev => ({ ...prev, quantite_stock: e.target.value }))}
+                placeholder="0"
+                required
+              />
+            </div>
+          ) : (
+            <div className="col-span-3 rounded-xl border border-dashed border-slate-300 p-4 bg-slate-50 dark:bg-slate-900">
+              <p className="text-sm text-slate-700 dark:text-slate-300">
+                Le stock est géré via les mouvements d&apos;arrivage et de vente.
+                Pour ajuster la quantité, utilisez la page d&apos;arrivage dédiée.
+              </p>
+              <Button
+                className="mt-3"
+                variant="secondary"
+                onClick={() => window.location.href = '/arrivage'}
+              >
+                Ouvrir la page Arrivage
+              </Button>
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="seuil_alerte">Seuil d'alerte *</Label>
             <Input
@@ -1220,7 +1476,7 @@ export default function ProduitsPage() {
         setShowFormDialog(open);
         if (!open) resetForm();
       }}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingProduit ? 'Modifier le produit' : 'Ajouter un nouveau produit'}
@@ -1251,9 +1507,23 @@ export default function ProduitsPage() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Image et Métriques */}
                 <div className="space-y-4">
-                  <div className="h-64 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-xl flex items-center justify-center">
-                    <Package className="w-16 h-16 text-slate-400" />
+                  <div className="h-64 rounded-xl overflow-hidden">
+                    <ProductImage produit={produitSelectionne} className="w-full h-64" />
                   </div>
+                  
+                  {/* Miniatures si plusieurs images */}
+                  {produitSelectionne.images && produitSelectionne.images.length > 1 && (
+                    <div className="grid grid-cols-3 gap-2">
+                      {produitSelectionne.images.map((url, index) => (
+                        <img 
+                          key={index}
+                          src={url} 
+                          alt={`${produitSelectionne.nom} ${index + 1}`}
+                          className="w-full h-16 object-cover rounded-lg cursor-pointer border-2 border-transparent hover:border-blue-500 transition-colors"
+                        />
+                      ))}
+                    </div>
+                  )}
                   
                   <div className="grid grid-cols-2 gap-4">
                     {[
@@ -1406,7 +1676,7 @@ export default function ProduitsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog Gestion Catégories - MIS À JOUR */}
+      {/* Dialog Gestion Catégories */}
       <Dialog open={showCategoriesDialog} onOpenChange={setShowCategoriesDialog}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
@@ -1539,7 +1809,7 @@ export default function ProduitsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog Formulaire Catégorie - NOUVEAU */}
+      {/* Dialog Formulaire Catégorie */}
       <Dialog open={showCategorieForm} onOpenChange={(open) => {
         setShowCategorieForm(open);
         if (!open) resetCategorieForm();
@@ -1662,7 +1932,7 @@ export default function ProduitsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog Confirmation Suppression Catégorie - NOUVEAU */}
+      {/* Dialog Confirmation Suppression Catégorie */}
       <Dialog open={showDeleteCategorieDialog} onOpenChange={setShowDeleteCategorieDialog}>
         <DialogContent>
           <DialogHeader>

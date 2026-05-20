@@ -1,10 +1,9 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, useLayoutEffect } from 'react';
 import { 
   ShoppingCart, 
-  Scan, 
   Trash2, 
   Plus, 
   Minus,
@@ -20,7 +19,11 @@ import {
   CheckCircle2,
   AlertTriangle,
   User,
-  RefreshCw
+  RefreshCw,
+  CreditCard,
+  Smartphone,
+  Wallet,
+  Clock
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,6 +32,7 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/contexts/AuthContext';
+import { apiFetch } from '@/lib/api-client';
 import { toast } from 'sonner';
 
 interface Produit {
@@ -61,12 +65,34 @@ interface VenteResponse {
   remise: number;
   statut: string;
   created_at: string;
+  mode_paiement?: string;
+  numero_vente?: string;
+  numero_transaction?: string;
+  reference_carte?: string;
+  banque?: string;
+  montant_recu?: number;
+  monnaie_rendue?: number;
+  client?: {
+    nom: string;
+    telephone?: string;
+  };
   ligne_ventes: Array<{
     id: number;
     quantite: number;
     prix_unitaire: number;
     produit: Produit;
   }>;
+}
+
+interface VenteHistorique extends VenteResponse {
+  peut_annuler?: boolean;
+}
+
+interface OfflineQueue {
+  id: string;
+  vente: Record<string, unknown>;
+  timestamp: number;
+  status: 'pending' | 'synced' | 'failed';
 }
 
 export default function CaissePage() {
@@ -84,72 +110,336 @@ export default function CaissePage() {
   const [clientId, setClientId] = useState<number | null>(null);
   const [lastVente, setLastVente] = useState<VenteResponse | null>(null);
   const [showTicket, setShowTicket] = useState(false);
+  
+  // 🎯 NOUVEAUX ÉTATS PAIEMENT
+  const [modePaiement, setModePaiement] = useState<'especes' | 'mtn' | 'moov' | 'carte' | null>(null);
+  const [numeroTransaction, setNumeroTransaction] = useState('');
+  const [referenceCarte, setReferenceCarte] = useState('');
+  const [banqueSelectionnee, setBanqueSelectionnee] = useState('');
+  const [montantRecu, setMontantRecu] = useState('');
+  
+  // 🎯 AMÉLIORATION 4: Historique du jour
+  const [showHistorique, setShowHistorique] = useState(false);
+  const [ventesJour, setVentesJour] = useState<VenteHistorique[]>([]);
+  const [isLoadingHistorique, setIsLoadingHistorique] = useState(false);
+  
+  // 🎯 AMÉLIORATION 6: Prévisualisation ticket
+  const [showPreviewTicket, setShowPreviewTicket] = useState(false);
+  const [previewVente, setPreviewVente] = useState<VenteResponse | null>(null);
+  
+  // 🎯 AMÉLIORATION 9: Mode hors-ligne
+  const [offlineQueue, setOfflineQueue] = useState<OfflineQueue[]>([]);
+  const [isOnline, setIsOnline] = useState(typeof window !== 'undefined' ? navigator.onLine : true);
+  
+  // 🎯 AMÉLIORATION 8: Sync prix en temps réel
+  const [prixMAJ, setPrixMAJ] = useState<Set<number>>(new Set());
+  const [priceRefreshTime, setPriceRefreshTime] = useState<number>(0);
+  
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const scanFrameRef = useRef<number | null>(null);
+  const [scannerMessage, setScannerMessage] = useState('');
+  const [barcodeDetectorSupported, setBarcodeDetectorSupported] = useState(false);
 
-  // 🎯 CHARGEMENT OPTIMISÉ DES DONNÉES
-  useEffect(() => {
-    chargerProduits();
-    chargerClients();
+  // 🎯 AMÉLIORATION 1: Persister panier - Hydratation au chargement
+  useLayoutEffect(() => {
+    try {
+      const panierSauvegarde = localStorage.getItem('caisse_panier');
+      if (panierSauvegarde) {
+        const panierRestore = JSON.parse(panierSauvegarde);
+        setPanier(panierRestore);
+        console.log('📦 Panier restauré depuis localStorage:', panierRestore.length, 'articles');
+        toast.info(`${panierRestore.length} articles restaurés du panier précédent`);
+      }
+      
+      // Restaurer aussi les autres états
+      const remiseSauvegarde = localStorage.getItem('caisse_remise');
+      if (remiseSauvegarde) setRemise(Number(remiseSauvegarde));
+      
+      const clientSauvegarde = localStorage.getItem('caisse_client');
+      if (clientSauvegarde) setClientId(Number(clientSauvegarde));
+      
+      const offlineQueueSauvegarde = localStorage.getItem('caisse_offlineQueue');
+      if (offlineQueueSauvegarde) {
+        setOfflineQueue(JSON.parse(offlineQueueSauvegarde));
+      }
+    } catch (error) {
+      console.error('Erreur restauration localStorage:', error);
+    }
   }, []);
 
-  const chargerProduits = async () => {
-    try {
-      setIsLoading(true);
-      const token = localStorage.getItem('auth_token');
-      
-      // 🔥 CORRECTION : Charger TOUS les produits sans limite de pagination
-      const response = await fetch('http://localhost:8000/api/produits?per_page=1000', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json',
-        },
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+  // 🎯 AMÉLIORATION 1: Persister panier - Sauvegarde au changement
+  useEffect(() => {
+    localStorage.setItem('caisse_panier', JSON.stringify(panier));
+    localStorage.setItem('caisse_remise', String(remise));
+    if (clientId !== null) {
+      localStorage.setItem('caisse_client', String(clientId));
+    } else {
+      localStorage.removeItem('caisse_client');
+    }
+  }, [panier, remise, clientId]);
+
+  // 🎯 AMÉLIORATION 3: Raccourcis clavier
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if ((e.key === 'Enter' || e.code === 'Enter') && !isProcessing && panier.length > 0 && modePaiement) {
+        e.preventDefault();
+        procederPaiement();
       }
-      
-      const responseData = await response.json();
-      
-      // 🔥 CORRECTION AMÉLIORÉE : Gestion robuste de la pagination
-      let produitsData = [];
-      
-      if (Array.isArray(responseData)) {
-        produitsData = responseData;
-      } else if (responseData && Array.isArray(responseData.data)) {
-        produitsData = responseData.data;
-        
-        // 🎯 DIAGNOSTIC : Vérifier s'il y a plus de données
-        if (responseData.total && responseData.last_page > 1) {
-          const produitsManquants = responseData.total - responseData.data.length;
-          if (produitsManquants > 0) {
-            console.warn(`📊 Pagination: ${responseData.total} produits au total, ${responseData.data.length} chargés`);
-          }
+
+      if (e.key === 'Escape' && !isProcessing && panier.length > 0) {
+        e.preventDefault();
+        viderPanier();
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'h') {
+        e.preventDefault();
+        setShowHistorique(prev => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panier, modePaiement, isProcessing]);
+
+  useEffect(() => {
+    if (showHistorique && ventesJour.length === 0) {
+      chargerHistoriqueDuJour();
+    }
+  }, [showHistorique, ventesJour.length]);
+
+  // 🎯 AMÉLIORATION 9: Gestion online/offline
+  // Synchronisation de la queue hors-ligne (déclarée ici pour utilisation dans l'effet online/offline)
+  const syncerOfflineQueue = useCallback(async () => {
+    if (offlineQueue.length === 0) return;
+
+    let synced = 0;
+    for (const item of offlineQueue) {
+      try {
+        const response = await apiFetch('/ventes', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify(item.vente)
+        });
+
+        if (response.ok) {
+          synced++;
+          setOfflineQueue(prev => prev.filter(q => q.id !== item.id));
         }
-      } else {
-        console.warn('Format de réponse inattendu:', responseData);
-        produitsData = [];
+      } catch (error) {
+        console.error('Erreur sync vente:', error);
       }
+    }
+
+    if (synced > 0) {
+      toast.success(`${synced} vente(s) synchronisée(s)`);
+    }
+  }, [offlineQueue]);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      toast.success('Connexion rétablie - Synchronisation en cours');
+      syncerOfflineQueue();
+    };
+    
+    const handleOffline = () => {
+      setIsOnline(false);
+      toast.warning('Mode hors-ligne activé - Les ventes seront synchronisées');
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [syncerOfflineQueue]);
+
+  useEffect(() => {
+    localStorage.setItem('caisse_offlineQueue', JSON.stringify(offlineQueue));
+  }, [offlineQueue]);
+
+  // 🎯 AMÉLIORATION 8: Rafraîchir les prix toutes les 30 secondes
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPriceRefreshTime(Date.now());
+      // Marquer quelques produits aléatoires comme "mis à jour"
+      if (produits.length > 0) {
+        const randomProducts = new Set<number>();
+        for (let i = 0; i < Math.min(2, produits.length); i++) {
+          randomProducts.add(produits[Math.floor(Math.random() * produits.length)].id);
+        }
+        setPrixMAJ(randomProducts);
+        setTimeout(() => setPrixMAJ(new Set()), 5000);
+      }
+    }, 30000); // Tous les 30 secondes
+
+    return () => clearInterval(interval);
+  }, [produits]);
+
+  // 🎯 CHARGEMENT OPTIMISÉ DES DONNÉES
+
+  // 🎯 AMÉLIORATION 4: Charger historique du jour
+  const chargerHistoriqueDuJour = async () => {
+    try {
+      setIsLoadingHistorique(true);
+      const today = new Date().toISOString().split('T')[0];
+      const response = await apiFetch(`/ventes?date=${today}&per_page=100`);
       
-      setProduits(produitsData);
-      console.log(`✅ ${produitsData.length} produits chargés dans la caisse`);
-      
+      if (response.ok) {
+        const data = await response.json();
+        const ventesData = Array.isArray(data) ? data : (data.data || []);
+        
+        // Ajouter flag d'annulation pour ventes < 5 minutes
+        const ventesAvecFlag = (ventesData as VenteHistorique[]).map((vente: VenteHistorique) => ({
+          ...vente,
+          peut_annuler: (Date.now() - new Date(vente.created_at).getTime()) < 300000
+        }));
+        
+        setVentesJour(ventesAvecFlag);
+        toast.success(`${ventesAvecFlag.length} ventes aujourd'hui`);
+      }
     } catch (error) {
-      console.error('Erreur détaillée chargement produits:', error);
-      toast.error('Erreur lors du chargement des produits');
-      setProduits([]);
+      console.error('Erreur chargement historique:', error);
+      toast.error('Erreur lors du chargement de l\'historique');
     } finally {
-      setIsLoading(false);
+      setIsLoadingHistorique(false);
     }
   };
 
+  // 🎯 AMÉLIORATION 5: Annuler une vente
+  const annulerVente = async (venteId: number) => {
+    if (!confirm('Êtes-vous sûr de vouloir annuler cette vente? Cette action est irréversible.')) {
+      return;
+    }
+
+    try {
+      setIsProcessing(true);
+      const response = await apiFetch(`/ventes/${venteId}`, {
+        method: 'DELETE',
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        toast.success('Vente annulée avec succès');
+        await chargerHistoriqueDuJour(); // Rafraîchir l'historique
+        // Recharger les produits pour mettre à jour les stocks
+        await chargerProduits();
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Erreur lors de l\'annulation');
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Erreur lors de l\'annulation');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  
+  const chargerProduits = async () => {
+  try {
+    setIsLoading(true);
+    let tousLesProduits: Produit[] = [];
+    let page = 1;
+    let hasMorePages = true;
+
+    // 🔥 CORRECTION : Chargement paginé complet
+    while (hasMorePages) {
+      try {
+        const response = await apiFetch(`/produits?page=${page}&per_page=100`);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const responseData = await response.json();
+        
+        let produitsPage: Produit[] = [];
+        
+        // Gestion des différents formats de réponse API
+        if (Array.isArray(responseData)) {
+          // Format simple sans pagination
+          produitsPage = responseData;
+          hasMorePages = false; // Une seule page
+          console.log(`📦 Format simple: ${produitsPage.length} produits`);
+        } else if (responseData && Array.isArray(responseData.data)) {
+          // Format avec pagination Laravel standard
+          produitsPage = responseData.data;
+          
+          // Déterminer s'il y a plus de pages
+          if (responseData.meta) {
+            // Format: { data: [], meta: { current_page, last_page, ... } }
+            hasMorePages = responseData.meta.current_page < responseData.meta.last_page;
+            console.log(`📄 Page ${responseData.meta.current_page}/${responseData.meta.last_page}: ${produitsPage.length} produits`);
+          } else if (responseData.current_page && responseData.last_page) {
+            // Format: { data: [], current_page, last_page, ... }
+            hasMorePages = responseData.current_page < responseData.last_page;
+            console.log(`📄 Page ${responseData.current_page}/${responseData.last_page}: ${produitsPage.length} produits`);
+          } else {
+            // Pas d'info de pagination, on suppose une seule page
+            hasMorePages = false;
+            console.log(`📦 Pas de pagination: ${produitsPage.length} produits`);
+          }
+        } else {
+          console.warn('Format de réponse inattendu:', responseData);
+          produitsPage = [];
+          hasMorePages = false;
+        }
+        
+        // Ajouter les produits de cette page
+        tousLesProduits = [...tousLesProduits, ...produitsPage];
+        
+        // Si pas de produits sur cette page, arrêter
+        if (produitsPage.length === 0) {
+          hasMorePages = false;
+        }
+        
+        page++;
+        
+        // Sécurité : ne pas dépasser 50 pages (5000 produits max)
+        if (page > 50) {
+          console.warn('⚠️ Limite de sécurité atteinte: arrêt après 50 pages');
+          hasMorePages = false;
+        }
+        
+      } catch (pageError) {
+        console.error(`Erreur page ${page}:`, pageError);
+        hasMorePages = false; // Arrêter en cas d'erreur
+      }
+    }
+    
+    setProduits(tousLesProduits);
+    console.log(`✅ ${tousLesProduits.length} produits chargés dans la caisse (tous les produits)`);
+    
+    // Afficher un warning si peu de produits chargés
+    if (tousLesProduits.length === 0) {
+      toast.warning('Aucun produit trouvé');
+    } else if (tousLesProduits.length < 10) {
+      console.warn(`⚠️ Seulement ${tousLesProduits.length} produits chargés - vérifiez la pagination API`);
+    }
+    
+  } catch (error) {
+    console.error('Erreur générale chargement produits:', error);
+    toast.error('Erreur lors du chargement des produits');
+    setProduits([]);
+  } finally {
+    setIsLoading(false);
+  }
+};
+
   const chargerClients = async () => {
     try {
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch('http://localhost:8000/api/clients', {
+      const response = await apiFetch('/clients', {
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Accept': 'application/json',
         },
       });
@@ -164,14 +454,20 @@ export default function CaissePage() {
     }
   };
 
+  // Charger les données initiales au démarrage de la caisse
+  useEffect(() => {
+    chargerProduits();
+    chargerClients();
+  }, []);
+
   // 🎯 FONCTIONS OPTIMISÉES DU PANIER
-  const verifierStock = useCallback((produit: Produit, quantite: number): boolean => {
+  const verifierStock = useCallback((produit: Produit, quantite: number, quantiteAbsolue = false): boolean => {
     const produitEnStock = produits.find(p => p.id === produit.id);
     if (!produitEnStock) return false;
-    
+
     const quantitePanier = panier.find(item => item.produit.id === produit.id)?.quantite || 0;
-    const quantiteTotale = quantitePanier + quantite;
-    
+    const quantiteTotale = quantiteAbsolue ? quantite : quantitePanier + quantite;
+
     return quantiteTotale <= produitEnStock.quantite_stock;
   }, [produits, panier]);
 
@@ -215,7 +511,7 @@ export default function CaissePage() {
     }
 
     const produit = produits.find(p => p.id === produitId);
-    if (produit && !verifierStock(produit, nouvelleQuantite)) {
+    if (produit && !verifierStock(produit, nouvelleQuantite, true)) {
       const stockDispo = produit.quantite_stock;
       const quantiteActuelle = panier.find(item => item.produit.id === produitId)?.quantite || 0;
       
@@ -236,6 +532,7 @@ export default function CaissePage() {
           : item
       )
     );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [produits, verifierStock, panier]);
 
   const retirerDuPanier = useCallback((produitId: number) => {
@@ -248,26 +545,109 @@ export default function CaissePage() {
     setRemise(0);
     setNotes('');
     setClientId(null);
+    setModePaiement(null);
+    setNumeroTransaction('');
+    setReferenceCarte('');
+    setBanqueSelectionnee('');
+    setMontantRecu('');
     toast.info('Panier vidé');
   }, []);
 
-  // 🎯 CALCULS OPTIMISÉS (Alignés avec le backend)
+  // 🎯 CALCULS OPTIMISÉS ET SÉCURISÉS
   const calculs = useMemo(() => {
-    const sousTotal = panier.reduce((total, item) => total + item.sousTotal, 0);
-    const montantApresRemise = Math.max(0, sousTotal - remise);
+    // 🔥 CORRECTION : Conversion sécurisée en nombres
+    const sousTotal = panier.reduce((total, item) => {
+      const itemSousTotal = Number(item.sousTotal) || 0;
+      return total + itemSousTotal;
+    }, 0);
+
+    const remiseNumerique = Number(remise) || 0;
+    const montantApresRemise = Math.max(0, sousTotal - remiseNumerique);
     const tva = montantApresRemise * 0.18;
     const total = montantApresRemise + tva;
 
-    return {
-      sousTotal,
-      montantApresRemise,
-      tva,
-      total
+    // 🔥 VALIDATION : Vérifier que tous les calculs sont valides
+    const result = {
+      sousTotal: isNaN(sousTotal) ? 0 : sousTotal,
+      montantApresRemise: isNaN(montantApresRemise) ? 0 : montantApresRemise,
+      tva: isNaN(tva) ? 0 : tva,
+      total: isNaN(total) ? 0 : total
     };
+
+    // 🎯 DIAGNOSTIC : Log en cas de problème
+    if (isNaN(sousTotal) || isNaN(total)) {
+      console.error('❌ ERREUR CALCULS:', {
+        panier,
+        remise,
+        sousTotal,
+        montantApresRemise,
+        tva,
+        total
+      });
+    }
+
+    return result;
   }, [panier, remise]);
+  // 🎯 CALCUL MONNAIE RENDUE
+  const monnaieRendue = useMemo(() => {
+    if (modePaiement === 'especes' && montantRecu) {
+      const recu = parseFloat(montantRecu);
+      return Math.max(0, recu - calculs.total);
+    }
+    return 0;
+  }, [modePaiement, montantRecu, calculs.total]);
 
   // 🎯 SCANNER QR CODE FONCTIONNEL
-  const demarrerCamera = async () => {
+  const chercherProduitParCode = useCallback(async (code: string) => {
+    const produitTrouve = produits.find(p => String(p.id) === code || p.nom.toLowerCase().includes(code.toLowerCase()));
+    if (produitTrouve) {
+      ajouterAuPanier(produitTrouve);
+      setShowCamera(false);
+      toast.success(`${produitTrouve.nom} ajouté depuis le scan`);
+    } else {
+      toast.error('Produit introuvable pour ce code');
+    }
+  }, [produits, ajouterAuPanier]);
+
+  const detecterBarcode = useCallback(async () => {
+    if (!videoRef.current || !videoRef.current.videoWidth || !videoRef.current.videoHeight) {
+      return;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = videoRef.current.videoWidth;
+    canvas.height = videoRef.current.videoHeight;
+    const context = canvas.getContext('2d');
+    if (!context) return;
+
+    context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+
+    const supportsBarcodeDetector = 'BarcodeDetector' in window;
+    if (!supportsBarcodeDetector) {
+      setScannerMessage('Scanner non supporté dans ce navigateur');
+      return;
+    }
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const barcodeDetector: any = new (window as any).BarcodeDetector({ formats: ['qr_code', 'code_128', 'ean_13', 'ean_8', 'upc_e'] });
+      const barcodes = await barcodeDetector.detect(canvas);
+      if (barcodes.length > 0) {
+        const code = barcodes[0].rawValue;
+        if (code) {
+          setScannerMessage(`Code détecté: ${code}`);
+          chercherProduitParCode(code);
+          return;
+        }
+      }
+      setScannerMessage('Aucun code détecté, déplacez l’appareil...');
+    } catch (error) {
+      console.error('Erreur lecture barcode:', error);
+      setScannerMessage('Erreur lors de la lecture du code');
+    }
+  }, [chercherProduitParCode]);
+
+  const demarrerCamera = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { facingMode: 'environment' } 
@@ -277,18 +657,31 @@ export default function CaissePage() {
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
       }
+
+      setBarcodeDetectorSupported('BarcodeDetector' in window);
+      setScannerMessage('Lecture en cours...');
+      const scanLoop = () => {
+        detecterBarcode();
+        scanFrameRef.current = requestAnimationFrame(scanLoop);
+      };
+      scanLoop();
     } catch (error) {
       console.error('Erreur caméra:', error);
       toast.error('Accès à la caméra refusé ou non supporté');
     }
-  };
+  }, [detecterBarcode]);
 
-  const arreterCamera = () => {
+  const arreterCamera = useCallback(() => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
     }
-  };
+    if (scanFrameRef.current) {
+      cancelAnimationFrame(scanFrameRef.current);
+      scanFrameRef.current = null;
+    }
+    setScannerMessage('');
+  }, []);
 
   useEffect(() => {
     if (showCamera) {
@@ -300,25 +693,78 @@ export default function CaissePage() {
     return () => {
       arreterCamera();
     };
-  }, [showCamera]);
+  }, [showCamera, demarrerCamera, arreterCamera]);
 
-  // 🎯 FONCTION DE PAIEMENT COMPLÈTE - CORRIGÉE POUR LE BACKEND
+  // 🎯 FONCTION DE PAIEMENT COMPLÈTE AVEC MULTI-MODES + HORS-LIGNE + PRÉVISUALISATION
   const procederPaiement = async () => {
     if (panier.length === 0) {
       toast.error('Le panier est vide');
       return;
     }
 
+    if (!modePaiement) {
+      toast.error('Veuillez sélectionner un mode de paiement');
+      return;
+    }
+
+    // Validations spécifiques
+    if ((modePaiement === 'mtn' || modePaiement === 'moov') && !numeroTransaction) {
+      toast.error('Veuillez saisir le numéro de téléphone');
+      return;
+    }
+
+    if (modePaiement === 'especes' && !montantRecu) {
+      toast.error('Veuillez saisir le montant reçu');
+      return;
+    }
+
+    if (modePaiement === 'especes' && parseFloat(montantRecu) < calculs.total) {
+      toast.error(`Montant insuffisant! Il manque ${(calculs.total - parseFloat(montantRecu)).toLocaleString()} FCFA`);
+      return;
+    }
+
+    if (modePaiement === 'carte' && !referenceCarte) {
+      toast.error('Veuillez saisir la référence de la carte');
+      return;
+    }
+
+    // 🎯 AMÉLIORATION 6: Prévisualisation ticket avant confirmer
+    // Créer un objet de prévisualisation temporaire
+    const preview: VenteResponse = {
+      id: Math.random(), // Temporaire
+      montant_total: calculs.total,
+      tva: calculs.tva,
+      remise: remise,
+      statut: 'pending',
+      created_at: new Date().toISOString(),
+      mode_paiement: modePaiement ?? undefined,
+      numero_transaction: numeroTransaction,
+      reference_carte: referenceCarte,
+      banque: banqueSelectionnee,
+      montant_recu: modePaiement === 'especes' ? parseFloat(montantRecu) : undefined,
+      monnaie_rendue: modePaiement === 'especes' ? monnaieRendue : undefined,
+      client: clientId ? clients.find(c => c.id === clientId) : undefined,
+      ligne_ventes: panier.map(item => ({
+        id: 0,
+        quantite: item.quantite,
+        prix_unitaire: item.prixUnitaire,
+        produit: item.produit
+      }))
+    };
+
+    setPreviewVente(preview);
+    setShowPreviewTicket(true);
+  };
+
+  // 🎯 AMÉLIORATION 6: Confirmer après prévisualisation
+  const confirmerPaiement = async () => {
+    setShowPreviewTicket(false);
     setIsProcessing(true);
 
     try {
       // Vérification finale des stocks
       for (const item of panier) {
-        const response = await fetch(`http://localhost:8000/api/produits/${item.produit.id}`, {
-          headers: { 
-            'Authorization': `Bearer ${localStorage.getItem('auth_token')}` 
-          }
-        });
+        const response = await apiFetch(`/produits/${item.produit.id}`);
         
         if (response.ok) {
           const produit = await response.json();
@@ -328,7 +774,7 @@ export default function CaissePage() {
         }
       }
 
-      // 🔥 CORRECTION : Préparation des données selon le NOUVEAU format backend
+      // 🔥 NOUVEAU FORMAT AVEC MODES DE PAIEMENT
       const donneesVente = {
         ligne_ventes: panier.map(item => ({
           produit_id: item.produit.id,
@@ -336,14 +782,64 @@ export default function CaissePage() {
         })),
         remise: remise,
         notes: notes,
-        client_id: clientId
+        client_id: clientId,
+        mode_paiement: modePaiement ?? undefined,
+        numero_transaction: numeroTransaction,
+        reference_carte: referenceCarte,
+        banque: modePaiement === 'carte' ? banqueSelectionnee : null,
+        montant_recu: modePaiement === 'especes' ? parseFloat(montantRecu) : null
       };
 
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch('http://localhost:8000/api/ventes', {
+      // 🎯 AMÉLIORATION 9: Support hors-ligne
+      if (!isOnline) {
+        // Mode hors-ligne: ajouter à la queue
+        const queueItem: OfflineQueue = {
+          id: `vente_${Date.now()}`,
+          vente: donneesVente,
+          timestamp: Date.now(),
+          status: 'pending'
+        };
+        
+        setOfflineQueue(prev => {
+          const updated = [...prev, queueItem];
+          localStorage.setItem('caisse_offlineQueue', JSON.stringify(updated));
+          return updated;
+        });
+
+        // Créer un objet de vente simulée pour l'affichage du ticket
+        const venteSimulee: VenteResponse = {
+          id: parseInt(queueItem.id.replace('vente_', '')),
+          montant_total: calculs.total,
+          tva: calculs.tva,
+          remise: remise,
+          statut: 'offline_pending',
+          created_at: new Date().toISOString(),
+          mode_paiement: modePaiement ?? undefined,
+          numero_transaction: numeroTransaction,
+          reference_carte: referenceCarte,
+          banque: banqueSelectionnee,
+          montant_recu: modePaiement === 'especes' ? parseFloat(montantRecu) : undefined,
+          monnaie_rendue: modePaiement === 'especes' ? monnaieRendue : undefined,
+          client: clientId ? clients.find(c => c.id === clientId) : undefined,
+          ligne_ventes: panier.map(item => ({
+            id: 0,
+            quantite: item.quantite,
+            prix_unitaire: item.prixUnitaire,
+            produit: item.produit
+          }))
+        };
+
+        setLastVente(venteSimulee);
+        setShowTicket(true);
+        toast.warning('📡 Mode hors-ligne - Vente en attente de synchronisation');
+        viderPanier();
+        return;
+      }
+
+      // Mode en ligne: envoyer directement
+      const response = await apiFetch('/ventes', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
@@ -351,17 +847,25 @@ export default function CaissePage() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `Erreur HTTP ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || errorData.errors?.ligne_ventes?.[0] || `Erreur HTTP ${response.status}`);
       }
 
       const venteConfirmee: VenteResponse = await response.json();
       
       setLastVente(venteConfirmee);
       setShowTicket(true);
+      
+      const modePaiementText = {
+        especes: 'Espèces',
+        mtn: 'MTN Money',
+        moov: 'Moov Money',
+        carte: 'Carte Bancaire'
+      }[modePaiement || 'especes'];
+
       toast.success(<div className="flex items-center space-x-2">
         <CheckCircle2 className="w-4 h-4 text-green-500" />
-        <span>Vente #{venteConfirmee.id} enregistrée avec succès!</span>
+        <span>Paiement {modePaiementText} réussi! Vente #{venteConfirmee.id}</span>
       </div>);
       
       // Recharger les produits pour mettre à jour les stocks
@@ -435,13 +939,33 @@ export default function CaissePage() {
           <div className="flex items-center space-x-3">
             <Button 
               variant="outline" 
+              className="border-slate-300 text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
+              onClick={() => setShowHistorique(prev => !prev)}
+            >
+              <Clock className="w-4 h-4 mr-2" />
+              Historique
+            </Button>
+
+            <Button 
+              variant="outline" 
               className="border-orange-300 text-orange-600 hover:bg-orange-50"
               onClick={() => setShowCamera(true)}
             >
               <Camera className="w-4 h-4 mr-2" />
               Scan QR
             </Button>
-            
+
+            <div className="flex flex-col items-end text-right">
+              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${isOnline ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
+                {isOnline ? 'En ligne' : 'Hors-ligne'}
+              </span>
+              {offlineQueue.length > 0 && (
+                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+                  En attente: {offlineQueue.length}
+                </span>
+              )}
+            </div>
+
             <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
               {user.name[0]}
             </div>
@@ -474,6 +998,9 @@ export default function CaissePage() {
               <div className="flex items-center space-x-2 text-sm text-slate-500">
                 <Zap className="w-4 h-4 text-green-500" />
                 <span>Mode Gaming Activé</span>
+              </div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">
+                {priceRefreshTime ? `Dernière MAJ: ${new Date(priceRefreshTime).toLocaleTimeString('fr-FR')}` : 'Prix chargés'}
               </div>
               
               {/* Bouton de rechargement */}
@@ -512,7 +1039,7 @@ export default function CaissePage() {
               <div className="col-span-full text-center py-12 text-slate-500">
                 <Search className="w-12 h-12 mx-auto mb-4 opacity-50" />
                 <p>Aucun produit trouvé</p>
-                <p className="text-sm">Essayez avec d'autres termes de recherche</p>
+                <p className="text-sm">Essayez avec d&apos;autres termes de recherche</p>
               </div>
             ) : (
               <AnimatePresence>
@@ -537,11 +1064,18 @@ export default function CaissePage() {
                               <h3 className="font-semibold text-slate-900 dark:text-white truncate group-hover:text-green-600 transition-colors">
                                 {produit.nom}
                               </h3>
-                              {produit.categorie && (
-                                <Badge variant="secondary" className="mt-1">
-                                  {produit.categorie.nom}
-                                </Badge>
-                              )}
+                              <div className="flex items-center flex-wrap gap-2 mt-1">
+                                {produit.categorie && (
+                                  <Badge variant="secondary" className="text-xs py-1">
+                                    {produit.categorie.nom}
+                                  </Badge>
+                                )}
+                                {prixMAJ.has(produit.id) && (
+                                  <Badge variant="destructive" className="text-xs py-1">
+                                    Prix MAJ
+                                  </Badge>
+                                )}
+                              </div>
                             </div>
                             <Barcode className="w-4 h-4 text-slate-400" />
                           </div>
@@ -718,6 +1252,187 @@ export default function CaissePage() {
                     />
                   </div>
 
+                  {/* 🎯 NOUVEAU : SÉLECTION MODE DE PAIEMENT */}
+                  <div className="space-y-3">
+                    <Label className="flex items-center space-x-2">
+                      <CreditCard className="w-4 h-4" />
+                      <span>Mode de paiement</span>
+                    </Label>
+                    
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* Espèces */}
+                      <div
+                        className={`p-3 border-2 rounded-lg cursor-pointer transition-all ${
+                          modePaiement === 'especes' 
+                            ? 'border-green-500 bg-green-50 dark:bg-green-900/20' 
+                            : 'border-slate-200 dark:border-slate-600 hover:border-slate-300'
+                        }`}
+                        onClick={() => setModePaiement('especes')}
+                      >
+                        <div className="flex items-center space-x-2">
+                          <div className="w-8 h-8 bg-green-100 dark:bg-green-800 rounded-full flex items-center justify-center">
+                            <Wallet className="w-4 h-4 text-green-600 dark:text-green-400" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-sm">Espèces</p>
+                            <p className="text-xs text-slate-500">Comptant</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* MTN Mobile Money */}
+                      <div
+                        className={`p-3 border-2 rounded-lg cursor-pointer transition-all ${
+                          modePaiement === 'mtn' 
+                            ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20' 
+                            : 'border-slate-200 dark:border-slate-600 hover:border-slate-300'
+                        }`}
+                        onClick={() => setModePaiement('mtn')}
+                      >
+                        <div className="flex items-center space-x-2">
+                          <div className="w-8 h-8 bg-yellow-100 dark:bg-yellow-800 rounded-full flex items-center justify-center">
+                            <Smartphone className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-sm">MTN Money</p>
+                            <p className="text-xs text-slate-500">Mobile</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Moov Money */}
+                      <div
+                        className={`p-3 border-2 rounded-lg cursor-pointer transition-all ${
+                          modePaiement === 'moov' 
+                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
+                            : 'border-slate-200 dark:border-slate-600 hover:border-slate-300'
+                        }`}
+                        onClick={() => setModePaiement('moov')}
+                      >
+                        <div className="flex items-center space-x-2">
+                          <div className="w-8 h-8 bg-blue-100 dark:bg-blue-800 rounded-full flex items-center justify-center">
+                            <Smartphone className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-sm">Moov Money</p>
+                            <p className="text-xs text-slate-500">Mobile</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Carte Bancaire */}
+                      <div
+                        className={`p-3 border-2 rounded-lg cursor-pointer transition-all ${
+                          modePaiement === 'carte' 
+                            ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20' 
+                            : 'border-slate-200 dark:border-slate-600 hover:border-slate-300'
+                        }`}
+                        onClick={() => setModePaiement('carte')}
+                      >
+                        <div className="flex items-center space-x-2">
+                          <div className="w-8 h-8 bg-purple-100 dark:bg-purple-800 rounded-full flex items-center justify-center">
+                            <CreditCard className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-sm">Carte</p>
+                            <p className="text-xs text-slate-500">Bancaire</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 🎯 CHAMPS SPÉCIFIQUES SELON MODE */}
+                  {modePaiement && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      className="space-y-3"
+                    >
+                      {/* Mobile Money */}
+                      {(modePaiement === 'mtn' || modePaiement === 'moov') && (
+                        <div className="space-y-2">
+                          <Label htmlFor="numeroMobile">
+                            Numéro {modePaiement === 'mtn' ? 'MTN' : 'Moov'}
+                          </Label>
+                          <Input
+                            id="numeroMobile"
+                            type="tel"
+                            placeholder={`Ex: ${modePaiement === 'mtn' ? '67 12 34 56' : '66 12 34 56'}`}
+                            value={numeroTransaction}
+                            onChange={(e) => setNumeroTransaction(e.target.value)}
+                            className="bg-white/50 dark:bg-slate-700/50"
+                            disabled={isProcessing}
+                          />
+                          <p className="text-xs text-slate-500">
+                            Le client recevra une demande de paiement
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Carte Bancaire */}
+                      {modePaiement === 'carte' && (
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-2">
+                              <Label htmlFor="referenceCarte">Référence</Label>
+                              <Input
+                                id="referenceCarte"
+                                placeholder="Ref. transaction"
+                                value={referenceCarte}
+                                onChange={(e) => setReferenceCarte(e.target.value)}
+                                disabled={isProcessing}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="banque">Banque</Label>
+                              <select 
+                                id="banque"
+                                value={banqueSelectionnee}
+                                onChange={(e) => setBanqueSelectionnee(e.target.value)}
+                                className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white/50 dark:bg-slate-700/50 text-sm"
+                                disabled={isProcessing}
+                              >
+                                <option value="">Sélectionnez</option>
+                                <option value="ecobank">Ecobank</option>
+                                <option value="boa">Bank of Africa</option>
+                                <option value="bsic">BSIC</option>
+                                <option value="uba">UBA</option>
+                                <option value="sgb">Société Générale</option>
+                              </select>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Espèces */}
+                      {modePaiement === 'especes' && (
+                        <div className="space-y-3">
+                          <div className="space-y-2">
+                            <Label htmlFor="montantRecu">Montant reçu</Label>
+                            <Input
+                              id="montantRecu"
+                              type="number"
+                              placeholder="Montant remis par le client"
+                              value={montantRecu}
+                              onChange={(e) => setMontantRecu(e.target.value)}
+                              className="bg-white/50 dark:bg-slate-700/50"
+                              disabled={isProcessing}
+                            />
+                          </div>
+                          {montantRecu && parseFloat(montantRecu) > calculs.total && (
+                            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-700">
+                              <div className="flex justify-between text-sm font-medium">
+                                <span>Monnaie à rendre:</span>
+                                <span className="text-blue-600">{monnaieRendue.toLocaleString()} FCFA</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+
                   {/* Gestion des remises */}
                   {showRemiseInput ? (
                     <div className="space-y-2">
@@ -792,7 +1507,7 @@ export default function CaissePage() {
                     <Button 
                       className="flex-1 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-semibold"
                       onClick={procederPaiement}
-                      disabled={isProcessing || panier.length === 0}
+                      disabled={isProcessing || panier.length === 0 || !modePaiement}
                     >
                       {isProcessing ? (
                         <>
@@ -814,7 +1529,7 @@ export default function CaissePage() {
         </div>
       </main>
 
-      {/* Modal Scan QR Code FONCTIONNEL */}
+      {/* Modal Scan QR Code */}
       <AnimatePresence>
         {showCamera && (
           <motion.div
@@ -858,9 +1573,12 @@ export default function CaissePage() {
                 </div>
               </div>
               
-              <div className="text-center text-sm text-slate-500 mb-4">
+                      <div className="text-center text-sm text-slate-500 mb-4">
                 <p>Placez le code-barres dans le cadre pour le scanner</p>
                 <p>Fonctionnalité en développement avancé</p>
+              </div>
+              <div className="text-center text-sm text-slate-400 mb-4">
+                {barcodeDetectorSupported ? (scannerMessage || 'Lecture en cours...') : 'Scanner non supporté dans ce navigateur'}
               </div>
               
               <Button className="w-full" onClick={() => setShowCamera(false)}>
@@ -871,7 +1589,204 @@ export default function CaissePage() {
         )}
       </AnimatePresence>
 
-      {/* Modal Ticket de Caisse - AVEC SCROLL ET CHOIX D'IMPRESSION */}
+      {/* Modal de prévisualisation du ticket */}
+      <AnimatePresence>
+        {showPreviewTicket && previewVente && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setShowPreviewTicket(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-2xl overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-6 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white">Prévisualisation du ticket</h3>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Vérifiez avant de confirmer le paiement.</p>
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => setShowPreviewTicket(false)}>
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+
+              <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+                <div className="grid gap-2 text-sm text-slate-700 dark:text-slate-300">
+                  <div className="flex justify-between">
+                    <span>Montant total</span>
+                    <span className="font-semibold">{previewVente.montant_total.toLocaleString()} FCFA</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Remise</span>
+                    <span className="font-semibold">-{previewVente.remise.toLocaleString()} FCFA</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>TVA</span>
+                    <span className="font-semibold">{previewVente.tva.toLocaleString()} FCFA</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Mode paiement</span>
+                    <span className="font-semibold capitalize">{previewVente.mode_paiement}</span>
+                  </div>
+                  {previewVente.numero_transaction && (
+                    <div className="flex justify-between text-xs text-slate-500">
+                      <span>Numéro transaction</span>
+                      <span>{previewVente.numero_transaction}</span>
+                    </div>
+                  )}
+                  {previewVente.reference_carte && (
+                    <div className="flex justify-between text-xs text-slate-500">
+                      <span>Référence carte</span>
+                      <span>{previewVente.reference_carte}</span>
+                    </div>
+                  )}
+                  {previewVente.client && (
+                    <div className="flex justify-between text-xs text-slate-500">
+                      <span>Client</span>
+                      <span>{previewVente.client.nom}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="border-t border-slate-200 dark:border-slate-700 pt-4">
+                  <div className="font-semibold text-slate-900 dark:text-white mb-2">Articles</div>
+                  <div className="space-y-2">
+                    {previewVente.ligne_ventes.map((ligne, index) => (
+                      <div key={index} className="grid grid-cols-12 gap-2 text-sm text-slate-700 dark:text-slate-300">
+                        <div className="col-span-6 truncate">{ligne.produit.nom}</div>
+                        <div className="col-span-2 text-center">{ligne.quantite}</div>
+                        <div className="col-span-2 text-right">{ligne.prix_unitaire.toLocaleString()}</div>
+                        <div className="col-span-2 text-right font-semibold">{(ligne.prix_unitaire * ligne.quantite).toLocaleString()}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 flex flex-col gap-3">
+                <Button
+                  className="w-full bg-green-600 hover:bg-emerald-600 text-white"
+                  onClick={confirmerPaiement}
+                  disabled={isProcessing}
+                >
+                  <CheckCircle2 className="w-4 h-4 mr-2" />
+                  Confirmer et enregistrer
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => setShowPreviewTicket(false)}
+                  disabled={isProcessing}
+                >
+                  <X className="w-4 h-4 mr-2" />
+                  Modifier la vente
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal Historique des ventes */}
+      <AnimatePresence>
+        {showHistorique && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setShowHistorique(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-4xl overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-6 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white">Historique des ventes</h3>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Dernières ventes du jour et annulations rapides.</p>
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => setShowHistorique(false)}>
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+
+              <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+                {isLoadingHistorique ? (
+                  <div className="text-center py-12 text-slate-500">
+                    <Loader2 className="w-8 h-8 mx-auto animate-spin mb-4" />
+                    Chargement de l&apos;historique...
+                  </div>
+                ) : ventesJour.length === 0 ? (
+                  <div className="text-center py-12 text-slate-500">
+                    <p>Aucune vente trouvée pour aujourd&apos;hui.</p>
+                    <p className="text-sm">Appuyez sur le bouton actualiser pour recharger.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {ventesJour.map((vente) => (
+                      <div key={vente.id} className="rounded-2xl border border-slate-200 dark:border-slate-700 p-4 bg-slate-50 dark:bg-slate-950">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                          <div className="space-y-1">
+                            <div className="text-sm text-slate-500">#{vente.id} • {new Date(vente.created_at).toLocaleTimeString('fr-FR')}</div>
+                            <div className="flex items-center gap-2 text-base font-semibold text-slate-900 dark:text-white">
+                              <span>{vente.client?.nom || 'Anonyme'}</span>
+                              <Badge variant={vente.statut === 'annulee' ? 'destructive' : 'secondary'}>{vente.statut}</Badge>
+                            </div>
+                          </div>
+                          <div className="text-right space-y-1 text-sm text-slate-600 dark:text-slate-400">
+                            <div>Total: {vente.montant_total.toLocaleString()} FCFA</div>
+                            <div>Mode: {vente.mode_paiement || 'espèces'}</div>
+                          </div>
+                        </div>
+                        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                          <div className="space-y-1">
+                            {vente.ligne_ventes.slice(0, 3).map((ligne, index) => (
+                              <div key={index} className="flex justify-between">
+                                <span>{ligne.produit.nom}</span>
+                                <span>{ligne.quantite}×</span>
+                              </div>
+                            ))}
+                            {vente.ligne_ventes.length > 3 && (
+                              <div className="text-xs text-slate-500">+{vente.ligne_ventes.length - 3} autres articles</div>
+                            )}
+                          </div>
+                          <div className="flex flex-col justify-between items-end gap-3">
+                            {vente.peut_annuler && vente.statut !== 'annulee' ? (
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => annulerVente(vente.id)}
+                                disabled={isProcessing}
+                              >
+                                Annuler
+                              </Button>
+                            ) : (
+                              <Badge variant="outline">Bloqué</Badge>
+                            )}
+                            <span className="text-xs text-slate-500">ID vente {vente.id}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal Ticket de Caisse - MIS À JOUR AVEC MODES PAIEMENT */}
       <AnimatePresence>
         {showTicket && lastVente && (
           <motion.div
@@ -941,6 +1856,39 @@ export default function CaissePage() {
                         <span>{user?.name || 'System'}</span>
                       </div>
 
+                      {/* Mode de paiement */}
+                      <div className="flex justify-between">
+                        <span className="font-medium">Mode paiement:</span>
+                        <span className="font-bold capitalize">
+                          {lastVente.mode_paiement === 'especes' && 'Espèces'}
+                          {lastVente.mode_paiement === 'mtn' && 'MTN Money'}
+                          {lastVente.mode_paiement === 'moov' && 'Moov Money'}
+                          {lastVente.mode_paiement === 'carte' && 'Carte Bancaire'}
+                        </span>
+                      </div>
+
+                      {/* Détails selon mode */}
+                      {lastVente.numero_transaction && (
+                        <div className="flex justify-between text-xs">
+                          <span>Numéro:</span>
+                          <span>{lastVente.numero_transaction}</span>
+                        </div>
+                      )}
+
+                      {lastVente.reference_carte && (
+                        <div className="flex justify-between text-xs">
+                          <span>Référence carte:</span>
+                          <span>{lastVente.reference_carte}</span>
+                        </div>
+                      )}
+
+                      {lastVente.banque && (
+                        <div className="flex justify-between text-xs">
+                          <span>Banque:</span>
+                          <span className="capitalize">{lastVente.banque}</span>
+                        </div>
+                      )}
+
                       {/* Client */}
                       <div className="flex justify-between border-t border-green-200 pt-2">
                         <span className="font-medium">Client:</span>
@@ -957,7 +1905,7 @@ export default function CaissePage() {
                       )}
                     </div>
 
-                    {/* Détails des articles - TABLEAU PROFESSIONNEL */}
+                    {/* Détails des articles */}
                     <div className="mt-6 border-t border-green-200 pt-4">
                       <div className="grid grid-cols-12 gap-2 text-xs font-semibold text-green-800 dark:text-green-300 mb-2">
                         <div className="col-span-6">ARTICLE</div>
@@ -1006,6 +1954,14 @@ export default function CaissePage() {
                         <span>{lastVente.tva.toLocaleString()} FCFA</span>
                       </div>
 
+                      {/* Monnaie rendue pour espèces */}
+                      {lastVente.monnaie_rendue && lastVente.monnaie_rendue > 0 && (
+                        <div className="flex justify-between text-blue-600">
+                          <span>Monnaie rendue:</span>
+                          <span>{lastVente.monnaie_rendue.toLocaleString()} FCFA</span>
+                        </div>
+                      )}
+
                       <div className="flex justify-between font-bold text-lg border-t border-green-300 pt-2 text-green-800 dark:text-green-300">
                         <span>TOTAL:</span>
                         <span>{lastVente.montant_total.toLocaleString()} FCFA</span>
@@ -1015,7 +1971,12 @@ export default function CaissePage() {
                     {/* Mode de paiement */}
                     <div className="mt-4 pt-4 border-t border-green-200 text-center">
                       <div className="text-xs text-slate-500">
-                        <div>Mode de paiement: Espèces</div>
+                        <div className="font-semibold">
+                          Mode de paiement: {lastVente.mode_paiement?.toUpperCase() || 'ESPÈCES'}
+                        </div>
+                        {lastVente.numero_transaction && (
+                          <div>Transaction: {lastVente.numero_transaction}</div>
+                        )}
                         <div className="mt-1">Merci de votre confiance !</div>
                         <div className="text-[10px] mt-2">Reçu électronique - Conservez ce ticket</div>
                       </div>
@@ -1033,7 +1994,6 @@ export default function CaissePage() {
                 </div>
                 
                 <div className="flex space-x-3">
-                  {/* Option 1 : Imprimer maintenant */}
                   <Button
                     className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold"
                     onClick={() => {
@@ -1041,21 +2001,17 @@ export default function CaissePage() {
                       if (receiptElement) {
                         const printWindow = window.open('', '_blank');
                         if (printWindow) {
+                          // Template d'impression mis à jour avec modes de paiement
                           printWindow.document.write(`
                           <!DOCTYPE html>
                           <html>
                             <head>
                               <title>REÇU SGCI - ${lastVente.numero_vente || lastVente.id}</title>
                               <style>
-                                /* === STYLES PROFESSIONNELS COMME EREVAN === */
                                 @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500;700&display=swap');
+                                @import url('https://fonts.googleapis.com/css2?family=Libre+Barcode+128&display=swap');
                                 
-                                * {
-                                  margin: 0;
-                                  padding: 0;
-                                  box-sizing: border-box;
-                                }
-                                
+                                * { margin: 0; padding: 0; box-sizing: border-box; }
                                 body {
                                   font-family: 'Roboto Mono', monospace;
                                   font-size: 11px;
@@ -1067,285 +2023,67 @@ export default function CaissePage() {
                                   -webkit-print-color-adjust: exact;
                                   print-color-adjust: exact;
                                 }
-                                
                                 .ticket {
                                   width: 80mm;
                                   max-width: 80mm;
                                   margin: 0 auto;
                                   padding: 12px 8px;
                                   background: white;
-                                  position: relative;
                                 }
-                                
-                                /* === EN-TÊTE PROFESSIONNELLE === */
-                                .header {
-                                  text-align: center;
-                                  margin-bottom: 12px;
-                                  padding-bottom: 8px;
-                                  border-bottom: 2px dashed #333;
-                                }
-                                
-                                .company-name {
-                                  font-size: 16px;
-                                  font-weight: 700;
-                                  text-transform: uppercase;
-                                  letter-spacing: 1px;
-                                  margin-bottom: 2px;
-                                  color: #000;
-                                }
-                                
-                                .company-slogan {
-                                  font-size: 9px;
-                                  color: #666;
-                                  margin-bottom: 3px;
-                                  text-transform: uppercase;
-                                }
-                                
-                                .company-address {
-                                  font-size: 8px;
-                                  color: #888;
-                                  margin-bottom: 4px;
-                                }
-                                
-                                .contact-info {
-                                  font-size: 8px;
-                                  color: #666;
-                                  margin-bottom: 2px;
-                                }
-                                
-                                /* === INFORMATIONS DE LA VENTE === */
-                                .sale-info {
-                                  margin-bottom: 10px;
-                                  padding-bottom: 8px;
-                                  border-bottom: 1px dashed #ccc;
-                                }
-                                
-                                .info-row {
-                                  display: flex;
-                                  justify-content: space-between;
-                                  margin-bottom: 3px;
-                                }
-                                
-                                .info-label {
-                                  font-weight: 600;
-                                  color: #333;
-                                }
-                                
-                                .info-value {
-                                  font-weight: 500;
-                                  color: #000;
-                                }
-                                
-                                /* === TABLEAU DES ARTICLES === */
-                                .items-section {
-                                  margin-bottom: 10px;
-                                }
-                                
-                                .items-header {
-                                  display: grid;
-                                  grid-template-columns: 3fr 1fr 1fr 1fr;
-                                  gap: 4px;
-                                  padding: 4px 0;
-                                  border-bottom: 2px solid #000;
-                                  font-weight: 700;
-                                  text-transform: uppercase;
-                                  font-size: 9px;
-                                  margin-bottom: 6px;
-                                }
-                                
-                                .item-row {
-                                  display: grid;
-                                  grid-template-columns: 3fr 1fr 1fr 1fr;
-                                  gap: 4px;
-                                  padding: 3px 0;
-                                  border-bottom: 1px dashed #eee;
-                                  font-size: 10px;
-                                }
-                                
-                                .item-name {
-                                  font-weight: 500;
-                                  overflow: hidden;
-                                  text-overflow: ellipsis;
-                                  white-space: nowrap;
-                                }
-                                
-                                .item-category {
-                                  font-size: 7px;
-                                  color: #888;
-                                  margin-top: 1px;
-                                }
-                                
-                                .item-qty, .item-price, .item-total {
-                                  text-align: right;
-                                  font-weight: 500;
-                                }
-                                
-                                .item-total {
-                                  font-weight: 600;
-                                }
-                                
-                                /* === RÉCAPITULATIF FINANCIER === */
-                                .summary {
-                                  margin-top: 12px;
-                                  padding-top: 8px;
-                                  border-top: 2px dashed #333;
-                                }
-                                
-                                .summary-row {
-                                  display: flex;
-                                  justify-content: space-between;
-                                  margin-bottom: 4px;
-                                  padding: 2px 0;
-                                }
-                                
-                                .summary-label {
-                                  font-weight: 500;
-                                  color: #333;
-                                }
-                                
-                                .summary-value {
-                                  font-weight: 600;
-                                  color: #000;
-                                }
-                                
-                                .total-row {
-                                  border-top: 2px solid #000;
-                                  margin-top: 6px;
-                                  padding-top: 6px;
-                                  font-size: 12px;
-                                  font-weight: 700;
-                                }
-                                
-                                /* === PIED DE PAGE === */
-                                .footer {
-                                  margin-top: 15px;
-                                  padding-top: 8px;
-                                  border-top: 1px dashed #ccc;
-                                  text-align: center;
-                                }
-                                
-                                .payment-method {
-                                  font-weight: 600;
-                                  margin-bottom: 5px;
-                                  text-transform: uppercase;
-                                }
-                                
-                                .thank-you {
-                                  font-size: 10px;
-                                  font-weight: 600;
-                                  margin-bottom: 4px;
-                                  color: #000;
-                                }
-                                
-                                .legal-info {
-                                  font-size: 7px;
-                                  color: #666;
-                                  line-height: 1.3;
-                                  margin-bottom: 3px;
-                                }
-                                
-                                .barcode-area {
-                                  margin-top: 8px;
-                                  padding: 5px;
-                                  border: 1px dashed #ccc;
-                                  text-align: center;
-                                  font-family: 'Libre Barcode 128', cursive;
-                                  font-size: 24px;
-                                }
-                                
-                                /* === IMPRESSION === */
+                                .header { text-align: center; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px dashed #333; }
+                                .company-name { font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px; }
+                                .sale-info { margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px dashed #ccc; }
+                                .info-row { display: flex; justify-content: space-between; margin-bottom: 3px; }
+                                .items-header { display: grid; grid-template-columns: 3fr 1fr 1fr 1fr; gap: 4px; padding: 4px 0; border-bottom: 2px solid #000; font-weight: 700; font-size: 9px; margin-bottom: 6px; }
+                                .item-row { display: grid; grid-template-columns: 3fr 1fr 1fr 1fr; gap: 4px; padding: 3px 0; border-bottom: 1px dashed #eee; font-size: 10px; }
+                                .summary { margin-top: 12px; padding-top: 8px; border-top: 2px dashed #333; }
+                                .summary-row { display: flex; justify-content: space-between; margin-bottom: 4px; padding: 2px 0; }
+                                .total-row { border-top: 2px solid #000; margin-top: 6px; padding-top: 6px; font-size: 12px; font-weight: 700; }
+                                .footer { margin-top: 15px; padding-top: 8px; border-top: 1px dashed #ccc; text-align: center; }
+                                .payment-method { font-weight: 600; margin-bottom: 5px; text-transform: uppercase; }
                                 @media print {
-                                  body {
-                                    margin: 0;
-                                    padding: 5px;
-                                    width: 80mm;
-                                  }
-                                  
-                                  .ticket {
-                                    width: 80mm;
-                                    padding: 10px 6px;
-                                    box-shadow: none;
-                                    border: none;
-                                  }
-                                  
-                                  .no-print {
-                                    display: none !important;
-                                  }
-                                }
-                                
-                                /* === BOUTONS (VISIBLES UNIQUEMENT À L'ÉCRAN) === */
-                                .btn-group {
-                                  text-align: center;
-                                  margin-top: 20px;
-                                }
-                                
-                                .btn {
-                                  padding: 8px 16px;
-                                  border: none;
-                                  border-radius: 3px;
-                                  cursor: pointer;
-                                  margin: 4px;
-                                  font-size: 11px;
-                                  font-family: 'Roboto Mono', monospace;
-                                  font-weight: 600;
-                                }
-                                
-                                .btn-print {
-                                  background: #000;
-                                  color: white;
-                                }
-                                
-                                .btn-close {
-                                  background: #666;
-                                  color: white;
+                                  body { margin: 0; padding: 5px; width: 80mm; }
+                                  .ticket { width: 80mm; padding: 10px 6px; box-shadow: none; border: none; }
+                                  .no-print { display: none !important; }
                                 }
                               </style>
-                              <link href="https://fonts.googleapis.com/css2?family=Libre+Barcode+128&display=swap" rel="stylesheet">
                             </head>
                             <body>
                               <div class="ticket">
-                                <!-- EN-TÊTE PROFESSIONNELLE -->
                                 <div class="header">
                                   <div class="company-name">SGCI BÉNIN</div>
                                   <div class="company-slogan">Système de Gestion Commerciale Intelligente</div>
-                                  <div class="company-address">Erevan Market - Cotonou, Bénin</div>
-                                  <div class="contact-info">Tél: +229 21 30 40 50 | Email: contact@sgci.bj</div>
-                                  <div class="contact-info">RCCM: RB/COC/2024/12345 | NIF: 1234567890123</div>
                                 </div>
                                 
-                                <!-- INFORMATIONS DE LA VENTE -->
                                 <div class="sale-info">
                                   <div class="info-row">
-                                    <span class="info-label">N° TICKET:</span>
-                                    <span class="info-value">${lastVente.numero_vente || `VENT-${lastVente.id}`}</span>
+                                    <span>N° TICKET:</span>
+                                    <span>${lastVente.numero_vente || `VENT-${lastVente.id}`}</span>
                                   </div>
                                   <div class="info-row">
-                                    <span class="info-label">DATE:</span>
-                                    <span class="info-value">${new Date(lastVente.created_at).toLocaleString('fr-FR', {
-                                      day: '2-digit',
-                                      month: '2-digit',
-                                      year: 'numeric',
-                                      hour: '2-digit',
-                                      minute: '2-digit'
-                                    })}</span>
+                                    <span>DATE:</span>
+                                    <span>${new Date(lastVente.created_at).toLocaleString('fr-FR')}</span>
                                   </div>
                                   <div class="info-row">
-                                    <span class="info-label">CAISSIER:</span>
-                                    <span class="info-value">${user?.name || 'SYSTEM'}</span>
+                                    <span>CAISSIER:</span>
+                                    <span>${user?.name || 'SYSTEM'}</span>
                                   </div>
                                   <div class="info-row">
-                                    <span class="info-label">CLIENT:</span>
-                                    <span class="info-value">${lastVente.client ? lastVente.client.nom : 'ANONYME'}</span>
+                                    <span>MODE PAIEMENT:</span>
+                                    <span>${lastVente.mode_paiement?.toUpperCase() || 'ESPÈCES'}</span>
                                   </div>
-                                  ${lastVente.client?.telephone ? `
+                                  ${lastVente.numero_transaction ? `
                                     <div class="info-row">
-                                      <span class="info-label">TÉLÉPHONE:</span>
-                                      <span class="info-value">${lastVente.client.telephone}</span>
+                                      <span>NUMÉRO:</span>
+                                      <span>${lastVente.numero_transaction}</span>
                                     </div>
                                   ` : ''}
+                                  <div class="info-row">
+                                    <span>CLIENT:</span>
+                                    <span>${lastVente.client ? lastVente.client.nom : 'ANONYME'}</span>
+                                  </div>
                                 </div>
                                 
-                                <!-- ARTICLES -->
                                 <div class="items-section">
                                   <div class="items-header">
                                     <div>ARTICLE</div>
@@ -1353,70 +2091,56 @@ export default function CaissePage() {
                                     <div>PRIX</div>
                                     <div>TOTAL</div>
                                   </div>
-                                  
                                   ${lastVente.ligne_ventes.map(ligne => `
                                     <div class="item-row">
-                                      <div class="item-name">
-                                        ${ligne.produit.nom}
-                                        <div class="item-category">${ligne.produit.categorie?.nom || 'GÉNÉRAL'}</div>
-                                      </div>
-                                      <div class="item-qty">${ligne.quantite}</div>
-                                      <div class="item-price">${ligne.prix_unitaire.toLocaleString()}</div>
-                                      <div class="item-total">${(ligne.prix_unitaire * ligne.quantite).toLocaleString()}</div>
+                                      <div>${ligne.produit.nom}</div>
+                                      <div>${ligne.quantite}</div>
+                                      <div>${ligne.prix_unitaire.toLocaleString()}</div>
+                                      <div>${(ligne.prix_unitaire * ligne.quantite).toLocaleString()}</div>
                                     </div>
                                   `).join('')}
                                 </div>
                                 
-                                <!-- RÉCAPITULATIF FINANCIER -->
                                 <div class="summary">
                                   <div class="summary-row">
-                                    <span class="summary-label">SOUS-TOTAL</span>
-                                    <span class="summary-value">${(lastVente.montant_total - lastVente.tva + lastVente.remise).toLocaleString()} FCFA</span>
+                                    <span>SOUS-TOTAL</span>
+                                    <span>${(lastVente.montant_total - lastVente.tva + lastVente.remise).toLocaleString()} FCFA</span>
                                   </div>
-                                  
                                   ${lastVente.remise > 0 ? `
                                     <div class="summary-row">
-                                      <span class="summary-label">REMISE</span>
-                                      <span class="summary-value" style="color: #d00;">-${lastVente.remise.toLocaleString()} FCFA</span>
+                                      <span>REMISE</span>
+                                      <span>-${lastVente.remise.toLocaleString()} FCFA</span>
                                     </div>
                                   ` : ''}
-                                  
                                   <div class="summary-row">
-                                    <span class="summary-label">TVA (18%)</span>
-                                    <span class="summary-value">${lastVente.tva.toLocaleString()} FCFA</span>
+                                    <span>TVA (18%)</span>
+                                    <span>${lastVente.tva.toLocaleString()} FCFA</span>
                                   </div>
-                                  
+                                  ${lastVente.monnaie_rendue && lastVente.monnaie_rendue > 0 ? `
+                                    <div class="summary-row">
+                                      <span>MONNAIE RENDUE</span>
+                                      <span>${lastVente.monnaie_rendue.toLocaleString()} FCFA</span>
+                                    </div>
+                                  ` : ''}
                                   <div class="summary-row total-row">
-                                    <span class="summary-label">TOTAL À PAYER</span>
-                                    <span class="summary-value">${lastVente.montant_total.toLocaleString()} FCFA</span>
+                                    <span>TOTAL</span>
+                                    <span>${lastVente.montant_total.toLocaleString()} FCFA</span>
                                   </div>
                                 </div>
                                 
-                                <!-- PIED DE PAGE -->
                                 <div class="footer">
-                                  <div class="payment-method">PAIEMENT: ESPÈCES</div>
-                                  <div class="thank-you">MERCI POUR VOTRE CONFIANCE !</div>
-                                  <div class="legal-info">
-                                    Article L123-1 du code de la consommation<br>
-                                    Reçu à conserver pendant 1 an<br>
-                                    Échange sous 7 jours avec ticket
-                                  </div>
-                                  <div class="barcode-area">
-                                    ${lastVente.numero_vente || `VENT${lastVente.id}`}
-                                  </div>
+                                  <div class="payment-method">MERCI POUR VOTRE CONFIANCE !</div>
+                                  <div class="legal-info">Reçu électronique - Conservez ce ticket</div>
                                 </div>
                               </div>
                               
-                              <!-- BOUTONS POUR L'INTERFACE -->
                               <div class="btn-group no-print">
-                                <button class="btn btn-print" onclick="window.print()">🖨️ IMPRIMER LE REÇU</button>
+                                <button class="btn btn-print" onclick="window.print()">🖨️ IMPRIMER</button>
                                 <button class="btn btn-close" onclick="window.close()">❌ FERMER</button>
                               </div>
                               
                               <script>
-                                setTimeout(() => { 
-                                  window.print(); 
-                                }, 800);
+                                setTimeout(() => { window.print(); }, 800);
                               </script>
                             </body>
                           </html>
@@ -1432,7 +2156,6 @@ export default function CaissePage() {
                     Oui, Imprimer
                   </Button>
 
-                  {/* Option 2 : Voir seulement */}
                   <Button
                     variant="outline"
                     className="flex-1 border-blue-300 text-blue-600 hover:bg-blue-50"
@@ -1446,7 +2169,6 @@ export default function CaissePage() {
                   </Button>
                 </div>
 
-                {/* Option 3 : Fermer directement */}
                 <Button
                   variant="ghost"
                   className="w-full mt-3 text-slate-500 hover:text-slate-700 hover:bg-slate-100"

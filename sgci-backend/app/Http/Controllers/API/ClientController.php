@@ -165,7 +165,7 @@ class ClientController extends Controller
                 $clientData['ventes'] = $client->ventes->map(function ($vente) {
                     $venteData = [
                         'id' => $vente->id,
-                        'numero_commande' => $vente->numero_commande,
+                        'numero_commande' => $vente->numero_vente,
                         'date_commande' => $vente->created_at,
                         'montant_total' => (float) $vente->montant_total,
                         'statut' => $vente->statut,
@@ -489,12 +489,28 @@ class ClientController extends Controller
                 $query->whereDate('created_at', '<=', $request->date_fin);
             }
 
-            $commandes = $query->with(['produits', 'paiements'])
+            $commandes = $query->with(['ligneVentes.produit', 'user'])
                 ->orderBy('created_at', 'desc')
                 ->paginate($request->get('per_page', 10));
 
+            $data = $commandes->getCollection()->map(function ($vente) {
+                return [
+                    'id' => $vente->id,
+                    'numero_commande' => $vente->numero_vente,
+                    'date_commande' => $vente->created_at,
+                    'montant_total' => (float) $vente->montant_total,
+                    'statut' => $vente->statut,
+                    'caissier' => $vente->user?->name,
+                    'lignes' => $vente->ligneVentes->map(fn ($l) => [
+                        'produit' => $l->produit?->nom,
+                        'quantite' => $l->quantite,
+                        'prix_unitaire' => (float) $l->prix_unitaire,
+                    ]),
+                ];
+            });
+
             return response()->json([
-                'data' => $commandes->getCollection(),
+                'data' => $data,
                 'meta' => [
                     'current_page' => $commandes->currentPage(),
                     'total' => $commandes->total(),
@@ -529,7 +545,7 @@ class ClientController extends Controller
             'nombre_commandes' => $client->nombre_commandes,
             'derniere_commande' => $derniereCommande ? [
                 'id' => $derniereCommande->id,
-                'numero_commande' => $derniereCommande->numero_commande,
+                'numero_commande' => $derniereCommande->numero_vente,
                 'date' => $derniereCommande->created_at,
                 'montant' => $derniereCommande->montant_total,
                 'statut' => $derniereCommande->statut,
@@ -548,28 +564,21 @@ class ClientController extends Controller
 
         // Ajouter les ventes formatées
         $formattedClient['ventes'] = $client->ventes->map(function ($vente) {
+            $vente->loadMissing('ligneVentes.produit');
+
             return [
                 'id' => $vente->id,
-                'numero_commande' => $vente->numero_commande,
+                'numero_commande' => $vente->numero_vente,
                 'date_commande' => $vente->created_at,
                 'montant_total' => (float) $vente->montant_total,
                 'statut' => $vente->statut,
-                'produits_count' => $vente->produits->count(),
-                'produits' => $vente->produits->map(function ($produit) {
+                'produits_count' => $vente->ligneVentes->count(),
+                'produits' => $vente->ligneVentes->map(function ($ligne) {
                     return [
-                        'id' => $produit->id,
-                        'nom' => $produit->nom,
-                        'prix' => (float) $produit->pivot->prix,
-                        'quantite' => $produit->pivot->quantite,
-                    ];
-                }),
-                'paiements' => $vente->paiements->map(function ($paiement) {
-                    return [
-                        'id' => $paiement->id,
-                        'montant' => (float) $paiement->montant,
-                        'methode' => $paiement->methode,
-                        'statut' => $paiement->statut,
-                        'date_paiement' => $paiement->date_paiement,
+                        'id' => $ligne->produit_id,
+                        'nom' => $ligne->produit?->nom,
+                        'prix' => (float) $ligne->prix_unitaire,
+                        'quantite' => $ligne->quantite,
                     ];
                 }),
             ];

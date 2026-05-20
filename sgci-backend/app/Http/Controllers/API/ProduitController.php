@@ -87,7 +87,7 @@ class ProduitController extends Controller
             'nom' => 'sometimes|string|max:255',
             'description' => 'nullable|string',
             'prix' => 'sometimes|numeric|min:0',
-            'quantite_stock' => 'sometimes|integer|min:0',
+            // Le stock est géré séparément via les mouvements de stock pour assurer traçabilité.
             'seuil_alerte' => 'sometimes|integer|min:0',
             'categorie_id' => 'sometimes|exists:categories,id',
             'est_perissable' => 'boolean',
@@ -129,6 +129,20 @@ class ProduitController extends Controller
     /**
      * Statistiques des produits
      */
+    public function search(string $search): JsonResponse
+    {
+        $produits = Produit::with('categorie')
+            ->where(function ($query) use ($search) {
+                $query->where('nom', 'like', '%' . $search . '%')
+                    ->orWhere('code_qr', 'like', '%' . $search . '%');
+            })
+            ->orderBy('nom')
+            ->limit(50)
+            ->get();
+
+        return response()->json($produits);
+    }
+
     public function statistiques(): JsonResponse
     {
         $totalProduits = Produit::count();
