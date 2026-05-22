@@ -47,6 +47,7 @@ import {
 } from "react-native";
 import { useAuth } from "../../contexts/AuthContext";
 import { apiFetch } from "@/lib/api-client";
+import { uploadProduitImage } from "@/lib/upload-image";
 
 const { width, height } = Dimensions.get("window");
 
@@ -120,6 +121,7 @@ const defaultImages = {
 
 export default function ProduitsScreen() {
   const { user } = useAuth();
+  const isGerant = user?.role === "gerant";
   const [produits, setProduits] = useState<Produit[]>([]);
   const [categories, setCategories] = useState<Categorie[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -335,7 +337,16 @@ export default function ProduitsScreen() {
 
       if (!response.ok) throw new Error("Erreur lors de la création");
 
-      const newProduit = await response.json();
+      let newProduit = await response.json();
+      const localUri = formData.images[0];
+      if (localUri?.startsWith("file://")) {
+        try {
+          const url = await uploadProduitImage(newProduit.id, localUri);
+          newProduit = { ...newProduit, image_url: url };
+        } catch {
+          /* garde produit sans image serveur */
+        }
+      }
       setProduits((prev) => [newProduit, ...prev]);
       setShowForm(false);
       resetForm();
@@ -374,7 +385,16 @@ export default function ProduitsScreen() {
 
       if (!response.ok) throw new Error("Erreur lors de la modification");
 
-      const updatedProduit = await response.json();
+      let updatedProduit = await response.json();
+      const localUri = formData.images[0];
+      if (localUri?.startsWith("file://")) {
+        try {
+          const url = await uploadProduitImage(editingProduit.id, localUri);
+          updatedProduit = { ...updatedProduit, image_url: url };
+        } catch {
+          /* ignore */
+        }
+      }
       setProduits((prev) =>
         prev.map((p) => (p.id === editingProduit.id ? updatedProduit : p))
       );
@@ -954,12 +974,14 @@ export default function ProduitsScreen() {
               >
                 <Edit size={18} color="#3b82f6" />
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.rowActionButton}
-                onPress={() => openDeleteDialog(produit)}
-              >
-                <Trash2 size={18} color="#ef4444" />
-              </TouchableOpacity>
+              {isGerant && (
+                <TouchableOpacity
+                  style={styles.rowActionButton}
+                  onPress={() => openDeleteDialog(produit)}
+                >
+                  <Trash2 size={18} color="#ef4444" />
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </View>

@@ -1,8 +1,8 @@
-# SGCI Bénin — Backend API
+# SGCI Bénin — Backend API (v1.1)
 
-API Laravel pour la gestion de boutique (produits, caisse, clients, analytics, IA).
+API Laravel pour la gestion de boutique : produits, stock, caisse, clients, analytics et assistant stock.
 
-## Installation locale
+## Installation
 
 ```bash
 cd sgci-backend
@@ -13,33 +13,125 @@ php artisan migrate --seed
 php artisan serve
 ```
 
-API disponible sur : `http://127.0.0.1:8000/api`
+API : `http://127.0.0.1:8000/api`
 
-## Comptes de démonstration
+## Comptes démo
 
 | Email | Mot de passe | Rôle |
 |-------|--------------|------|
 | gerant@sgci.bj | password | Gérant |
 | caissier@sgci.bj | password | Caissier |
 
-## CORS (web + mobile)
+## Authentification
 
-Édite `config/cors.php` et remplace `192.168.1.102` par l’IP de ton PC si tu testes depuis un téléphone sur le même réseau Wi‑Fi.
+- `POST /api/login` — connexion (compte actif requis)
+- Header protégé : `Authorization: Bearer {token}`
+- `POST /api/logout`, `GET /api/me`, `PUT /api/me/profile`, `PUT /api/me/password`
 
-## Endpoints utiles
+## Rôles
 
-- `GET /api/health` — état de l’API (public)
-- `POST /api/login` — connexion
-- `GET /api/me` — profil connecté
-- `PUT /api/me/profile` — modifier nom, email, téléphone
-- `PUT /api/me/password` — changer le mot de passe
-- Routes protégées : header `Authorization: Bearer {token}`
+| Action | Caissier | Gérant |
+|--------|----------|--------|
+| Ventes, clients, produits (CRUD sauf suppression) | Oui | Oui |
+| Supprimer produit / catégorie | Non | Oui |
+| Valider / rejeter arrivages stock | Non | Oui |
+| Paramètres boutique (écriture) | Non | Oui |
+| Gestion utilisateurs | Non | Oui |
 
-## Module « Assistant stock & promos » (ex-IA)
+Middleware : `role.gerant`, `user.active`
 
-- `GET /api/ia/predictions-demande` — besoins stock (ventes 7/30/90 j)
-- `GET /api/ia/recommandations-promotions` — promos suggérées (score > 40)
-- `GET /api/ia/metrics-performance` — indicateurs
-- `POST /api/ia/recalculer-analyses` — recalcul (alias `entrainer-modele`)
+## Ventes
 
-Ce n’est pas un modèle ML : assistant statistique basé sur vos ventes terminées.
+### Vente immédiate (recommandé — caisse web/mobile)
+
+```http
+POST /api/ventes
+```
+
+Corps exemple :
+
+```json
+{
+  "ligne_ventes": [{"produit_id": 1, "quantite": 2}],
+  "remise": 0,
+  "client_id": null,
+  "notes": null,
+  "mode_paiement": "especes",
+  "montant_recu": 5000,
+  "numero_transaction": null,
+  "reference_carte": null,
+  "banque": null
+}
+```
+
+Modes de paiement : `especes`, `mtn`, `moov`, `carte`.
+
+### Panier en deux temps
+
+1. `POST /api/ventes/checkout` — statut `en_cours`, stock non déduit
+2. `POST /api/ventes/{id}/terminer` — finalise et déduit le stock (+ paiement optionnel)
+
+### Annulation
+
+```http
+POST /api/ventes/{id}/annuler
+```
+
+- Restaure le stock pour une vente `termine`
+- Délai configurable via `boutique_settings.delai_annulation_vente_minutes` (défaut : 5 min)
+- `DELETE /api/ventes/{id}` — suppression uniquement si statut `annule`
+
+### Autres
+
+- `GET /api/ventes?date=2026-05-21` — historique par jour
+- `GET /api/ventes/{id}/facture` — données facture + infos boutique
+- `GET /api/ventes/aujourdhui/stats`
+
+## Paramètres boutique
+
+- `GET /api/boutique/settings` — lecture (tous)
+- `PUT /api/boutique/settings` — écriture (gérant)
+
+Champs : `nom`, `adresse`, `telephone`, `email`, `devise`, `taux_tva`, `delai_annulation_vente_minutes`
+
+## Utilisateurs (gérant)
+
+- `GET /api/users` — liste (`?role=caissier`, `?actifs_seulement=0`)
+- `GET /api/users/caissiers` — caissiers actifs
+- `POST /api/users` — créer
+- `PUT /api/users/{id}` — modifier / désactiver (`est_actif`)
+- `DELETE /api/users/{id}` — désactivation (soft)
+
+## Produits
+
+- CRUD + `image_url` (URL externe)
+- `GET /api/produits/alerte-stock`, `/statistiques`, `/search/{term}`
+
+## Mouvements de stock
+
+- `POST /api/mouvements-stock` — créer (souvent `en_attente` pour arrivage)
+- `POST .../valider` / `.../rejeter` — gérant uniquement
+- `GET .../statistiques`, `.../export`
+
+## Clients, Analytics, IA
+
+Identiques à la v1.0 — voir routes dans `routes/api.php`.
+
+Module IA : assistant statistique (pas de ML).
+
+## Tests
+
+```bash
+php artisan test
+```
+
+## CORS
+
+Éditer `config/cors.php` pour l’IP LAN du poste de développement (tests mobile).
+
+## Variables optionnelles
+
+```env
+SGCI_DELAI_ANNULATION_VENTE=5
+SGCI_TAUX_TVA=0.18
+```

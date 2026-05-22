@@ -37,11 +37,18 @@ import { apiFetch } from '@/lib/api-client';
 import {
   loadBoutiqueSettings,
   loadUserPreferences,
-  saveBoutiqueSettings,
   saveUserPreferences,
   defaultBoutique,
   defaultPreferences,
 } from '@/lib/preferences';
+import {
+  fetchBoutiqueSettings,
+  updateBoutiqueSettings,
+  apiToLocal,
+  localToApi,
+} from '@/lib/boutique-settings';
+import { UsersManagement } from '@/components/UsersManagement';
+import { useTheme } from 'next-themes';
 import { toast } from 'sonner';
 
 interface UserProfile {
@@ -58,10 +65,12 @@ interface BoutiqueSettings {
   email: string;
   tva: number;
   devise: string;
+  delai_annulation_vente_minutes: number;
 }
 
 export default function ParametresPage() {
   const { user, logout } = useAuth();
+  const { setTheme } = useTheme();
   const [activeTab, setActiveTab] = useState('profil');
   const [isLoading, setIsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -74,7 +83,10 @@ export default function ParametresPage() {
     role: ''
   });
 
-  const [boutique, setBoutique] = useState<BoutiqueSettings>(defaultBoutique);
+  const [boutique, setBoutique] = useState<BoutiqueSettings>({
+    ...defaultBoutique,
+    delai_annulation_vente_minutes: 5,
+  });
   const [preferences, setPreferences] = useState(defaultPreferences);
 
   const [securite, setSecurite] = useState({
@@ -99,8 +111,20 @@ export default function ParametresPage() {
         role: user.role,
       });
     }
-    setBoutique(loadBoutiqueSettings());
     setPreferences(loadUserPreferences());
+    const local = loadBoutiqueSettings();
+    setBoutique((prev) => ({ ...prev, ...local, delai_annulation_vente_minutes: prev.delai_annulation_vente_minutes }));
+
+    fetchBoutiqueSettings()
+      .then((api) => {
+        if (api) {
+          setBoutique({
+            ...apiToLocal(api),
+            delai_annulation_vente_minutes: api.delai_annulation_vente_minutes ?? 5,
+          });
+        }
+      })
+      .catch(() => undefined);
   }, [user]);
 
   // 🎯 FONCTIONS DE SAUVEGARDE
@@ -130,12 +154,18 @@ export default function ParametresPage() {
   };
 
   const sauvegarderBoutique = async () => {
+    if (user?.role !== 'gerant') {
+      toast.error('Seul le gérant peut modifier les paramètres boutique sur le serveur');
+      return;
+    }
     setSaving(true);
     try {
-      saveBoutiqueSettings(boutique);
-      toast.success('Paramètres boutique enregistrés sur cet appareil');
-    } catch {
-      toast.error('Erreur lors de la sauvegarde');
+      await updateBoutiqueSettings(
+        localToApi(boutique, boutique.delai_annulation_vente_minutes)
+      );
+      toast.success('Paramètres boutique enregistrés');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Erreur lors de la sauvegarde');
     } finally {
       setSaving(false);
     }
@@ -192,9 +222,35 @@ export default function ParametresPage() {
     }
   };
 
-  const exporterDonnees = () => {
-    toast.success('Export des données lancé');
-    // Logique d'export ici
+  const exporterDonnees = async () => {
+    setSaving(true);
+    try {
+      const [analyticsRes, clientsRes] = await Promise.all([
+        apiFetch('/analytics/export?periode=30j'),
+        apiFetch('/clients/export/data'),
+      ]);
+      if (analyticsRes.ok) {
+        const analytics = await analyticsRes.json();
+        const blob = new Blob([JSON.stringify(analytics, null, 2)], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `analytics-export-${new Date().toISOString().split('T')[0]}.json`;
+        a.click();
+      }
+      if (clientsRes.ok) {
+        const clients = await clientsRes.json();
+        const blob = new Blob([JSON.stringify(clients.data ?? clients, null, 2)], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = clients.filename || `clients-export-${new Date().toISOString().split('T')[0]}.json`;
+        a.click();
+      }
+      toast.success('Exports JSON téléchargés');
+    } catch {
+      toast.error('Erreur lors de l\'export');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const importerDonnees = () => {
@@ -247,7 +303,7 @@ export default function ParametresPage() {
       <main className="p-6 max-w-7xl mx-auto">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           {/* Navigation Tabs */}
-          <TabsList className="grid grid-cols-5 gap-2 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm border border-slate-200/50 dark:border-slate-700/50 p-1">
+          <TabsList className={`grid gap-2 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm border border-slate-200/50 dark:border-slate-700/50 p-1 ${user.role === 'gerant' ? 'grid-cols-6' : 'grid-cols-5'}`}>
             <TabsTrigger value="profil" className="flex items-center space-x-2">
               <User className="w-4 h-4" />
               <span>Profil</span>
@@ -268,6 +324,12 @@ export default function ParametresPage() {
               <Database className="w-4 h-4" />
               <span>Système</span>
             </TabsTrigger>
+            {user.role === 'gerant' && (
+              <TabsTrigger value="equipe" className="flex items-center space-x-2">
+                <User className="w-4 h-4" />
+                <span>Équipe</span>
+              </TabsTrigger>
+            )}
           </TabsList>
 
           {/* Tab Profil */}
@@ -392,7 +454,9 @@ export default function ParametresPage() {
                   <span>Paramètres de la Boutique</span>
                 </CardTitle>
                 <CardDescription>
-                  Configurez les informations de votre établissement commercial
+                  {user.role === 'gerant'
+                    ? 'Synchronisé avec le serveur (tickets, TVA, délai d\'annulation caisse)'
+                    : 'Lecture seule — contactez le gérant pour modifier'}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -405,6 +469,7 @@ export default function ParametresPage() {
                         value={boutique.nom}
                         onChange={(e) => setBoutique(prev => ({ ...prev, nom: e.target.value }))}
                         placeholder="Nom de votre boutique"
+                        disabled={user.role !== 'gerant'}
                       />
                     </div>
 
@@ -415,6 +480,7 @@ export default function ParametresPage() {
                         value={boutique.adresse}
                         onChange={(e) => setBoutique(prev => ({ ...prev, adresse: e.target.value }))}
                         placeholder="Adresse complète"
+                        disabled={user.role !== 'gerant'}
                       />
                     </div>
 
@@ -425,6 +491,7 @@ export default function ParametresPage() {
                         value={boutique.telephone}
                         onChange={(e) => setBoutique(prev => ({ ...prev, telephone: e.target.value }))}
                         placeholder="Téléphone de contact"
+                        disabled={user.role !== 'gerant'}
                       />
                     </div>
                   </div>
@@ -438,6 +505,7 @@ export default function ParametresPage() {
                         value={boutique.email}
                         onChange={(e) => setBoutique(prev => ({ ...prev, email: e.target.value }))}
                         placeholder="contact@boutique.bj"
+                        disabled={user.role !== 'gerant'}
                       />
                     </div>
 
@@ -450,6 +518,7 @@ export default function ParametresPage() {
                         onChange={(e) => setBoutique(prev => ({ ...prev, tva: Number(e.target.value) }))}
                         min="0"
                         max="100"
+                        disabled={user.role !== 'gerant'}
                       />
                     </div>
 
@@ -460,15 +529,35 @@ export default function ParametresPage() {
                         value={boutique.devise}
                         onChange={(e) => setBoutique(prev => ({ ...prev, devise: e.target.value }))}
                         placeholder="Devise utilisée"
+                        disabled={user.role !== 'gerant'}
                       />
                     </div>
+
+                    {user.role === 'gerant' && (
+                      <div className="space-y-2">
+                        <Label htmlFor="boutique-delai">Délai annulation caisse (minutes)</Label>
+                        <Input
+                          id="boutique-delai"
+                          type="number"
+                          min={0}
+                          max={1440}
+                          value={boutique.delai_annulation_vente_minutes}
+                          onChange={(e) =>
+                            setBoutique((prev) => ({
+                              ...prev,
+                              delai_annulation_vente_minutes: Number(e.target.value),
+                            }))
+                          }
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 <div className="flex justify-end pt-4">
                   <Button 
                     onClick={sauvegarderBoutique}
-                    disabled={saving}
+                    disabled={saving || user.role !== 'gerant'}
                     className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600"
                   >
                     {saving ? (
@@ -558,14 +647,17 @@ export default function ParametresPage() {
                 <CardContent className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
-                      <Label>Mode sombre</Label>
-                      <p className="text-sm text-slate-500">Interface sombre pour un confort visuel</p>
+                      <Label>Mode nuit / jour</Label>
+                      <p className="text-sm text-slate-500">Nuit (sombre) ou jour (clair)</p>
                     </div>
                     <Switch
                       checked={preferences.darkMode}
-                      onCheckedChange={(checked) => 
-                        setPreferences(prev => ({ ...prev, darkMode: checked }))
-                      }
+                      onCheckedChange={(checked) => {
+                        const next = { ...preferences, darkMode: checked };
+                        setPreferences(next);
+                        saveUserPreferences(next);
+                        setTheme(checked ? 'dark' : 'light');
+                      }}
                     />
                   </div>
 
@@ -860,6 +952,12 @@ export default function ParametresPage() {
               </Card>
             </div>
           </TabsContent>
+
+          {user.role === 'gerant' && (
+            <TabsContent value="equipe" className="space-y-6">
+              <UsersManagement />
+            </TabsContent>
+          )}
         </Tabs>
       </main>
     </div>

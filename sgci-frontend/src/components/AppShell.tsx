@@ -1,0 +1,87 @@
+'use client';
+
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import {
+  BarChart3,
+  Brain,
+  Package,
+  ShoppingCart,
+  Users,
+  Settings,
+  Store,
+  TrendingUp,
+  History,
+} from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { NotificationBell } from '@/components/NotificationBell';
+import { ThemeToggle } from '@/components/ThemeToggle';
+import { cn } from '@/lib/utils';
+
+const NAV = [
+  { href: '/dashboard', label: 'Dashboard', icon: BarChart3 },
+  { href: '/produits', label: 'Produits', icon: Package },
+  { href: '/stock', label: 'Stock', icon: History },
+  { href: '/arrivage', label: 'Arrivage', icon: TrendingUp },
+  { href: '/caisse', label: 'Caisse', icon: ShoppingCart },
+  { href: '/clients', label: 'Clients', icon: Users },
+  { href: '/analytics', label: 'Analytics', icon: BarChart3 },
+  { href: '/ia', label: 'Assistant stock', icon: Brain },
+  { href: '/parametres', label: 'Paramètres', icon: Settings },
+];
+
+export function AppShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const { user } = useAuth();
+
+  return (
+    <div className="min-h-screen flex bg-background text-foreground">
+      <aside className="hidden lg:flex w-64 flex-col border-r border-border bg-card/80">
+        <div className="p-6 border-b border-border">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 flex items-center justify-center">
+              <Store className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <p className="font-bold text-sm">SGCI Bénin</p>
+              <p className="text-xs text-muted-foreground capitalize">{user?.role}</p>
+            </div>
+          </div>
+        </div>
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+          {NAV.map((item) => {
+            const active = pathname === item.href || pathname.startsWith(item.href + '/');
+            const Icon = item.icon;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  'flex items-center gap-3 px-4 py-3 rounded-xl text-sm transition-colors',
+                  active
+                    ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white'
+                    : 'text-muted-foreground hover:bg-muted'
+                )}
+              >
+                <Icon className="w-4 h-4" />
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
+      </aside>
+
+      <div className="flex-1 flex flex-col min-w-0">
+        <header className="h-14 border-b border-border flex items-center justify-between px-4 lg:px-6 bg-card/60 backdrop-blur sticky top-0 z-40">
+          <p className="text-sm font-medium text-muted-foreground lg:hidden">SGCI Bénin</p>
+          <div className="flex items-center gap-2 ml-auto">
+            <ThemeToggle />
+            <NotificationBell />
+            <span className="text-sm text-muted-foreground hidden sm:inline">{user?.name}</span>
+          </div>
+        </header>
+        <main className="flex-1 overflow-auto">{children}</main>
+      </div>
+    </div>
+  );
+}

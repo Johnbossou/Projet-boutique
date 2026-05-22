@@ -52,6 +52,14 @@ import { Badge } from "../../components/ui/Badge";
 import * as SecureStore from "expo-secure-store";
 import { useAuth } from "../../contexts/AuthContext";
 import { apiFetch } from "@/lib/api-client";
+import { BarcodeScannerModal } from "@/components/BarcodeScannerModal";
+import {
+  enqueueOfflineVente,
+  loadOfflineQueue,
+} from "@/lib/offline-caisse";
+import { syncOfflineQueue } from "@/lib/sync-offline-caisse";
+import { fetchBoutiqueSettings, getDelaiAnnulationMs } from "@/lib/boutique-settings";
+import { downloadFacturePdf } from "@/lib/facture-pdf";
 
 const { width, height } = Dimensions.get("window");
 
@@ -94,6 +102,7 @@ interface VenteResponse {
   montant_recu?: number;
   monnaie_rendue?: number;
   numero_vente?: string;
+  peut_annuler?: boolean;
   client?: {
     nom: string;
     telephone?: string;
@@ -122,6 +131,9 @@ export default function CaisseScreen() {
   const [lastVente, setLastVente] = useState<VenteResponse | null>(null);
   const [showTicket, setShowTicket] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
+  const [showHistorique, setShowHistorique] = useState(false);
+  const [ventesJour, setVentesJour] = useState<VenteResponse[]>([]);
+  const [offlineCount, setOfflineCount] = useState(0);
 
   // États paiement
   const [modePaiement, setModePaiement] = useState<
@@ -183,6 +195,15 @@ export default function CaisseScreen() {
   useEffect(() => {
     chargerProduits();
     chargerClients();
+    fetchBoutiqueSettings().catch(() => undefined);
+    loadOfflineQueue().then((q) => setOfflineCount(q.length));
+    syncOfflineQueue().then((n) => {
+      if (n > 0) {
+        Alert.alert("Synchronisation", `${n} vente(s) hors-ligne envoyée(s)`);
+        loadOfflineQueue().then((q) => setOfflineCount(q.length));
+        chargerProduits();
+      }
+    });
   }, []);
 
   const chargerProduits = async () => {
@@ -238,10 +259,83 @@ export default function CaisseScreen() {
     }
   };
 
+  const chargerHistoriqueDuJour = async () => {
+    try {
+      const today = new Date().toISOString().split("T")[0];
+      const token = await SecureStore.getItemAsync("auth_token");
+      const response = await apiFetch(`/ventes?date=${today}&per_page=50`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const list = Array.isArray(data) ? data : data.data || [];
+        const delai = await getDelaiAnnulationMs();
+        setVentesJour(
+          list.map((v: VenteResponse) => ({
+            ...v,
+            peut_annuler:
+              v.statut === "termine" &&
+              Date.now() - new Date(v.created_at).getTime() < delai,
+          }))
+        );
+      }
+    } catch {
+      Alert.alert("Erreur", "Impossible de charger l'historique");
+    }
+  };
+
+  const annulerVente = async (venteId: number) => {
+    Alert.alert("Annuler la vente", "Cette action est irréversible.", [
+      { text: "Non", style: "cancel" },
+      {
+        text: "Oui",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            const token = await SecureStore.getItemAsync("auth_token");
+            const res = await apiFetch(`/ventes/${venteId}/annuler`, {
+              method: "POST",
+              headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+            });
+            if (!res.ok) {
+              const err = await res.json().catch(() => ({}));
+              throw new Error(err.message || "Annulation refusée");
+            }
+            Alert.alert("Succès", "Vente annulée");
+            await chargerHistoriqueDuJour();
+            await chargerProduits();
+          } catch (e) {
+            Alert.alert("Erreur", e instanceof Error ? e.message : "Échec");
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleBarcodeScan = async (code: string) => {
+    try {
+      const token = await SecureStore.getItemAsync("auth_token");
+      const res = await apiFetch(`/produits/code/${encodeURIComponent(code)}`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      });
+      if (!res.ok) throw new Error("Produit introuvable");
+      const produit: Produit = await res.json();
+      ajouterAuPanier(produit);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {
+      Alert.alert("Scan", "Aucun produit pour ce code");
+    }
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const synced = await syncOfflineQueue();
+    if (synced > 0) Alert.alert("Sync", `${synced} vente(s) synchronisée(s)`);
+    const q = await loadOfflineQueue();
+    setOfflineCount(q.length);
     await chargerProduits();
+    setRefreshing(false);
   };
 
   // Fonctions panier
@@ -448,6 +542,26 @@ export default function CaisseScreen() {
 
     setIsProcessing(true);
 
+    const donneesVente = {
+      ligne_ventes: panier.map((item) => ({
+        produit_id: item.produit.id,
+        quantite: item.quantite,
+      })),
+      remise: remise,
+      notes: notes,
+      client_id: clientId,
+      mode_paiement: modePaiement,
+      numero_transaction:
+        modePaiement === "mtn" || modePaiement === "moov"
+          ? numeroTransaction
+          : null,
+      reference_carte: modePaiement === "carte" ? referenceCarte : null,
+      banque: modePaiement === "carte" ? banqueSelectionnee : null,
+      montant_recu:
+        modePaiement === "especes" ? parseFloat(montantRecu) : null,
+      monnaie_rendue: modePaiement === "especes" ? monnaieRendue : null,
+    };
+
     try {
       // Vérification des stocks
       for (const item of panier) {
@@ -470,26 +584,6 @@ export default function CaisseScreen() {
           }
         }
       }
-
-      // Données de vente
-      const donneesVente = {
-        ligne_ventes: panier.map((item) => ({
-          produit_id: item.produit.id,
-          quantite: item.quantite,
-        })),
-        remise: remise,
-        notes: notes,
-        client_id: clientId,
-        mode_paiement: modePaiement,
-        numero_transaction:
-          modePaiement === "mtn" || modePaiement === "moov"
-            ? numeroTransaction
-            : null,
-        reference_carte: modePaiement === "carte" ? referenceCarte : null,
-        banque: modePaiement === "carte" ? banqueSelectionnee : null,
-        montant_recu:
-          modePaiement === "especes" ? parseFloat(montantRecu) : null,
-      };
 
       const token = await SecureStore.getItemAsync("auth_token");
       const response = await apiFetch("/ventes", {
@@ -518,11 +612,26 @@ export default function CaisseScreen() {
       await chargerProduits();
       viderPanier();
     } catch (error) {
-      console.error("Erreur paiement:", error);
-      Alert.alert(
-        "Erreur",
-        error instanceof Error ? error.message : "Erreur lors du paiement"
-      );
+      const isNetwork =
+        error instanceof TypeError ||
+        (error instanceof Error &&
+          /network|fetch|failed|connexion/i.test(error.message));
+      if (isNetwork) {
+        await enqueueOfflineVente(donneesVente);
+        const q = await loadOfflineQueue();
+        setOfflineCount(q.length);
+        Alert.alert(
+          "Hors-ligne",
+          "Vente en file d'attente. Elle sera synchronisée au retour du réseau."
+        );
+        viderPanier();
+      } else {
+        console.error("Erreur paiement:", error);
+        Alert.alert(
+          "Erreur",
+          error instanceof Error ? error.message : "Erreur lors du paiement"
+        );
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -846,6 +955,20 @@ export default function CaisseScreen() {
           </View>
 
           <View style={styles.headerRight}>
+            {offlineCount > 0 && (
+              <Text style={{ color: "#f97316", fontSize: 11, marginRight: 6 }}>
+                {offlineCount} off
+              </Text>
+            )}
+            <TouchableOpacity
+              style={styles.scanButton}
+              onPress={() => {
+                setShowHistorique(true);
+                chargerHistoriqueDuJour();
+              }}
+            >
+              <RefreshCw size={18} color="#94a3b8" />
+            </TouchableOpacity>
             <TouchableOpacity
               style={styles.scanButton}
               onPress={() => setShowScanner(true)}
@@ -1359,50 +1482,57 @@ export default function CaisseScreen() {
         )}
       </Animated.View>
 
-      {/* Scanner Modal */}
-      <Modal
+      <BarcodeScannerModal
         visible={showScanner}
+        onClose={() => setShowScanner(false)}
+        onScan={handleBarcodeScan}
+      />
+
+      <Modal
+        visible={showHistorique}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setShowScanner(false)}
+        onRequestClose={() => setShowHistorique(false)}
       >
         <SafeAreaView style={styles.scannerModal}>
           <View style={styles.scannerHeader}>
-            <TouchableOpacity
-              style={styles.scannerClose}
-              onPress={() => setShowScanner(false)}
-            >
+            <TouchableOpacity onPress={() => setShowHistorique(false)}>
               <X size={24} color="#64748b" />
             </TouchableOpacity>
-            <Text style={styles.scannerTitle}>Scanner</Text>
+            <Text style={styles.scannerTitle}>Ventes du jour</Text>
             <View style={{ width: 40 }} />
           </View>
-
-          <View style={styles.scannerContent}>
-            <View style={styles.scannerPreview}>
-              <Text style={styles.scannerInstructions}>
-                Fonctionnalité en développement
+          <ScrollView style={{ padding: 16 }}>
+            {offlineCount > 0 && (
+              <Text style={{ color: "#f97316", marginBottom: 12 }}>
+                {offlineCount} vente(s) en attente de sync
               </Text>
-              <Camera size={64} color="#94a3b8" />
-            </View>
-
-            <View style={styles.scannerActions}>
-              <TouchableOpacity
-                style={styles.scannerButton}
-                onPress={pickImageFromGallery}
+            )}
+            {ventesJour.map((v) => (
+              <View
+                key={v.id}
+                style={{
+                  padding: 12,
+                  marginBottom: 8,
+                  backgroundColor: "#1e293b",
+                  borderRadius: 8,
+                }}
               >
-                <ImageIcon size={20} color="#ffffff" />
-                <Text style={styles.scannerButtonText}>Galerie</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.scannerButtonSecondary}
-                onPress={() => setShowScanner(false)}
-              >
-                <Text style={styles.scannerButtonSecondaryText}>Annuler</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+                <Text style={{ color: "#fff", fontWeight: "600" }}>
+                  #{v.numero_vente ?? v.id} — {v.montant_total?.toLocaleString()} FCFA
+                </Text>
+                <Text style={{ color: "#94a3b8", fontSize: 12 }}>{v.statut}</Text>
+                {v.peut_annuler && (
+                  <TouchableOpacity
+                    style={{ marginTop: 8 }}
+                    onPress={() => annulerVente(v.id)}
+                  >
+                    <Text style={{ color: "#ef4444" }}>Annuler</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ))}
+          </ScrollView>
         </SafeAreaView>
       </Modal>
 
@@ -1427,6 +1557,18 @@ export default function CaisseScreen() {
               onPress={imprimerTicket}
             >
               <Printer size={20} color="#3b82f6" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.ticketPrint}
+              onPress={async () => {
+                try {
+                  await downloadFacturePdf(lastVente!.id);
+                } catch {
+                  Alert.alert("Erreur", "PDF indisponible");
+                }
+              }}
+            >
+              <Text style={{ color: "#3b82f6", fontSize: 12 }}>PDF</Text>
             </TouchableOpacity>
           </View>
 

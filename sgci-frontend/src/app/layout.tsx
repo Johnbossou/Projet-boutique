@@ -4,6 +4,9 @@ import { Toaster } from 'sonner';
 import './globals.css';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { AuthGuard } from '@/components/AuthGuard';
+import { AppChrome } from '@/components/AppChrome';
+import { ThemeProvider } from '@/components/ThemeProvider';
+import { ThemeBootstrap } from '@/components/ThemeBootstrap';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -18,10 +21,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="fr" className="dark">
-      <body className={inter.className}>
+    <html lang="fr" suppressHydrationWarning>
+      <body className={`${inter.className} bg-background text-foreground antialiased`}>
+        <ThemeProvider>
+        <ThemeBootstrap />
         <AuthProvider>
-          <AuthGuard>{children}</AuthGuard>
+          <AuthGuard>
+            <AppChrome>{children}</AppChrome>
+          </AuthGuard>
           {/* 🔥 AJOUT CRITIQUE : Toaster pour les notifications */}
           <Toaster 
             position="top-right"
@@ -31,6 +38,7 @@ export default function RootLayout({
             expand={true}
           />
         </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

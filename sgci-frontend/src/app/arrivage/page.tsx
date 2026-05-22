@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Plus, CheckCircle2, XCircle, Search } from 'lucide-react';
+import { Plus, CheckCircle2, XCircle, Search, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { apiFetch } from '@/lib/api-client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -33,6 +34,7 @@ export default function ArrivagePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [pendingOnly, setPendingOnly] = useState(true);
   const [searchProduit, setSearchProduit] = useState('');
+  const [showScanner, setShowScanner] = useState(false);
 
   const chargerProduits = useCallback(async () => {
     try {
@@ -85,6 +87,22 @@ export default function ArrivagePage() {
   }, [searchParams, produits]);
 
   const resetForm = () => setFormData(initialForm);
+
+  const handleCodeDetected = (code: string, produit?: Produit) => {
+    if (produit) {
+      // Si le produit est trouvé via l'API, pré-remplir le formulaire
+      setFormData(prev => ({
+        ...prev,
+        produit_id: produit.id.toString(),
+        quantite: '1', // Défaut à 1 unité
+      }));
+      toast.success(`Produit détecté: ${produit.nom}`);
+    } else {
+      // Le code a été détecté mais le produit n'existe pas
+      toast.warning(`Code détecté: ${code}, mais produit non trouvé`);
+    }
+    setShowScanner(false);
+  };
 
   const submitArrivage = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -212,79 +230,108 @@ export default function ArrivagePage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form className="space-y-5" onSubmit={submitArrivage}>
-            <div className="grid gap-4 lg:grid-cols-3">
-              <div className="space-y-2">
-                <Label htmlFor="produit_id">Produit *</Label>
-                <Select
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, produit_id: value }))}
+          <div className="space-y-5">
+            {/* Scanner QR/Code-barres */}
+            <div className="border-b pb-6">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-sm font-semibold">Scanner QR/Code-barres</h3>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowScanner(!showScanner)}
+                  className="gap-2"
                 >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Sélectionnez un produit" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {produitsFiltres.length === 0 ? (
-                      <SelectItem value="">Aucun produit trouvé</SelectItem>
-                    ) : (
-                      produitsFiltres.map((produit) => (
-                        <SelectItem key={produit.id} value={produit.id.toString()}>
-                          {produit.nom} ({produit.quantite_stock} en stock)
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
+                  <ChevronDown className={`h-4 w-4 transition-transform ${showScanner ? 'rotate-180' : ''}`} />
+                  {showScanner ? 'Masquer' : 'Afficher'} scanner
+                </Button>
+              </div>
+              {showScanner && (
+                <div className="mb-4 rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+                  <BarcodeScanner 
+                    onCodeDetected={handleCodeDetected}
+                    apiBaseUrl={process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Formulaire */}
+            <form className="space-y-5" onSubmit={submitArrivage}>
+              <div className="grid gap-4 lg:grid-cols-3">
+                <div className="space-y-2">
+                  <Label htmlFor="produit_id">Produit *</Label>
+                  <Select
+                    value={formData.produit_id}
+                    onValueChange={(value) => setFormData(prev => ({ ...prev, produit_id: value }))}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Sélectionnez un produit" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {produitsFiltres.length === 0 ? (
+                        <SelectItem value="">Aucun produit trouvé</SelectItem>
+                      ) : (
+                        produitsFiltres.map((produit) => (
+                          <SelectItem key={produit.id} value={produit.id.toString()}>
+                            {produit.nom} ({produit.quantite_stock} en stock)
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="quantite">Quantité *</Label>
+                  <Input
+                    id="quantite"
+                    type="number"
+                    min="1"
+                    value={formData.quantite}
+                    onChange={(e) => setFormData(prev => ({ ...prev, quantite: e.target.value }))}
+                    placeholder="0"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="reference_bon">Référence bon</Label>
+                  <Input
+                    id="reference_bon"
+                    value={formData.reference_bon}
+                    onChange={(e) => setFormData(prev => ({ ...prev, reference_bon: e.target.value }))}
+                    placeholder="Ex: BON-2026-001"
+                  />
+                </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="quantite">Quantité *</Label>
-                <Input
-                  id="quantite"
-                  type="number"
-                  min="1"
-                  value={formData.quantite}
-                  onChange={(e) => setFormData(prev => ({ ...prev, quantite: e.target.value }))}
-                  placeholder="0"
-                  required
+                <Label htmlFor="notes">Notes</Label>
+                <Textarea
+                  id="notes"
+                  rows={3}
+                  value={formData.notes}
+                  onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                  placeholder="Informations complémentaires sur la réception"
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="reference_bon">Référence bon</Label>
-                <Input
-                  id="reference_bon"
-                  value={formData.reference_bon}
-                  onChange={(e) => setFormData(prev => ({ ...prev, reference_bon: e.target.value }))}
-                  placeholder="Ex: BON-2026-001"
-                />
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <Button type="submit" disabled={isSaving || isLoading}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Enregistrer l&apos;arrivage
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setPendingOnly((prev) => !prev)}
+                >
+                  {pendingOnly ? 'Afficher tous les mouvements' : 'Afficher seulement les demandes'}
+                </Button>
               </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="notes">Notes</Label>
-              <Textarea
-                id="notes"
-                rows={3}
-                value={formData.notes}
-                onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                placeholder="Informations complémentaires sur la réception"
-              />
-            </div>
-
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <Button type="submit" disabled={isSaving || isLoading}>
-                <Plus className="mr-2 h-4 w-4" />
-                Enregistrer l&apos;arrivage
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setPendingOnly((prev) => !prev)}
-              >
-                {pendingOnly ? 'Afficher tous les mouvements' : 'Afficher seulement les demandes'}
-              </Button>
-            </div>
-          </form>
+            </form>
+          </div>
         </CardContent>
       </Card>
 

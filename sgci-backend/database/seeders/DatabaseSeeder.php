@@ -10,12 +10,12 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             UsersTableSeeder::class,
+            BoutiqueSettingsSeeder::class,
             CategoriesTableSeeder::class,
             ProduitsTableSeeder::class,
             ClientsTableSeeder::class,
-            VentesTableSeeder::class, // ⬅️ AJOUT IMPORTANT !
-            AIMetricsSeeder::class, // ← AJOUTEZ CETTE LIGNE
-
+            VentesTableSeeder::class,
+            AIMetricsSeeder::class,
         ]);
     }
 }

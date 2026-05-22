@@ -35,6 +35,8 @@ export default function TabLayout() {
       <Tabs.Screen name="analytics" options={{ href: null }} />
       <Tabs.Screen name="ia" options={{ href: null }} />
       <Tabs.Screen name="parametres" options={{ href: null }} />
+      <Tabs.Screen name="arrivage" options={{ href: null }} />
+      <Tabs.Screen name="stock" options={{ href: null }} />
     </Tabs>
   );
 }

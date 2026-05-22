@@ -26,6 +26,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiFetch } from '@/lib/api-client';
+import { NotificationBell } from '@/components/NotificationBell';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -126,6 +127,9 @@ export default function Dashboard() {
   useEffect(() => {
     if (user) {
       fetchDashboardData();
+      if (user.role === 'gerant') {
+        apiFetch('/notifications/sync-stock-alerts', { method: 'POST' }).catch(() => undefined);
+      }
     }
   }, [user]);
 
@@ -365,12 +369,7 @@ export default function Dashboard() {
                 <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
               </Button>
               
-              <Button variant="ghost" size="icon" className="relative">
-                <Bell className="w-5 h-5" />
-                <Badge className="absolute -top-1 -right-1 h-5 w-5 bg-red-500 text-white p-0 flex items-center justify-center text-xs">
-                  {produitsAlerte.length}
-                </Badge>
-              </Button>
+              <NotificationBell />
               
               <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
                 {user.name[0]}

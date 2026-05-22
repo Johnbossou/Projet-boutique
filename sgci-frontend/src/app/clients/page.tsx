@@ -29,6 +29,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiFetch } from '@/lib/api-client';
@@ -109,12 +110,14 @@ const useDebounce = (value: string, delay: number) => {
 };
 
 export default function ClientsPage() {
-  const { user, getToken } = useAuth();
+  const { user } = useAuth();
   const [clients, setClients] = useState<Client[]>([]);
   const [commandesClient, setCommandesClient] = useState<Vente[]>([]);
   const [clientSelectionne, setClientSelectionne] = useState<Client | null>(null);
   const [recherche, setRecherche] = useState('');
   const [filtreStatut, setFiltreStatut] = useState<'tous' | 'actif' | 'inactif' | 'vip'>('tous');
+  const [sortField, setSortField] = useState<'nom' | 'email' | 'telephone' | 'statut' | 'nombre_commandes' | 'total_achats' | 'created_at'>('nom');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [isLoading, setIsLoading] = useState(true);
   const [loadingCommandes, setLoadingCommandes] = useState(false);
   const [showModalClient, setShowModalClient] = useState(false);
@@ -160,21 +163,32 @@ export default function ClientsPage() {
     chargerStatistiques();
   }, []);
 
-  // Chargement avec filtres
+  // Chargement avec filtres et tri
   useEffect(() => {
     chargerClientsAvecFiltres();
-  }, [rechercheDebouncee, filtreStatut]);
+  }, [rechercheDebouncee, filtreStatut, sortField, sortDirection]);
+
+  const changerTri = (field: typeof sortField) => {
+    if (sortField === field) {
+      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+
+    setSortField(field);
+    setSortDirection('asc');
+  };
 
   // 🚀 CHARGE LES CLIENTS AVEC FILTRES
   const chargerClientsAvecFiltres = async (page = 1) => {
     try {
       setIsLoading(true);
-      const token = await getToken();
-      
+
       const params = new URLSearchParams();
       if (rechercheDebouncee) params.append('search', rechercheDebouncee);
       if (filtreStatut !== 'tous') params.append('statut', filtreStatut);
       params.append('page', page.toString());
+      params.append('sort_field', sortField);
+      params.append('sort_direction', sortDirection);
       
       const response = await apiFetch(`/clients?${params}`, {
         headers: { 'Accept': 'application/json' },
@@ -203,11 +217,11 @@ export default function ClientsPage() {
       }));
       
       setClients(clientsTransformes);
-      setPagination(data.meta || {
-        current_page: 1,
-        last_page: 1,
-        per_page: 20,
-        total: clientsTransformes.length
+      setPagination({
+        current_page: data.meta?.current_page || page,
+        last_page: data.meta?.last_page || 1,
+        per_page: data.meta?.per_page || 20,
+        total: data.meta?.total ?? clientsTransformes.length
       });
       
     } catch (error) {
@@ -226,7 +240,6 @@ export default function ClientsPage() {
   // 🚀 CHARGE LES STATISTIQUES
   const chargerStatistiques = async () => {
     try {
-      const token = await getToken();
       const response = await apiFetch('/clients/statistiques/globales', {
         headers: { 'Accept': 'application/json' },
       });
@@ -240,12 +253,20 @@ export default function ClientsPage() {
     }
   };
 
+  const handleSort = (field: typeof sortField) => {
+    if (sortField === field) {
+      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDirection('desc');
+    }
+  };
+
   // 🚀 CHARGE LES DÉTAILS D'UN CLIENT AVEC COMMANDES
   const chargerDetailsClient = async (clientId: number) => {
     try {
       setLoadingCommandes(true);
-      const token = await getToken();
-      
+
       const response = await apiFetch(`/clients/${clientId}`, {
         headers: { 'Accept': 'application/json' },
       });
@@ -330,8 +351,7 @@ export default function ClientsPage() {
   const creerClient = async () => {
     try {
       setActionEnCours('creation');
-      const token = await getToken();
-      
+
       const response = await apiFetch('/clients', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -372,8 +392,7 @@ export default function ClientsPage() {
     
     try {
       setActionEnCours('modification');
-      const token = await getToken();
-      
+
       const response = await apiFetch(`/clients/${clientSelectionne.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -415,8 +434,7 @@ export default function ClientsPage() {
     
     try {
       setActionEnCours('suppression');
-      const token = await getToken();
-      
+
       const response = await apiFetch(`/clients/${clientSelectionne.id}`, {
         method: 'DELETE',
       });
@@ -451,8 +469,7 @@ export default function ClientsPage() {
   const promouvoirVip = async (client: Client) => {
     try {
       setActionEnCours(`promotion-${client.id}`);
-      const token = await getToken();
-      
+
       const response = await apiFetch(`/clients/${client.id}/promouvoir-vip`, {
         method: 'POST',
       });
@@ -489,8 +506,7 @@ export default function ClientsPage() {
   const retrograderVip = async (client: Client) => {
     try {
       setActionEnCours(`retrogradation-${client.id}`);
-      const token = await getToken();
-      
+
       const response = await apiFetch(`/clients/${client.id}/retrograder-vip`, {
         method: 'POST',
       });
@@ -527,8 +543,7 @@ export default function ClientsPage() {
   const exporterClients = async () => {
     try {
       setActionEnCours('export');
-      const token = await getToken();
-      
+
       const params = new URLSearchParams();
       if (recherche) params.append('search', recherche);
       if (filtreStatut !== 'tous') params.append('statut', filtreStatut);
@@ -546,13 +561,13 @@ export default function ClientsPage() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `clients-export-${new Date().toISOString().split('T')[0]}.json`;
+      a.download = data.filename || `clients-export-${new Date().toISOString().split('T')[0]}.json`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
       
-      toast.success('Export réalisé avec succès');
+      toast.success(`Export réalisé avec succès (${data.count || data.data?.length || 0} clients)`);
       
     } catch (error: any) {
       console.error('Erreur export clients:', error);
@@ -850,8 +865,19 @@ export default function ClientsPage() {
                     placeholder="Rechercher un client..."
                     value={recherche}
                     onChange={(e) => setRecherche(e.target.value)}
-                    className="pl-10 w-80 bg-white/50 dark:bg-slate-700/50 border-slate-300 dark:border-slate-600"
+                    className="pl-10 pr-10 w-80 bg-white/50 dark:bg-slate-700/50 border-slate-300 dark:border-slate-600"
                   />
+                  {recherche && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-2 top-1/2 -translate-y-1/2"
+                      onClick={() => setRecherche('')}
+                      aria-label="Effacer la recherche"
+                    >
+                      <X className="w-4 h-4 text-slate-500" />
+                    </Button>
+                  )}
                 </div>
 
                 <div className="flex items-center space-x-2">
@@ -878,57 +904,228 @@ export default function ClientsPage() {
           </CardContent>
         </Card>
 
-        {/* Grid des Clients */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          <AnimatePresence>
-            {isLoading ? (
-              Array.from({ length: 6 }).map((_, index) => (
-                <Card key={index} className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm border-slate-200/50 dark:border-slate-700/50 animate-pulse">
-                  <CardContent className="p-6">
-                    <div className="space-y-4">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-12 h-12 bg-slate-200 dark:bg-slate-700 rounded-xl"></div>
-                        <div className="space-y-2 flex-1">
-                          <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-3/4"></div>
-                          <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-1/2"></div>
+        {/* Liste Clients en Tableau */}
+        <Card className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm border-slate-200/50 dark:border-slate-700/50">
+          <CardHeader>
+            <CardTitle>Liste des clients</CardTitle>
+            <CardDescription>
+              Cliquez sur une ligne pour ouvrir le profil client et appliquer des actions VIP.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="overflow-x-auto overflow-y-auto max-h-[640px]">
+            <Table className="min-w-[900px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="sticky top-0 z-10 bg-white/95 dark:bg-slate-900/95">
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 text-left"
+                      onClick={() => changerTri('nom')}
+                    >
+                      Client
+                      {sortField === 'nom' ? (
+                        sortDirection === 'asc' ? (
+                          <ArrowUp className="w-3 h-3" />
+                        ) : (
+                          <ArrowDown className="w-3 h-3" />
+                        )
+                      ) : (
+                        <ArrowUp className="w-3 h-3 opacity-0" />
+                      )}
+                    </button>
+                  </TableHead>
+                  <TableHead className="sticky top-0 z-10 bg-white/95 dark:bg-slate-900/95">
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 text-left"
+                      onClick={() => changerTri('email')}
+                    >
+                      Email
+                      {sortField === 'email' ? (
+                        sortDirection === 'asc' ? (
+                          <ArrowUp className="w-3 h-3" />
+                        ) : (
+                          <ArrowDown className="w-3 h-3" />
+                        )
+                      ) : (
+                        <ArrowUp className="w-3 h-3 opacity-0" />
+                      )}
+                    </button>
+                  </TableHead>
+                  <TableHead className="sticky top-0 z-10 bg-white/95 dark:bg-slate-900/95">
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 text-left"
+                      onClick={() => changerTri('telephone')}
+                    >
+                      Téléphone
+                      {sortField === 'telephone' ? (
+                        sortDirection === 'asc' ? (
+                          <ArrowUp className="w-3 h-3" />
+                        ) : (
+                          <ArrowDown className="w-3 h-3" />
+                        )
+                      ) : (
+                        <ArrowUp className="w-3 h-3 opacity-0" />
+                      )}
+                    </button>
+                  </TableHead>
+                  <TableHead className="sticky top-0 z-10 bg-white/95 dark:bg-slate-900/95">
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 text-left"
+                      onClick={() => changerTri('statut')}
+                    >
+                      Statut
+                      {sortField === 'statut' ? (
+                        sortDirection === 'asc' ? (
+                          <ArrowUp className="w-3 h-3" />
+                        ) : (
+                          <ArrowDown className="w-3 h-3" />
+                        )
+                      ) : (
+                        <ArrowUp className="w-3 h-3 opacity-0" />
+                      )}
+                    </button>
+                  </TableHead>
+                  <TableHead className="sticky top-0 z-10 bg-white/95 dark:bg-slate-900/95">
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 text-left"
+                      onClick={() => changerTri('nombre_commandes')}
+                    >
+                      Commandes
+                      {sortField === 'nombre_commandes' ? (
+                        sortDirection === 'asc' ? (
+                          <ArrowUp className="w-3 h-3" />
+                        ) : (
+                          <ArrowDown className="w-3 h-3" />
+                        )
+                      ) : (
+                        <ArrowUp className="w-3 h-3 opacity-0" />
+                      )}
+                    </button>
+                  </TableHead>
+                  <TableHead className="sticky top-0 z-10 bg-white/95 dark:bg-slate-900/95">
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 text-left"
+                      onClick={() => changerTri('total_achats')}
+                    >
+                      CA total
+                      {sortField === 'total_achats' ? (
+                        sortDirection === 'asc' ? (
+                          <ArrowUp className="w-3 h-3" />
+                        ) : (
+                          <ArrowDown className="w-3 h-3" />
+                        )
+                      ) : (
+                        <ArrowUp className="w-3 h-3 opacity-0" />
+                      )}
+                    </button>
+                  </TableHead>
+                  <TableHead className="sticky top-0 z-10 bg-white/95 dark:bg-slate-900/95">Dernière commande</TableHead>
+                  <TableHead className="sticky top-0 z-10 bg-white/95 dark:bg-slate-900/95 text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-12 text-slate-500">
+                      Chargement des clients...
+                    </TableCell>
+                  </TableRow>
+                ) : clients.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-12 text-slate-500">
+                      Aucun client ne correspond à vos critères de recherche.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  clients.map((client) => (
+                    <TableRow
+                      key={client.id}
+                      className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700"
+                      onClick={() => ouvrirModalVisualisation(client)}
+                    >
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span className="font-semibold text-slate-900 dark:text-white">{client.nom}</span>
+                          <span className="text-sm text-slate-500 dark:text-slate-400">
+                            {client.ville || 'Ville non renseignée'}
+                          </span>
                         </div>
-                      </div>
-                      <div className="space-y-2">
-                        <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-full"></div>
-                        <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-2/3"></div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4 pt-4">
-                        <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded"></div>
-                        <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded"></div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
-            ) : clients.length > 0 ? (
-              clients.map((client, index) => (
-                <ClientCard key={client.id} client={client} index={index} />
-              ))
-            ) : (
-              <div className="col-span-full text-center py-12">
-                <Users className="w-16 h-16 text-slate-400 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
-                  Aucun client trouvé
-                </h3>
-                <p className="text-slate-600 dark:text-slate-400">
-                  Aucun client ne correspond à vos critères de recherche.
-                </p>
-                <Button 
-                  className="mt-4 bg-gradient-to-r from-blue-500 to-purple-500"
-                  onClick={ouvrirModalCreation}
-                >
-                  <UserPlus className="w-4 h-4 mr-2" />
-                  Créer le premier client
-                </Button>
-              </div>
-            )}
-          </AnimatePresence>
-        </div>
+                      </TableCell>
+                      <TableCell>{client.email}</TableCell>
+                      <TableCell>{client.telephone}</TableCell>
+                      <TableCell>
+                        <Badge variant={
+                          client.statut === 'vip' ? 'default' : client.statut === 'actif' ? 'secondary' : 'outline'
+                        } className={
+                          client.statut === 'vip'
+                            ? 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20'
+                            : client.statut === 'actif'
+                            ? 'bg-green-500/10 text-green-600 border-green-500/20'
+                            : 'bg-slate-500/10 text-slate-600 border-slate-500/20'
+                        }>
+                          {client.statut === 'vip' ? 'VIP' : client.statut}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{client.nombre_commandes}</TableCell>
+                      <TableCell>
+                        {client.total_achats >= 1000
+                          ? `${(client.total_achats / 1000).toFixed(0)}K FCFA`
+                          : `${client.total_achats.toLocaleString()} FCFA`}
+                      </TableCell>
+                      <TableCell>
+                        {client.derniere_commande
+                          ? new Date(client.derniere_commande.date).toLocaleDateString('fr-FR')
+                          : '—'}
+                      </TableCell>
+                      <TableCell className="text-right space-x-2">
+                        <div className="flex flex-wrap justify-end gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              ouvrirModalVisualisation(client);
+                            }}
+                          >
+                            Voir
+                          </Button>
+                          {client.statut === 'vip' ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                retrograderVip(client);
+                              }}
+                            >
+                              Retrograder
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                promouvoirVip(client);
+                              }}
+                            >
+                              VIP
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
 
         {/* Pagination */}
         {pagination.last_page > 1 && (

@@ -42,6 +42,7 @@ import {
   View,
 } from "react-native";
 import { useAuth } from "../../contexts/AuthContext";
+import { NotificationBell } from "@/components/NotificationBell";
 import { apiFetch } from "@/lib/api-client";
 
 const { width, height } = Dimensions.get("window");
@@ -258,6 +259,18 @@ export default function DashboardScreen() {
       label: "Produits",
       active: false,
       route: "/produits",
+    },
+    {
+      icon: Package,
+      label: "Stock",
+      active: false,
+      route: "/(tabs)/stock",
+    },
+    {
+      icon: TrendingUpIcon,
+      label: "Arrivage",
+      active: false,
+      route: "/(tabs)/arrivage",
     },
     {
       icon: ShoppingCart,
@@ -497,18 +510,7 @@ export default function DashboardScreen() {
                 </Animated.View>
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[styles.iconButton, styles.notificationButton]}
-              >
-                <Bell size={22} color="#ffffff" />
-                {produitsAlerte.length > 0 && (
-                  <View style={styles.notificationBadge}>
-                    <Text style={styles.notificationBadgeText}>
-                      {produitsAlerte.length}
-                    </Text>
-                  </View>
-                )}
-              </TouchableOpacity>
+              <NotificationBell />
 
               <TouchableOpacity style={styles.userButton}>
                 <LinearGradient
@@ -841,6 +843,8 @@ export default function DashboardScreen() {
           {[
             { icon: Home, label: "Accueil", route: "/(tabs)" },
             { icon: Package, label: "Produits", route: "/produits" },
+            { icon: Package, label: "Stock", route: "/stock" },
+            { icon: TrendingUpIcon, label: "Arrivage", route: "/arrivage" },
             { icon: ShoppingCart, label: "Caisse", route: "/caisse" },
             { icon: Users, label: "Clients", route: "/clients" },
             { icon: BarChart3, label: "Stats", route: "/analytics" },

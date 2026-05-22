@@ -20,14 +20,21 @@ class AuthController extends Controller
         if (Auth::attempt($request->only('email', 'password'))) {
             $user = User::where('email', $request->email)->first();
 
+            if (!$user->est_actif) {
+                Auth::logout();
+                throw ValidationException::withMessages([
+                    'email' => ['Ce compte est désactivé. Contactez le gérant.'],
+                ]);
+            }
+
             // Mettre à jour la dernière connexion
             $user->update(['derniere_connexion' => now()]);
 
-            // Créer le token
-            $token = $user->createToken('auth-token')->plainTextToken;
+            $tokenData = $this->issueToken($user);
 
             return response()->json([
-                'token' => $token,
+                'token' => $tokenData['token'],
+                'expires_at' => $tokenData['expires_at'],
                 'user' => [
                     'id' => $user->id,
                     'name' => $user->name,
@@ -48,6 +55,19 @@ class AuthController extends Controller
         $request->user()->currentAccessToken()->delete();
 
         return response()->json(['message' => 'Déconnexion réussie']);
+    }
+
+    public function refresh(Request $request)
+    {
+        $user = $request->user();
+        $request->user()->currentAccessToken()->delete();
+        $tokenData = $this->issueToken($user);
+
+        return response()->json([
+            'token' => $tokenData['token'],
+            'expires_at' => $tokenData['expires_at'],
+            'user' => $this->formatUser($user),
+        ]);
     }
 
     public function me(Request $request)
@@ -103,6 +123,23 @@ class AuthController extends Controller
             'email' => $user->email,
             'role' => $user->role,
             'telephone' => $user->telephone,
+        ];
+    }
+
+    private function issueToken(User $user): array
+    {
+        $ttlMinutes = config('sgci.token_ttl_minutes', 10080);
+        $expiresAt = now()->addMinutes($ttlMinutes);
+
+        $accessToken = $user->createToken(
+            'auth-token',
+            ['*'],
+            $expiresAt
+        );
+
+        return [
+            'token' => $accessToken->plainTextToken,
+            'expires_at' => $expiresAt->toIso8601String(),
         ];
     }
 }

@@ -11,6 +11,7 @@ import React, {
 } from 'react';
 import { Alert } from 'react-native';
 import { apiFetch } from '@/lib/api-client';
+import { fetchBoutiqueSettings } from '@/lib/boutique-settings';
 
 interface User {
   id: number;
@@ -54,6 +55,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (response.ok) {
           const data = await response.json();
           setUser(data.user);
+          fetchBoutiqueSettings().catch(() => undefined);
         } else {
           await SecureStore.deleteItemAsync('auth_token');
           await AsyncStorage.removeItem('user_data');
@@ -91,6 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await SecureStore.setItemAsync('auth_token', data.token);
         await AsyncStorage.setItem('user_data', JSON.stringify(data.user));
         setUser(data.user);
+        fetchBoutiqueSettings().catch(() => undefined);
         router.replace('/(tabs)');
       } catch (error: unknown) {
         const message =

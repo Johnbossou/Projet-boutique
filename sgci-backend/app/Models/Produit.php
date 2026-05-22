@@ -10,8 +10,16 @@ class Produit extends Model
     use HasFactory, SoftDeletes;
 
     protected $fillable = [
-        'nom', 'description', 'prix', 'quantite_stock', 'seuil_alerte',
-        'categorie_id', 'est_perissable', 'code_qr', 'unite_mesure'
+        'nom',
+        'description',
+        'prix',
+        'quantite_stock',
+        'seuil_alerte',
+        'categorie_id',
+        'est_perissable',
+        'code_qr',
+        'unite_mesure',
+        'image_url',
     ];
 
     protected $casts = [

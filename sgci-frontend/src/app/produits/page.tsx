@@ -31,6 +31,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiFetch } from '@/lib/api-client';
+import { uploadProduitImage } from '@/lib/media';
 import { toast } from 'sonner';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -115,6 +116,7 @@ const defaultImages = {
 
 export default function ProduitsPage() {
   const { user } = useAuth();
+  const isGerant = user?.role === 'gerant';
   const [produits, setProduits] = useState<Produit[]>([]);
   const [categories, setCategories] = useState<Categorie[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -140,6 +142,7 @@ export default function ProduitsPage() {
     from: 0,
     to: 0
   });
+  const [pendingImageFile, setPendingImageFile] = useState<File | null>(null);
   const [formData, setFormData] = useState({
     nom: '',
     description: '',
@@ -273,9 +276,18 @@ export default function ProduitsPage() {
       if (!response.ok) throw new Error('Erreur lors de la création');
 
       const newProduit = await response.json();
+      if (pendingImageFile) {
+        try {
+          const { image_url } = await uploadProduitImage(newProduit.id, pendingImageFile);
+          newProduit.image_url = image_url;
+        } catch {
+          toast.warning('Produit créé, mais upload image échoué');
+        }
+      }
       setProduits(prev => [newProduit, ...prev]);
       setShowFormDialog(false);
       resetForm();
+      setPendingImageFile(null);
       toast.success('Produit créé avec succès');
       chargerStats();
     } catch (error: unknown) {
@@ -312,11 +324,20 @@ export default function ProduitsPage() {
 
       if (!response.ok) throw new Error('Erreur lors de la modification');
 
-      const updatedProduit = await response.json();
+      let updatedProduit = await response.json();
+      if (pendingImageFile) {
+        try {
+          const { image_url } = await uploadProduitImage(editingProduit.id, pendingImageFile);
+          updatedProduit = { ...updatedProduit, image_url };
+        } catch {
+          toast.warning('Produit modifié, mais upload image échoué');
+        }
+      }
       setProduits(prev => prev.map(p => p.id === editingProduit.id ? updatedProduit : p));
       setShowFormDialog(false);
       setEditingProduit(null);
       resetForm();
+      setPendingImageFile(null);
       toast.success('Produit modifié avec succès');
       chargerStats();
     } catch (error: unknown) {
@@ -363,6 +384,7 @@ export default function ProduitsPage() {
       images: []
     });
     setEditingProduit(null);
+    setPendingImageFile(null);
   };
 
   const openEditDialog = (produit: Produit) => {
@@ -666,13 +688,15 @@ export default function ProduitsPage() {
                     <Edit className="w-4 h-4 mr-2" />
                     Modifier
                   </DropdownMenuItem>
-                  <DropdownMenuItem 
-                    onClick={() => openDeleteDialog(produit)}
-                    className="text-red-600"
-                  >
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Supprimer
-                  </DropdownMenuItem>
+                  {isGerant && (
+                    <DropdownMenuItem 
+                      onClick={() => openDeleteDialog(produit)}
+                      className="text-red-600"
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Supprimer
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -826,14 +850,16 @@ export default function ProduitsPage() {
             >
               <Edit className="w-3 h-3" />
             </Button>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-red-600 hover:text-red-700"
-              onClick={() => openDeleteDialog(produit)}
-            >
-              <Trash2 className="w-3 h-3" />
-            </Button>
+            {isGerant && (
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-red-600 hover:text-red-700"
+                onClick={() => openDeleteDialog(produit)}
+              >
+                <Trash2 className="w-3 h-3" />
+              </Button>
+            )}
           </div>
         </td>
       </motion.tr>
@@ -922,8 +948,21 @@ export default function ProduitsPage() {
               Ajouter
             </Button>
           </div>
+          <div className="flex items-center gap-2">
+            <Input
+              type="file"
+              accept="image/*"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) setPendingImageFile(file);
+              }}
+            />
+            {pendingImageFile && (
+              <span className="text-xs text-green-600">{pendingImageFile.name} prêt à l&apos;upload</span>
+            )}
+          </div>
           <p className="text-xs text-slate-500">
-            Collez l'URL d'une image existante sur le web. Vous pouvez ajouter plusieurs images.
+            Fichier local (upload API) ou URL web. Vous pouvez ajouter plusieurs images.
           </p>
 
           {/* Suggestions d'images par défaut */}
@@ -1584,17 +1623,19 @@ export default function ProduitsPage() {
                         <Edit className="w-4 h-4 mr-2" />
                         Modifier
                       </Button>
-                      <Button 
-                        variant="outline" 
-                        className="flex-1 text-red-600 border-red-300 hover:bg-red-50"
-                        onClick={() => {
-                          setShowDialog(false);
-                          openDeleteDialog(produitSelectionne);
-                        }}
-                      >
-                        <Trash2 className="w-4 h-4 mr-2" />
-                        Supprimer
-                      </Button>
+                      {isGerant && (
+                        <Button 
+                          variant="outline" 
+                          className="flex-1 text-red-600 border-red-300 hover:bg-red-50"
+                          onClick={() => {
+                            setShowDialog(false);
+                            openDeleteDialog(produitSelectionne);
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Supprimer
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1766,18 +1807,20 @@ export default function ProduitsPage() {
                           >
                             <Edit className="w-4 h-4" />
                           </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="text-red-600 hover:text-red-700"
-                            onClick={() => {
-                              setCategorieToDelete(categorie);
-                              setShowDeleteCategorieDialog(true);
-                            }}
-                            disabled={(categorie.produits_count || 0) > 0}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                          {isGerant && (
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="text-red-600 hover:text-red-700"
+                              onClick={() => {
+                                setCategorieToDelete(categorie);
+                                setShowDeleteCategorieDialog(true);
+                              }}
+                              disabled={(categorie.produits_count || 0) > 0}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

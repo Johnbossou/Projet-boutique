@@ -11,13 +11,28 @@ class Vente extends Model
     use HasFactory;
 
     protected $fillable = [
-        'numero_vente', 'montant_total', 'tva', 'remise', 'user_id', 'client_id', 'statut', 'notes',
+        'numero_vente',
+        'montant_total',
+        'tva',
+        'remise',
+        'user_id',
+        'client_id',
+        'statut',
+        'notes',
+        'mode_paiement',
+        'montant_recu',
+        'monnaie_rendue',
+        'numero_transaction',
+        'reference_carte',
+        'banque',
     ];
 
     protected $casts = [
         'montant_total' => 'decimal:2',
         'tva' => 'decimal:2',
         'remise' => 'decimal:2',
+        'montant_recu' => 'decimal:2',
+        'monnaie_rendue' => 'decimal:2',
     ];
 
     // Génération automatique du numéro de vente

@@ -50,11 +50,19 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   loadBoutiqueSettings,
   loadUserPreferences,
-  saveBoutiqueSettings,
   saveUserPreferences,
   defaultBoutique,
   defaultPreferences,
 } from "@/lib/preferences";
+import {
+  fetchBoutiqueSettings,
+  updateBoutiqueSettings,
+  apiToLocal,
+} from "@/lib/boutique-settings";
+import * as Sharing from "expo-sharing";
+import * as FileSystem from "expo-file-system";
+import { UsersManagement } from "@/components/UsersManagement";
+import { useSgciTheme } from "@/contexts/ThemeContext";
 
 const { width, height } = Dimensions.get("window");
 
@@ -72,10 +80,12 @@ interface BoutiqueSettings {
   email: string;
   tva: number;
   devise: string;
+  delai_annulation_vente_minutes?: number;
 }
 
 export default function ParametresScreen() {
   const { user, logout } = useAuth();
+  const { setDarkMode } = useSgciTheme();
   const [activeTab, setActiveTab] = useState("profil");
   const [isLoading, setIsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -139,8 +149,15 @@ export default function ParametresScreen() {
     }
 
     (async () => {
-      setBoutique(await loadBoutiqueSettings());
+      setBoutique({ ...(await loadBoutiqueSettings()), delai_annulation_vente_minutes: 5 });
       setPreferences(await loadUserPreferences());
+      const api = await fetchBoutiqueSettings().catch(() => null);
+      if (api) {
+        setBoutique({
+          ...apiToLocal(api),
+          delai_annulation_vente_minutes: api.delai_annulation_vente_minutes ?? 5,
+        });
+      }
     })();
   }, [user]);
 
@@ -174,13 +191,25 @@ export default function ParametresScreen() {
   };
 
   const sauvegarderBoutique = async () => {
+    if (user?.role !== "gerant") {
+      Alert.alert("Accès refusé", "Seul le gérant peut modifier les paramètres boutique");
+      return;
+    }
     setSaving(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
-      await saveBoutiqueSettings(boutique);
-      Alert.alert("Succès", "Paramètres boutique enregistrés sur cet appareil");
-    } catch {
-      Alert.alert("Erreur", "Erreur lors de la sauvegarde");
+      await updateBoutiqueSettings({
+        nom: boutique.nom,
+        adresse: boutique.adresse,
+        telephone: boutique.telephone,
+        email: boutique.email,
+        devise: boutique.devise,
+        taux_tva: boutique.tva,
+        delai_annulation_vente_minutes: boutique.delai_annulation_vente_minutes ?? 5,
+      });
+      Alert.alert("Succès", "Paramètres boutique synchronisés");
+    } catch (error) {
+      Alert.alert("Erreur", error instanceof Error ? error.message : "Erreur sauvegarde");
     } finally {
       setSaving(false);
     }
@@ -247,9 +276,26 @@ export default function ParametresScreen() {
     }
   };
 
-  const exporterDonnees = () => {
+  const exporterDonnees = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    Alert.alert("Export", "Export des données lancé");
+    try {
+      const [aRes, cRes] = await Promise.all([
+        apiFetch("/analytics/export?periode=30j"),
+        apiFetch("/clients/export/data"),
+      ]);
+      const payload: Record<string, unknown> = {};
+      if (aRes.ok) payload.analytics = await aRes.json();
+      if (cRes.ok) payload.clients = await cRes.json();
+      const path = `${FileSystem.cacheDirectory}sgci-export-${Date.now()}.json`;
+      await FileSystem.writeAsStringAsync(path, JSON.stringify(payload, null, 2));
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(path, { mimeType: "application/json" });
+      } else {
+        Alert.alert("Export", "Fichier généré dans le cache de l'app");
+      }
+    } catch {
+      Alert.alert("Erreur", "Export impossible");
+    }
   };
 
   const importerDonnees = () => {
@@ -451,6 +497,14 @@ export default function ParametresScreen() {
             icon={Database}
             isActive={activeTab === "systeme"}
           />
+          {user?.role === "gerant" && (
+            <TabButton
+              value="equipe"
+              label="Équipe"
+              icon={User}
+              isActive={activeTab === "equipe"}
+            />
+          )}
         </ScrollView>
       </Animated.View>
 
@@ -815,12 +869,15 @@ export default function ParametresScreen() {
                 </View>
                 <View style={styles.sectionContent}>
                   <SwitchItem
-                    label="Mode sombre"
-                    description="Interface sombre pour un confort visuel"
+                    label="Mode nuit / jour"
+                    description="Nuit (sombre) ou jour (clair)"
                     value={preferences.darkMode}
-                    onValueChange={(value: boolean) =>
-                      setPreferences((prev) => ({ ...prev, darkMode: value }))
-                    }
+                    onValueChange={async (value: boolean) => {
+                      const next = { ...preferences, darkMode: value };
+                      setPreferences(next);
+                      await saveUserPreferences(next);
+                      await setDarkMode(value);
+                    }}
                     icon={Palette}
                     color="#8b5cf6"
                   />
@@ -1218,6 +1275,12 @@ export default function ParametresScreen() {
                 <LogOut size={20} color="#ef4444" />
                 <Text style={styles.logoutText}>Déconnexion</Text>
               </TouchableOpacity>
+            </View>
+          )}
+
+          {activeTab === "equipe" && user?.role === "gerant" && (
+            <View style={{ paddingBottom: 24 }}>
+              <UsersManagement />
             </View>
           )}
         </ScrollView>

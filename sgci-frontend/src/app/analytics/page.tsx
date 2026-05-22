@@ -1,15 +1,25 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback, type ComponentType, type SVGProps, useMemo } from 'react';
+import {
+  LineChart,
+  Line,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer
+} from 'recharts';
 import {
   TrendingUp,
   BarChart3,
-  PieChart,
+  PieChart as PieChartIcon,
   Calendar,
   Download,
-  Filter,
-  Eye,
   Zap,
   DollarSign,
   ShoppingCart,
@@ -28,6 +38,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiFetch } from '@/lib/api-client';
 import { toast } from 'sonner';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+
+const COLORS = ['#6366f1', '#38bdf8', '#f472b6', '#34d399', '#f97316', '#a78bfa'];
 
 // Types pour les données analytics
 interface AnalyticsData {
@@ -75,32 +89,66 @@ interface CategorieRepartition {
 
 export default function AnalyticsPage() {
   const { user } = useAuth();
+  const chartRef = useRef<HTMLDivElement>(null);
+  
+  // États pour les données
   const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null);
+  const [analyticsDataPrecedent, setAnalyticsDataPrecedent] = useState<AnalyticsData | null>(null);
   const [ventesQuotidiennes, setVentesQuotidiennes] = useState<VenteQuotidienne[]>([]);
   const [produitsPopulaires, setProduitsPopulaires] = useState<ProduitPopulaire[]>([]);
   const [repartitionCategories, setRepartitionCategories] = useState<CategorieRepartition[]>([]);
+  
+  const lineChartData = useMemo(
+    () => ventesQuotidiennes.map((item) => ({
+      ...item,
+      label: new Date(item.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
+    })),
+    [ventesQuotidiennes]
+  );
+
+  const pieData = useMemo(
+    () => repartitionCategories.map((item) => ({
+      name: item.categorie,
+      value: item.chiffre_affaires,
+      id: item.categorie_id
+    })),
+    [repartitionCategories]
+  );
+  
+  // États pour les filtres et contrôles
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [periode, setPeriode] = useState<'7j' | '30j' | '90j'>('30j');
 
-  // 🎯 CHARGEMENT DES DONNÉES ANALYTICS AVEC PÉRIODE
-  useEffect(() => {
-    chargerAnalytics();
-  }, [periode]);
+  // Fonction pour obtenir la période précédente
+  const getPeriodeAvant = (periode: string): string => {
+    const map = { '7j': '14j', '30j': '60j', '90j': '180j' };
+    return map[periode as keyof typeof map] || '30j';
+  };
 
-  const chargerAnalytics = async () => {
+  // Fonction pour charger toutes les données analytics
+  const chargerAnalytics = useCallback(async () => {
     try {
       setIsLoading(true);
 
-      // 🎯 TOUS LES APPELS AVEC PÉRIODE DYNAMIQUE
-      const [statsResponse, ventesResponse, populairesResponse, categoriesResponse] = await Promise.all([
+      const [
+        statsResponse,
+        statsPrecedentResponse,
+        ventesResponse,
+        populairesResponse,
+        categoriesResponse
+      ] = await Promise.all([
         apiFetch(`/analytics/stats-globales?periode=${periode}`, {
           headers: { 'Accept': 'application/json' }
         }),
+        apiFetch(`/analytics/stats-globales?periode=${getPeriodeAvant(periode)}`, {
+          headers: { 'Accept': 'application/json' }
+        }).catch(() => Promise.resolve(null)),
         apiFetch(`/analytics/ventes-quotidiennes?periode=${periode}`, {
           headers: { 'Accept': 'application/json' }
         }),
-        apiFetch(`/analytics/produits-populaires?periode=${periode}&limit=5`, {
+        apiFetch(`/analytics/produits-populaires?periode=${periode}&limit=10`, {
           headers: { 'Accept': 'application/json' }
         }),
         apiFetch(`/analytics/repartition-categories?periode=${periode}`, {
@@ -108,146 +156,156 @@ export default function AnalyticsPage() {
         })
       ]);
 
-      // 🎯 GESTION DES ERREURS DÉTAILLÉE
-      if (!statsResponse.ok) throw new Error('Erreur lors du chargement des statistiques globales');
-      if (!ventesResponse.ok) throw new Error('Erreur lors du chargement des ventes quotidiennes');
-      if (!populairesResponse.ok) throw new Error('Erreur lors du chargement des produits populaires');
-      if (!categoriesResponse.ok) throw new Error('Erreur lors du chargement de la répartition par catégorie');
+      if (!statsResponse.ok) throw new Error('Erreur stats globales');
 
-      const [statsData, ventesData, populairesData, categoriesData] = await Promise.all([
-        statsResponse.json(),
-        ventesResponse.json(),
-        populairesResponse.json(),
-        categoriesResponse.json()
-      ]);
-
+      const statsData = await statsResponse.json();
       setAnalyticsData(statsData);
-      setVentesQuotidiennes(ventesData);
-      setProduitsPopulaires(populairesData);
-      setRepartitionCategories(categoriesData);
 
-      toast.success(`Données ${periode} chargées avec succès`);
+      if (statsPrecedentResponse?.ok) {
+        const statsPrecedent = await statsPrecedentResponse.json();
+        setAnalyticsDataPrecedent(statsPrecedent);
+      }
 
+      if (ventesResponse.ok) {
+        const ventesData = await ventesResponse.json();
+        setVentesQuotidiennes(Array.isArray(ventesData) ? ventesData : (ventesData.data || []));
+      }
+
+      if (populairesResponse.ok) {
+        const populairesData = await populairesResponse.json();
+        setProduitsPopulaires(Array.isArray(populairesData) ? populairesData : (populairesData.data || []));
+      }
+
+      if (categoriesResponse.ok) {
+        const categoriesData = await categoriesResponse.json();
+        setRepartitionCategories(Array.isArray(categoriesData) ? categoriesData : (categoriesData.data || []));
+      }
+
+      toast.success(`Données ${periode} chargées`);
     } catch (error) {
       console.error('Erreur chargement analytics:', error);
-      toast.error(`Erreur: ${error.message}`);
+      toast.error('Erreur lors du chargement des données');
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
+  }, [periode]);
+
+  useEffect(() => {
+    chargerAnalytics();
+  }, [chargerAnalytics]);
+
+  // Calcule la tendance réelle entre deux périodes
+  const calculerTendance = (valeurActuelle: number, valeurPrecedente: number | undefined): { pct: number; isPositive: boolean; label: string } => {
+    if (!valeurPrecedente || valeurPrecedente === 0) {
+      return { pct: 0, isPositive: true, label: 'N/A' };
+    }
+    const pct = ((valeurActuelle - valeurPrecedente) / valeurPrecedente) * 100;
+    return {
+      pct: Math.abs(pct),
+      isPositive: pct >= 0,
+      label: `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`
+    };
   };
 
-  // 🎯 FONCTION DE RAFRAÎCHISSEMENT MANUEL
+  // Gère le rafraîchissement
   const handleRefresh = async () => {
     setIsRefreshing(true);
     await chargerAnalytics();
   };
 
-  // 🎯 FONCTION D'EXPORT DES DONNÉES
-  const handleExport = async () => {
+  // Export PDF
+  const handleExportPDF = async () => {
     try {
-      const response = await apiFetch(`/analytics/export?periode=${periode}&format=json`, {
-        headers: { 'Accept': 'application/json' }
+      setIsExporting(true);
+      if (!chartRef.current) return;
+
+      const canvas = await html2canvas(chartRef.current, {
+        scale: 2,
+        backgroundColor: '#ffffff'
       });
-      
-      if (!response.ok) throw new Error('Erreur lors de l\'export');
-      
-      const data = await response.json();
-      
-      // Créer et télécharger le fichier
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `analytics-${periode}-${new Date().toISOString().split('T')[0]}.json`;
-      link.click();
-      window.URL.revokeObjectURL(url);
-      
-      toast.success('Données exportées avec succès !');
+
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgData = canvas.toDataURL('image/png');
+      const imgWidth = 210;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+      pdf.save(`analytics-${periode}-${new Date().toISOString().split('T')[0]}.pdf`);
+
+      toast.success('PDF exporté avec succès');
     } catch (error) {
-      console.error('Erreur export:', error);
-      toast.error('Erreur lors de l\'export des données');
+      console.error('Erreur export PDF:', error);
+      toast.error('Erreur lors de l\'export PDF');
+    } finally {
+      setIsExporting(false);
     }
   };
 
-  // 🎯 CALCUL DES TENDANCES RÉELLES (simplifié pour l'exemple)
-  const calculerTendance = (valeurActuelle: number, index: number) => {
-    const tendancesPositives = [12.5, 8.2, 5.1, 15.3, 9.7, 6.4, 11.2];
-    return tendancesPositives[index % tendancesPositives.length];
+  const handleExportJson = async () => {
+    try {
+      setIsExporting(true);
+      const response = await apiFetch(`/analytics/export?periode=${periode}`);
+      if (!response.ok) throw new Error('Export API indisponible');
+      const data = await response.json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `analytics-${periode}-${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      toast.success('Export JSON téléchargé');
+    } catch (error) {
+      console.error(error);
+      toast.error('Export JSON impossible');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
-  // 🎯 COMPOSANT CHART BAR ANIMÉ AVEC DONNÉES RÉELLES
-  const ChartBar = ({ value, max, label, color }: { value: number; max: number; label: string; color: string }) => (
-    <div className="flex items-end space-x-2 group">
-      <div className="flex-1">
-        <div className="text-xs text-slate-500 mb-1 group-hover:text-slate-700 transition-colors text-center">
-          {label}
-        </div>
-        <div className="relative h-32 bg-slate-100 dark:bg-slate-700 rounded-lg overflow-hidden">
-          <motion.div
-            initial={{ height: 0 }}
-            animate={{ height: `${(value / max) * 100}%` }}
-            transition={{ duration: 1, delay: 0.2, type: "spring" }}
-            className={`absolute bottom-0 left-0 right-0 ${color} rounded-lg group-hover:brightness-110 transition-all duration-300 shadow-lg`}
-          />
-          <div className="absolute inset-0 flex items-end justify-center pb-2">
-            <span className="text-xs font-medium text-white mix-blend-difference bg-black/30 px-1 rounded">
-              {value > 1000 ? `${(value/1000).toFixed(0)}K` : value.toLocaleString()}
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  const handleExport = async () => {
+    await handleExportPDF();
+  };
 
-  // 🎯 COMPOSANT METRIC CARD AVANCÉ
-  const MetricCard = ({ 
-    title, 
-    value, 
-    trend, 
-    icon: Icon, 
+  // Composant Metric Card amélioré
+  const MetricCard = ({
+    title,
+    value,
+    trend,
+    icon: Icon,
     color,
-    delay,
-    isPositive = true
-  }: { 
-    title: string; 
-    value: string; 
-    trend: string; 
-    icon: any; 
+    isPositive = true,
+    delay = 0
+  }: {
+    title: string;
+    value: string;
+    trend: string;
+    icon: ComponentType<SVGProps<SVGSVGElement>>;
     color: string;
-    delay: number;
     isPositive?: boolean;
+    delay?: number;
   }) => (
     <motion.div
-      initial={{ y: 20, opacity: 0, scale: 0.95 }}
-      animate={{ y: 0, opacity: 1, scale: 1 }}
-      transition={{ delay, type: "spring", stiffness: 100 }}
-      whileHover={{ 
-        scale: 1.03,
-        y: -5,
-        transition: { type: "spring", stiffness: 400 }
-      }}
+      initial={{ y: 20, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ delay }}
+      whileHover={{ scale: 1.05, y: -5 }}
     >
-      <Card className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl border-slate-200/60 dark:border-slate-700/60 hover:shadow-2xl transition-all duration-500 group relative overflow-hidden">
-        {/* Effet de brillance */}
-        <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent dark:from-slate-600/20 pointer-events-none" />
-        
-        <CardContent className="p-6 relative z-10">
+      <Card className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 border-slate-200 dark:border-slate-700 hover:shadow-xl transition-all">
+        <CardContent className="p-6">
           <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <p className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-1 flex items-center">
-                <span className="w-2 h-2 rounded-full bg-current mr-2"></span>
+            <div>
+              <p className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-2">
                 {title}
               </p>
-              <p className="text-3xl font-bold text-slate-900 dark:text-white mb-2 bg-gradient-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300 bg-clip-text text-transparent">
+              <p className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
                 {isLoading ? (
-                  <div className="h-8 bg-gradient-to-r from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-600 rounded animate-pulse w-24"></div>
+                  <div className="h-8 bg-slate-300 dark:bg-slate-600 rounded w-24 animate-pulse" />
                 ) : (
                   value
                 )}
               </p>
-              <div className={`text-sm font-medium flex items-center space-x-1 ${
-                isPositive ? 'text-green-600 dark:text-green-400' : 'text-orange-600 dark:text-orange-400'
+              <div className={`text-xs font-semibold flex items-center space-x-1 ${
+                isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
               }`}>
                 {isPositive ? (
                   <ArrowUpRight className="w-3 h-3" />
@@ -257,10 +315,8 @@ export default function AnalyticsPage() {
                 <span>{trend}</span>
               </div>
             </div>
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
-              color.replace('text', 'bg').replace('-500', '-500/10')
-            } group-hover:scale-110 transition-transform duration-300 shadow-lg`}>
-              <Icon className={`w-6 h-6 ${color} drop-shadow-sm`} />
+            <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${color} bg-opacity-10`}>
+              <Icon className={`w-6 h-6 ${color}`} />
             </div>
           </div>
         </CardContent>
@@ -333,7 +389,7 @@ export default function AnalyticsPage() {
                   key={p}
                   variant={periode === p ? "default" : "ghost"}
                   size="sm"
-                  onClick={() => setPeriode(p as any)}
+                  onClick={() => setPeriode(p as '7j' | '30j' | '90j')}
                   className={`relative ${
                     periode === p 
                       ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-md" 
@@ -369,10 +425,20 @@ export default function AnalyticsPage() {
                 variant="default" 
                 size="sm" 
                 onClick={handleExport}
+                disabled={isExporting}
                 className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-lg"
               >
                 <Download className="w-4 h-4 mr-2" />
-                Exporter
+                {isExporting ? 'Export...' : 'PDF'}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportJson}
+                disabled={isExporting}
+              >
+                <Download className="w-4 h-4 mr-2" />
+                JSON
               </Button>
             </div>
           </div>
@@ -380,7 +446,7 @@ export default function AnalyticsPage() {
       </motion.header>
 
       {/* Main Content */}
-      <main className="p-6 space-y-8">
+      <main ref={chartRef} className="p-6 space-y-8">
         {/* KPI Cards Grid Impressionnant */}
         <motion.div 
           className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
@@ -391,33 +457,33 @@ export default function AnalyticsPage() {
           <MetricCard
             title="Chiffre d'Affaires"
             value={analyticsData ? `${(analyticsData.ventes.chiffre_affaires_total / 1000).toFixed(0)}K FCFA` : '0 FCFA'}
-            trend={`+${calculerTendance(analyticsData?.ventes.chiffre_affaires_total || 0, 0)}% vs période précédente`}
+            trend={calculerTendance(analyticsData?.ventes.chiffre_affaires_total || 0, analyticsDataPrecedent?.ventes.chiffre_affaires_total).label}
             icon={DollarSign}
             color="text-green-500"
             delay={0.1}
-            isPositive={true}
+            isPositive={analyticsDataPrecedent ? (analyticsData?.ventes.chiffre_affaires_total || 0) >= (analyticsDataPrecedent?.ventes.chiffre_affaires_total || 0) : true}
           />
           
           <MetricCard
             title="Transactions"
             value={analyticsData ? analyticsData.ventes.total_ventes.toString() : '0'}
-            trend={`+${calculerTendance(analyticsData?.ventes.total_ventes || 0, 1)}% de croissance`}
+            trend={calculerTendance(analyticsData?.ventes.total_ventes || 0, analyticsDataPrecedent?.ventes.total_ventes).label}
             icon={ShoppingCart}
             color="text-blue-500"
             delay={0.2}
-            isPositive={true}
+            isPositive={analyticsDataPrecedent ? (analyticsData?.ventes.total_ventes || 0) >= (analyticsDataPrecedent?.ventes.total_ventes || 0) : true}
           />
           
           <MetricCard
             title="Panier Moyen"
             value={analyticsData ? `${Math.round(analyticsData.ventes.panier_moyen).toLocaleString()} FCFA` : '0 FCFA'}
-            trend={`+${calculerTendance(analyticsData?.ventes.panier_moyen || 0, 2)}% d'augmentation`}
+            trend={calculerTendance(analyticsData?.ventes.panier_moyen || 0, analyticsDataPrecedent?.ventes.panier_moyen).label}
             icon={Users}
             color="text-purple-500"
             delay={0.3}
-            isPositive={true}
+            isPositive={analyticsDataPrecedent ? (analyticsData?.ventes.panier_moyen || 0) >= (analyticsDataPrecedent?.ventes.panier_moyen || 0) : true}
           />
-          
+
           <MetricCard
             title="Produits en Alerte"
             value={analyticsData ? analyticsData.produits.produits_en_alerte.toString() : '0'}
@@ -471,7 +537,7 @@ export default function AnalyticsPage() {
                       </Badge>
                     </CardTitle>
                     <CardDescription>
-                      Évolution du chiffre d'affaires sur la période sélectionnée
+                      Évolution du chiffre d&apos;affaires sur la période sélectionnée
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -484,23 +550,33 @@ export default function AnalyticsPage() {
                           </div>
                         </div>
                       ) : ventesQuotidiennes.length > 0 ? (
-                        <div className="grid grid-cols-7 gap-3 h-full items-end">
-                          {ventesQuotidiennes.slice(0, 7).map((vente, index) => {
-                            const maxChiffreAffaires = Math.max(...ventesQuotidiennes.map(v => v.chiffre_affaires));
-                            const date = new Date(vente.date);
-                            const label = date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
-                            
-                            return (
-                              <ChartBar
-                                key={vente.date}
-                                value={vente.chiffre_affaires}
-                                max={maxChiffreAffaires}
-                                label={label}
-                                color="bg-gradient-to-t from-purple-500 to-pink-500"
-                              />
-                            );
-                          })}
-                        </div>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={lineChartData} margin={{ top: 16, right: 24, left: 0, bottom: 8 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" />
+                            <XAxis
+                              dataKey="date"
+                              tickFormatter={(date) => new Date(date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+                              stroke="#64748b"
+                            />
+                            <YAxis
+                              tickFormatter={(value) => (typeof value === 'number' && value >= 1000 ? `${(value / 1000).toFixed(0)}K` : value)}
+                              stroke="#64748b"
+                            />
+                            <Tooltip
+                              formatter={(value) => `${Number(value ?? 0).toLocaleString()} FCFA`}
+                              labelFormatter={(label) => new Date(label).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: '2-digit' })}
+                            />
+                            <Line
+                              type="monotone"
+                              dataKey="chiffre_affaires"
+                              name="Chiffre d&apos;Affaires"
+                              stroke="#8b5cf6"
+                              strokeWidth={3}
+                              dot={{ r: 4, fill: '#8b5cf6' }}
+                              activeDot={{ r: 6 }}
+                            />
+                          </LineChart>
+                        </ResponsiveContainer>
                       ) : (
                         <div className="h-full flex items-center justify-center text-slate-500">
                           <div className="text-center">
@@ -523,11 +599,11 @@ export default function AnalyticsPage() {
                 <Card className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm border-slate-200/50 dark:border-slate-700/50 hover:shadow-xl transition-all duration-500">
                   <CardHeader className="pb-4">
                     <CardTitle className="flex items-center space-x-2">
-                      <PieChart className="w-5 h-5 text-blue-500" />
+                      <PieChartIcon className="w-5 h-5 text-blue-500" />
                       <span>Répartition par Catégorie</span>
                     </CardTitle>
                     <CardDescription>
-                      Chiffre d'affaires par catégorie de produits
+                      Chiffre d&apos;affaires par catégorie de produits
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -539,51 +615,32 @@ export default function AnalyticsPage() {
                             <p>Chargement des données...</p>
                           </div>
                         </div>
-                      ) : repartitionCategories.length > 0 ? (
-                        <div className="space-y-4">
-                          {repartitionCategories.map((categorie, index) => {
-                            const totalCA = repartitionCategories.reduce((sum, cat) => sum + cat.chiffre_affaires, 0);
-                            const percentage = totalCA > 0 ? (categorie.chiffre_affaires / totalCA) * 100 : 0;
-                            const colors = [
-                              'bg-gradient-to-r from-blue-500 to-cyan-500',
-                              'bg-gradient-to-r from-green-500 to-emerald-500',
-                              'bg-gradient-to-r from-purple-500 to-pink-500',
-                              'bg-gradient-to-r from-orange-500 to-red-500',
-                              'bg-gradient-to-r from-yellow-500 to-amber-500'
-                            ];
-                            
-                            return (
-                              <motion.div
-                                key={categorie.categorie_id}
-                                initial={{ opacity: 0, x: -20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ delay: index * 0.1 }}
-                                className="space-y-2 group"
-                              >
-                                <div className="flex items-center justify-between text-sm">
-                                  <span className="font-medium text-slate-700 dark:text-slate-300 group-hover:text-purple-600 transition-colors">
-                                    {categorie.categorie}
-                                  </span>
-                                  <span className="text-slate-600 dark:text-slate-400 font-semibold">
-                                    {categorie.chiffre_affaires.toLocaleString()} FCFA ({percentage.toFixed(1)}%)
-                                  </span>
-                                </div>
-                                <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-3 overflow-hidden">
-                                  <motion.div
-                                    initial={{ width: 0 }}
-                                    animate={{ width: `${percentage}%` }}
-                                    transition={{ duration: 1.5, delay: index * 0.2, type: "spring" }}
-                                    className={`h-3 rounded-full ${colors[index % colors.length]} shadow-lg group-hover:brightness-110 transition-all duration-300`}
-                                  />
-                                </div>
-                              </motion.div>
-                            );
-                          })}
-                        </div>
+                      ) : pieData.length > 0 ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={pieData}
+                              dataKey="value"
+                              nameKey="name"
+                              innerRadius={48}
+                              outerRadius={88}
+                              paddingAngle={4}
+                              stroke="transparent"
+                            >
+                              {pieData.map((entry, index) => (
+                                <Cell key={`cell-${entry.id}`} fill={COLORS[index % COLORS.length]} />
+                              ))}
+                            </Pie>
+                            <Tooltip
+                              formatter={(value) => `${Number(value ?? 0).toLocaleString()} FCFA`}
+                              cursor={{ fill: 'rgba(59, 130, 246, 0.08)' }}
+                            />
+                          </PieChart>
+                        </ResponsiveContainer>
                       ) : (
                         <div className="h-full flex items-center justify-center text-slate-500">
                           <div className="text-center">
-                            <PieChart className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                            <PieChartIcon className="w-12 h-12 mx-auto mb-2 opacity-50" />
                             <p>Aucune donnée de catégorie pour cette période</p>
                           </div>
                         </div>
@@ -656,7 +713,7 @@ export default function AnalyticsPage() {
                                 {item.chiffre_affaires?.toLocaleString() || '0'} FCFA
                               </p>
                               <p className="text-sm text-green-600 dark:text-green-400 font-medium">
-                                +{calculerTendance(item.total_vendus, index)}%
+                                {calculerTendance(item.total_vendus, index).label}
                               </p>
                             </div>
                           </motion.div>
@@ -738,7 +795,7 @@ export default function AnalyticsPage() {
                               <p className="font-semibold text-slate-900 dark:text-white group-hover:text-slate-700 dark:group-hover:text-slate-300">
                                 {metric.label}
                               </p>
-                              <p className="text-2xl font-bold text-slate-900 dark:text-white bg-gradient-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300 bg-clip-text text-transparent">
+                              <p className="text-2xl font-bold dark:text-white bg-gradient-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300 bg-clip-text text-transparent">
                                 {metric.value}
                               </p>
                               <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -823,7 +880,7 @@ export default function AnalyticsPage() {
                             </p>
                             <div className="flex items-center space-x-1 text-sm text-green-500 dark:text-green-400 font-medium">
                               <TrendingUp className="w-3 h-3" />
-                              <span>+{calculerTendance(vente.chiffre_affaires, index)}%</span>
+                              <span>{calculerTendance(vente.chiffre_affaires, index).label}</span>
                             </div>
                           </div>
                         </motion.div>

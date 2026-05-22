@@ -62,6 +62,8 @@ class ProduitController extends Controller
             'categorie_id' => 'required|exists:categories,id',
             'est_perissable' => 'boolean',
             'unite_mesure' => 'required|string|max:50',
+            'image_url' => 'nullable|string|max:500',
+            'code_qr' => 'nullable|string|max:255',
         ]);
 
         $produit = Produit::create($validated);
@@ -92,6 +94,8 @@ class ProduitController extends Controller
             'categorie_id' => 'sometimes|exists:categories,id',
             'est_perissable' => 'boolean',
             'unite_mesure' => 'sometimes|string|max:50',
+            'image_url' => 'nullable|string|max:500',
+            'code_qr' => 'nullable|string|max:255',
         ]);
 
         $produit->update($validated);
@@ -141,6 +145,48 @@ class ProduitController extends Controller
             ->get();
 
         return response()->json($produits);
+    }
+
+    /**
+     * Scan code-barres / QR / ID produit (caisse).
+     */
+    public function findByCode(string $code): JsonResponse
+    {
+        $query = Produit::with('categorie')->where('code_qr', $code);
+
+        if (ctype_digit($code)) {
+            $query->orWhere('id', (int) $code);
+        }
+
+        $produit = $query->first();
+
+        if (!$produit) {
+            return response()->json(['message' => 'Produit introuvable pour ce code'], 404);
+        }
+
+        return response()->json($produit);
+    }
+
+    /**
+     * Upload image produit (jpeg, png, webp — max 5 Mo).
+     */
+    public function uploadImage(Request $request, Produit $produit): JsonResponse
+    {
+        $request->validate([
+            'image' => 'required|image|mimes:jpeg,jpg,png,webp|max:5120',
+        ]);
+
+        $file = $request->file('image');
+        $path = $file->store('produits/' . $produit->id, 'public');
+        $url = rtrim(config('app.url'), '/') . Storage::disk('public')->url($path);
+
+        $produit->update(['image_url' => $url]);
+
+        return response()->json([
+            'message' => 'Image enregistrée',
+            'image_url' => $url,
+            'produit' => $produit->fresh()->load('categorie'),
+        ]);
     }
 
     public function statistiques(): JsonResponse

@@ -12,20 +12,11 @@ export const api = axios.create({
   }
 });
 
-// Gestion d'authentification avec refresh token
 api.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
     const token = localStorage.getItem('auth_token');
-    const expiresAt = localStorage.getItem('token_expires_at');
-    
-    if (token && expiresAt && new Date() < new Date(expiresAt)) {
+    if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-    } else {
-      // Token expiré, déconnexion automatique
-      localStorage.removeItem('auth_token');
-      localStorage.removeItem('token_expires_at');
-      localStorage.removeItem('user_data');
-      window.location.href = '/login';
     }
   }
   return config;
@@ -34,15 +25,34 @@ api.interceptors.request.use((config) => {
 // Gestion avancée des erreurs
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      // Redirection élégante vers login
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('auth_token');
-        localStorage.removeItem('token_expires_at');
-        localStorage.removeItem('user_data');
-        window.location.href = '/login?message=session_expired';
+  async (error) => {
+    if (error.response?.status === 401 && typeof window !== 'undefined') {
+      const token = localStorage.getItem('auth_token');
+      if (token && !error.config?.headers?.['X-Retry-After-Refresh']) {
+        try {
+          const refreshRes = await fetch(`${API_BASE_URL}/refresh`, {
+            method: 'POST',
+            headers: {
+              Accept: 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+          });
+          if (refreshRes.ok) {
+            const data = await refreshRes.json();
+            if (data.token) localStorage.setItem('auth_token', data.token);
+            if (data.expires_at) localStorage.setItem('token_expires_at', data.expires_at);
+            error.config.headers.Authorization = `Bearer ${data.token}`;
+            error.config.headers['X-Retry-After-Refresh'] = '1';
+            return api.request(error.config);
+          }
+        } catch {
+          /* ignore */
+        }
       }
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('token_expires_at');
+      localStorage.removeItem('user_data');
+      window.location.href = '/login?message=session_expired';
     }
     
     // Notification d'erreur stylée

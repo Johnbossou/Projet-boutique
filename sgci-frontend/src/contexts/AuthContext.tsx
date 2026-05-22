@@ -11,6 +11,7 @@ import React, {
 import { useRouter } from 'next/navigation';
 import { User } from '@/types';
 import { apiFetch } from '@/lib/api-client';
+import { fetchBoutiqueSettings } from '@/lib/boutique-settings';
 
 interface AuthContextType {
   user: User | null;
@@ -48,6 +49,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
           const data = await response.json();
           setUser(data.user);
+          fetchBoutiqueSettings().catch(() => undefined);
         } catch {
           localStorage.removeItem('auth_token');
           localStorage.removeItem('user_data');
@@ -84,10 +86,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error(errorData.message || 'Erreur de connexion');
       }
 
-      const { token, user: userData } = await response.json();
+      const { token, user: userData, expires_at } = await response.json();
       localStorage.setItem('auth_token', token);
       localStorage.setItem('user_data', JSON.stringify(userData));
+      if (expires_at) {
+        localStorage.setItem('token_expires_at', expires_at);
+      }
       setUser(userData);
+      fetchBoutiqueSettings().catch(() => undefined);
       router.push('/dashboard');
     } catch (error: unknown) {
       localStorage.removeItem('auth_token');

@@ -9,9 +9,53 @@ export async function getAuthToken(): Promise<string | null> {
   }
 }
 
+async function setAuthToken(token: string): Promise<void> {
+  await SecureStore.setItemAsync('auth_token', token);
+}
+
+async function clearAuthToken(): Promise<void> {
+  await SecureStore.deleteItemAsync('auth_token');
+}
+
+let refreshInFlight: Promise<boolean> | null = null;
+
+async function tryRefreshToken(): Promise<boolean> {
+  if (refreshInFlight) return refreshInFlight;
+
+  refreshInFlight = (async () => {
+    const token = await getAuthToken();
+    if (!token) return false;
+
+    try {
+      const res = await fetch(apiUrl('/refresh'), {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) return false;
+
+      const data = await res.json();
+      if (data.token) {
+        await setAuthToken(data.token);
+      }
+      return true;
+    } catch {
+      return false;
+    } finally {
+      refreshInFlight = null;
+    }
+  })();
+
+  return refreshInFlight;
+}
+
 export async function apiFetch(
   path: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  retried = false
 ): Promise<Response> {
   const headers = new Headers(options.headers);
 
@@ -28,5 +72,20 @@ export async function apiFetch(
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  return fetch(apiUrl(path), { ...options, headers });
+  const response = await fetch(apiUrl(path), { ...options, headers });
+
+  if (
+    response.status === 401 &&
+    !retried &&
+    path !== '/login' &&
+    path !== '/refresh'
+  ) {
+    const refreshed = await tryRefreshToken();
+    if (refreshed) {
+      return apiFetch(path, options, true);
+    }
+    await clearAuthToken();
+  }
+
+  return response;
 }

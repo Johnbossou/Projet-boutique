@@ -33,6 +33,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiFetch } from '@/lib/api-client';
+import { fetchBoutiqueSettings, getDelaiAnnulationMs } from '@/lib/boutique-settings';
+import { BarcodeScanField } from '@/components/BarcodeScanField';
+import { downloadFacturePdf } from '@/lib/media';
 import { toast } from 'sonner';
 
 interface Produit {
@@ -204,6 +207,10 @@ export default function CaissePage() {
   }, [panier, modePaiement, isProcessing]);
 
   useEffect(() => {
+    fetchBoutiqueSettings().catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
     if (showHistorique && ventesJour.length === 0) {
       chargerHistoriqueDuJour();
     }
@@ -299,7 +306,9 @@ export default function CaissePage() {
         // Ajouter flag d'annulation pour ventes < 5 minutes
         const ventesAvecFlag = (ventesData as VenteHistorique[]).map((vente: VenteHistorique) => ({
           ...vente,
-          peut_annuler: (Date.now() - new Date(vente.created_at).getTime()) < 300000
+          peut_annuler:
+            vente.statut === 'termine' &&
+            (Date.now() - new Date(vente.created_at).getTime()) < getDelaiAnnulationMs()
         }));
         
         setVentesJour(ventesAvecFlag);
@@ -321,8 +330,8 @@ export default function CaissePage() {
 
     try {
       setIsProcessing(true);
-      const response = await apiFetch(`/ventes/${venteId}`, {
-        method: 'DELETE',
+      const response = await apiFetch(`/ventes/${venteId}/annuler`, {
+        method: 'POST',
         headers: {
           'Accept': 'application/json'
         }
@@ -599,11 +608,27 @@ export default function CaissePage() {
 
   // 🎯 SCANNER QR CODE FONCTIONNEL
   const chercherProduitParCode = useCallback(async (code: string) => {
-    const produitTrouve = produits.find(p => String(p.id) === code || p.nom.toLowerCase().includes(code.toLowerCase()));
+    const trimmed = code.trim();
+    if (!trimmed) return;
+    try {
+      const res = await apiFetch(`/produits/code/${encodeURIComponent(trimmed)}`);
+      if (res.ok) {
+        const produit = await res.json();
+        ajouterAuPanier(produit);
+        setShowCamera(false);
+        toast.success(`${produit.nom} ajouté depuis le scan`);
+        return;
+      }
+    } catch {
+      /* fallback local */
+    }
+    const produitTrouve = produits.find(
+      (p) => String(p.id) === trimmed || p.nom.toLowerCase().includes(trimmed.toLowerCase())
+    );
     if (produitTrouve) {
       ajouterAuPanier(produitTrouve);
       setShowCamera(false);
-      toast.success(`${produitTrouve.nom} ajouté depuis le scan`);
+      toast.success(`${produitTrouve.nom} ajouté`);
     } else {
       toast.error('Produit introuvable pour ce code');
     }
@@ -787,7 +812,8 @@ export default function CaissePage() {
         numero_transaction: numeroTransaction,
         reference_carte: referenceCarte,
         banque: modePaiement === 'carte' ? banqueSelectionnee : null,
-        montant_recu: modePaiement === 'especes' ? parseFloat(montantRecu) : null
+        montant_recu: modePaiement === 'especes' ? parseFloat(montantRecu) : null,
+        monnaie_rendue: modePaiement === 'especes' ? monnaieRendue : null,
       };
 
       // 🎯 AMÉLIORATION 9: Support hors-ligne
@@ -933,6 +959,9 @@ export default function CaissePage() {
                 onChange={(e) => setRecherche(e.target.value)}
                 className="pl-10 w-80 bg-white/50 dark:bg-slate-700/50 border-slate-300 dark:border-slate-600"
               />
+            </div>
+            <div className="w-72">
+              <BarcodeScanField onProduitFound={(p) => ajouterAuPanier(p as Produit)} />
             </div>
           </div>
 
@@ -1740,7 +1769,7 @@ export default function CaissePage() {
                             <div className="text-sm text-slate-500">#{vente.id} • {new Date(vente.created_at).toLocaleTimeString('fr-FR')}</div>
                             <div className="flex items-center gap-2 text-base font-semibold text-slate-900 dark:text-white">
                               <span>{vente.client?.nom || 'Anonyme'}</span>
-                              <Badge variant={vente.statut === 'annulee' ? 'destructive' : 'secondary'}>{vente.statut}</Badge>
+                              <Badge variant={vente.statut === 'annule' ? 'destructive' : 'secondary'}>{vente.statut}</Badge>
                             </div>
                           </div>
                           <div className="text-right space-y-1 text-sm text-slate-600 dark:text-slate-400">
@@ -1761,7 +1790,7 @@ export default function CaissePage() {
                             )}
                           </div>
                           <div className="flex flex-col justify-between items-end gap-3">
-                            {vente.peut_annuler && vente.statut !== 'annulee' ? (
+                            {vente.peut_annuler && vente.statut !== 'annule' ? (
                               <Button
                                 variant="destructive"
                                 size="sm"
@@ -2168,6 +2197,24 @@ export default function CaissePage() {
                     Voir seulement
                   </Button>
                 </div>
+
+                {lastVente?.id && (
+                  <Button
+                    variant="outline"
+                    className="w-full mt-3"
+                    onClick={async () => {
+                      try {
+                        await downloadFacturePdf(lastVente.id, `facture-${lastVente.numero_vente ?? lastVente.id}.pdf`);
+                        toast.success('Facture PDF téléchargée');
+                      } catch {
+                        toast.error('PDF indisponible (composer install dompdf côté API)');
+                      }
+                    }}
+                  >
+                    <Receipt className="w-4 h-4 mr-2" />
+                    Télécharger facture PDF
+                  </Button>
+                )}
 
                 <Button
                   variant="ghost"

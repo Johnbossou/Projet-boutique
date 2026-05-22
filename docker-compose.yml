@@ -1,0 +1,52 @@
+services:
+  api:
+    build:
+      context: ./sgci-backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      APP_URL: http://localhost:8000
+      DB_CONNECTION: mysql
+      DB_HOST: db
+      DB_DATABASE: sgci
+      DB_USERNAME: sgci
+      DB_PASSWORD: sgci_secret
+    volumes:
+      - ./sgci-backend:/var/www/html
+      - sgci_storage:/var/www/html/storage
+    depends_on:
+      - db
+    command: >
+      sh -c "composer install --no-interaction &&
+             php artisan key:generate --force &&
+             php artisan migrate --seed --force &&
+             php artisan storage:link &&
+             php artisan serve --host=0.0.0.0 --port=8000"
+
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: sgci
+      MYSQL_USER: sgci
+      MYSQL_PASSWORD: sgci_secret
+      MYSQL_ROOT_PASSWORD: root_secret
+    ports:
+      - "3306:3306"
+    volumes:
+      - sgci_mysql:/var/lib/mysql
+
+  web:
+    build:
+      context: ./sgci-frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000/api
+    depends_on:
+      - api
+
+volumes:
+  sgci_mysql:
+  sgci_storage:

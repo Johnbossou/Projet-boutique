@@ -5,7 +5,7 @@ export interface User {
   role: 'gerant' | 'caissier';
   telephone?: string | null;
   derniere_connexion?: string;
-  est_actif: boolean;
+  est_actif?: boolean;
 }
 
 export interface Categorie {
@@ -30,6 +30,7 @@ export interface Produit {
   est_perissable: boolean;
   code_qr?: string;
   unite_mesure: string;
+  image_url?: string | null;
   created_at: string;
   updated_at: string;
   deleted_at?: string;
@@ -58,10 +59,29 @@ export interface Vente {
   user_id: number;
   statut: 'en_cours' | 'termine' | 'annule';
   notes?: string;
+  client_id?: number | null;
+  mode_paiement?: 'especes' | 'mtn' | 'moov' | 'carte' | null;
+  montant_recu?: number | null;
+  monnaie_rendue?: number | null;
+  numero_transaction?: string | null;
+  reference_carte?: string | null;
+  banque?: string | null;
   created_at: string;
   updated_at: string;
   user?: User;
+  client?: { id: number; nom: string; email?: string };
   ligne_ventes?: LigneVente[];
+}
+
+export interface BoutiqueSettingsApi {
+  id?: number;
+  nom: string;
+  adresse?: string | null;
+  telephone?: string | null;
+  email?: string | null;
+  devise: string;
+  taux_tva: number;
+  delai_annulation_vente_minutes: number;
 }
 
 export interface MouvementStock {

@@ -38,12 +38,22 @@ class ClientController extends Controller
 
             // Charger la dernière commande pour chaque client
             $query->with(['ventes' => function ($query) {
-                $query->latest()->first();
+                $query->latest()->limit(1);
             }]);
 
             // Tri
             $sortField = $request->get('sort_field', 'created_at');
-            $sortDirection = $request->get('sort_direction', 'desc');
+            $sortDirection = strtolower($request->get('sort_direction', 'desc'));
+
+            $allowedSortFields = ['created_at', 'nom', 'email', 'telephone', 'statut', 'nombre_commandes', 'total_achats'];
+            if (!in_array($sortField, $allowedSortFields)) {
+                $sortField = 'created_at';
+            }
+
+            if (!in_array($sortDirection, ['asc', 'desc'])) {
+                $sortDirection = 'desc';
+            }
+
             $query->orderBy($sortField, $sortDirection);
 
             $clients = $query->paginate($request->get('per_page', 20));
@@ -224,7 +234,7 @@ class ClientController extends Controller
 
             // Recharger le client avec les relations
             $client->load(['ventes' => function ($query) {
-                $query->latest()->first();
+                $query->latest()->limit(1);
             }]);
 
             return response()->json([
