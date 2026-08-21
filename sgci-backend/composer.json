@@ -11,7 +11,7 @@
         "laravel/sanctum": "^4.2",
         "laravel/tinker": "^2.10.1",
         "barryvdh/laravel-dompdf": "^3.1",
-        "kreait/laravel-firebase": "^5.0"
+        "kreait/laravel-firebase": "^7.0"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",

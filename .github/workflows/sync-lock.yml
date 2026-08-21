@@ -1,10 +1,12 @@
 name: Temp - Sync composer.lock
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
       - ".github/workflows/sync-lock.yml"
+      - "sgci-backend/composer.json"
 
 jobs:
   update-lock:
