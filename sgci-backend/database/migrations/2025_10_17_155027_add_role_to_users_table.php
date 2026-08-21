@@ -12,7 +12,9 @@ return new class extends Migration
     public function up()
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->enum('role', ['gerant', 'caissier'])->default('caissier');
+            // string (et non enum) pour rester portable MySQL/SQLite ;
+            // les valeurs valides sont contrôlées au niveau applicatif
+            $table->string('role', 20)->default('caissier');
             $table->string('telephone')->nullable();
             $table->boolean('est_actif')->default(true);
             $table->timestamp('derniere_connexion')->nullable();

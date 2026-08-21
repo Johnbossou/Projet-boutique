@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SGCI Bénin - Guide Technique Complet</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);
+            color: #1a202c;
+            line-height: 1.6;
+        }
+
+        /* Navigation */
+        .navbar {
+            background: linear-gradient(135deg, #1a2a6c, #b21f1f, #fdbb4d);
+            background-size: 200% 200%;
+            color: white;
+            padding: 1rem 2rem;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            animation: gradientShift 10s ease infinite;
+        }
+
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .navbar-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .logo h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .logo p {
+            font-size: 0.8rem;
+            opacity: 0.9;
+        }
+
+        .status-badge {
+            background: rgba(255,255,255,0.2);
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+            backdrop-filter: blur(10px);
+        }
+
+        .status-badge .badge {
+            background: #10b981;
+            padding: 0.25rem 0.75rem;
+            border-radius: 50px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        /* Container principal */
+        .container {
+            display: flex;
+            max-width: 1400px;
+            margin: 2rem auto;
+            gap: 2rem;
+            padding: 0 2rem;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            position: sticky;
+            top: 100px;
+            height: fit-content;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 35px -10px rgba(0,0,0,0.1);
+            padding: 1.5rem;
+        }
+
+        .sidebar h3 {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #718096;
+            margin-bottom: 1rem;
+        }
+
+        .sidebar nav ul {
+            list-style: none;
+        }
+
+        .sidebar nav li {
+            margin-bottom: 0.5rem;
+        }
+
+        .sidebar nav a {
+            display: block;
+            padding: 0.5rem 0.75rem;
+            color: #2d3748;
+            text-decoration: none;
+            border-radius: 10px;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+        }
+
+        .sidebar nav a:hover {
+            background: #f7fafc;
+            color: #b21f1f;
+            transform: translateX(5px);
+        }
+
+        /* Contenu principal */
+        .content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        /* Cartes */
+        .card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 35px -10px rgba(0,0,0,0.05);
+            padding: 2rem;
+            margin-bottom: 2rem;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 25px 40px -12px rgba(0,0,0,0.15);
+        }
+
+        .card h2 {
+            font-size: 1.8rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 3px solid #fdbb4d;
+            display: inline-block;
+        }
+
+        .card h3 {
+            font-size: 1.3rem;
+            margin: 1.5rem 0 1rem;
+            color: #2d3748;
+        }
+
+        .card h4 {
+            font-size: 1.1rem;
+            margin: 1rem 0 0.5rem;
+            color: #4a5568;
+        }
+
+        /* Badges */
+        .tech-badge {
+            display: inline-block;
+            background: #edf2f7;
+            color: #2d3748;
+            padding: 0.25rem 0.75rem;
+            border-radius: 50px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            margin-right: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .tech-badge.highlight {
+            background: linear-gradient(135deg, #1a2a6c, #b21f1f);
+            color: white;
+        }
+
+        /* Tableaux */
+        .tech-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+            background: #f7fafc;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .tech-table th {
+            background: #2d3748;
+            color: white;
+            padding: 0.75rem 1rem;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .tech-table td {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .tech-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* Diagramme architecture */
+        .architecture-diagram {
+            background: #1a202c;
+            color: #e2e8f0;
+            padding: 2rem;
+            border-radius: 16px;
+            font-family: monospace;
+            overflow-x: auto;
+            margin: 1.5rem 0;
+        }
+
+        .architecture-diagram pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        /* Alertes */
+        .alert {
+            padding: 1rem 1.5rem;
+            border-radius: 12px;
+            margin: 1rem 0;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .alert-warning {
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            color: #92400e;
+        }
+
+        .alert-info {
+            background: #dbeafe;
+            border-left: 4px solid #3b82f6;
+            color: #1e40af;
+        }
+
+        .alert-success {
+            background: #d1fae5;
+            border-left: 4px solid #10b981;
+            color: #065f46;
+        }
+
+        /* Timeline */
+        .timeline {
+            position: relative;
+            padding-left: 2rem;
+            margin: 1.5rem 0;
+        }
+
+        .timeline-item {
+            position: relative;
+            padding-bottom: 1.5rem;
+            border-left: 2px solid #e2e8f0;
+            padding-left: 1.5rem;
+        }
+
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -0.5rem;
+            top: 0;
+            width: 1rem;
+            height: 1rem;
+            border-radius: 50%;
+            background: #b21f1f;
+        }
+
+        /* Code blocks */
+        pre {
+            background: #1a202c;
+            color: #e2e8f0;
+            padding: 1rem;
+            border-radius: 12px;
+            overflow-x: auto;
+            margin: 1rem 0;
+            font-size: 0.85rem;
+        }
+
+        code {
+            font-family: 'Fira Code', 'Courier New', monospace;
+        }
+
+        /* Footer */
+        .footer {
+            background: #1a202c;
+            color: #a0aec0;
+            text-align: center;
+            padding: 2rem;
+            margin-top: 3rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+                padding: 0 1rem;
+            }
+            
+            .sidebar {
+                width: 100%;
+                position: static;
+            }
+            
+            .card {
+                padding: 1rem;
+            }
+            
+            .navbar-content {
+                flex-direction: column;
+                text-align: center;
+            }
+        }
+
+        /* Boutons */
+        .btn {
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #b21f1f, #fdbb4d);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(178,31,31,0.3);
+        }
+
+        /* Progress bar */
+        .progress-bar {
+            background: #e2e8f0;
+            border-radius: 10px;
+            overflow: hidden;
+            height: 8px;
+            margin: 0.5rem 0;
+        }
+
+        .progress-fill {
+            background: linear-gradient(90deg, #10b981, #34d399);
+            height: 100%;
+            width: 0%;
+            border-radius: 10px;
+            transition: width 1s ease;
+        }
+    </style>
+</head>
+<body>
+
+<!-- Navigation -->
+<nav class="navbar">
+    <div class="navbar-content">
+        <div class="logo">
+            <h1>📚 SGCI Bénin</h1>
+            <p>Système de Gestion Commerciale Intelligente</p>
+        </div>
+        <div class="status-badge">
+            <span class="badge">🟢 Production-Ready</span>
+            <span style="margin-left: 0.5rem;">v2.0 · 2 juin 2026</span>
+        </div>
+    </div>
+</nav>
+
+<div class="container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <h3>📖 Navigation rapide</h3>
+        <nav>
+            <ul>
+                <li><a href="#presentation">🎯 Présentation</a></li>
+                <li><a href="#architecture">🏗️ Architecture</a></li>
+                <li><a href="#stack">⚙️ Stack Technologique</a></li>
+                <li><a href="#database">🗄️ Base de données</a></li>
+                <li><a href="#api">🔌 API Backend</a></li>
+                <li><a href="#frontend">💻 Frontend Web</a></li>
+                <li><a href="#mobile">📱 Application Mobile</a></li>
+                <li><a href="#workflows">🔄 Workflows métier</a></li>
+                <li><a href="#features">✨ Fonctionnalités</a></li>
+                <li><a href="#deployment">🚀 Déploiement</a></li>
+                <li><a href="#roadmap">🗺️ Roadmap</a></li>
+            </ul>
+        </nav>
+        
+        <div style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #e2e8f0;">
+            <h3>📊 État du projet</h3>
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: 95%;"></div>
+            </div>
+            <p style="font-size: 0.8rem; color: #718096;">95% · Production-Ready</p>
+        </div>
+        
+        <div style="margin-top: 1rem;">
+            <a href="#" class="btn btn-primary" style="width: 100%; text-align: center;">📥 Télécharger PDF</a>
+        </div>
+    </aside>
+    
+    <!-- Contenu principal -->
+    <main class="content">
+        
+        <!-- Présentation -->
+        <section id="presentation" class="card">
+            <h2>🎯 Présentation du projet</h2>
+            <h3>Qu'est-ce que SGCI Bénin?</h3>
+            <p><strong>SGCI Bénin</strong> (Système de Gestion Commerciale Intelligente) est une solution SaaS de gestion de boutique complète et intelligente conçue pour les commerçants au Bénin et en Afrique de l'Ouest.</p>
+            
+            <h3>Objectifs principaux</h3>
+            <ul style="margin-left: 2rem;">
+                <li>✅ <strong>Gestion complète</strong> : Produits, stock, ventes, clients, caisse</li>
+                <li>🤖 <strong>Intelligence Artificielle</strong> : Prédictions de demande, recommandations, cross-selling</li>
+                <li>📱 <strong>Multi-plateforme</strong> : Web, Mobile (iOS/Android)</li>
+                <li>📶 <strong>Offline-first</strong> : Fonctionne sans connexion internet</li>
+                <li>🔔 <strong>Notifications</strong> : Alertes stock, rapports automatiques</li>
+                <li>🔐 <strong>Sécurité</strong> : Rôles, permissions, audit trail</li>
+            </ul>
+            
+            <div class="alert alert-success">
+                🚀 <strong>Valeur ajoutée</strong> : Réduction des ruptures de stock grâce à l'IA, optimisation des réapprovisionnements, amélioration de l'expérience client.
+            </div>
+        </section>
+        
+        <!-- Architecture -->
+        <section id="architecture" class="card">
+            <h2>🏗️ Architecture technique</h2>
+            
+            <div class="architecture-diagram">
+                <pre>
+┌─────────────────────────────────────────────────────────────┐
+│                         Frontend Web                          │
+│                    (Next.js 15 + React 19)                    │
+└──────────────────────┬──────────────────────────────────────┘
+                       │ HTTP/REST
+┌──────────────────────▼──────────────────────────────────────┐
+│                      Backend API                              │
+│                   (Laravel 12 + Sanctum)                     │
+├─────────────────────────────────────────────────────────────┤
+│  Controllers  │  Services  │  Jobs  │  Middleware  │  Models │
+└──────────────────────┬──────────────────────────────────────┘
+                       │
+┌──────────────────────▼──────────────────────────────────────┐
+│                    Base de données                           │
+│                      (MySQL 8)                               │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│                    Application Mobile                         │
+│                  (Expo 54 + React Native)                     │
+└─────────────────────────────────────────────────────────────┘
+                </pre>
+            </div>
+            
+            <h3>Composants principaux</h3>
+            <ul>
+                <li><strong>Backend</strong> : Laravel 12 + Sanctum + MySQL 8 + Redis</li>
+                <li><strong>Frontend</strong> : Next.js 15 + React 19 + Tailwind CSS 4 + shadcn/ui</li>
+                <li><strong>Mobile</strong> : Expo 54 + React Native + AsyncStorage</li>
+            </ul>
+        </section>
+        
+        <!-- Stack -->
+        <section id="stack" class="card">
+            <h2>⚙️ Stack Technologique</h2>
+            
+            <h3>Backend</h3>
+            <table class="tech-table">
+                <thead><tr><th>Composant</th><th>Version</th><th>Description</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>PHP</td><td>8.3+</td><td>Langage principal</td></tr>
+                    <tr><td>Laravel</td><td>12</td><td>Framework PHP</td></tr>
+                    <tr><td>MySQL</td><td>8.0+</td><td>Base de données</td></tr>
+                    <tr><td>Sanctum</td><td>3.x</td><td>Authentification API</td></tr>
+                    <tr><td>Redis</td><td>7.x</td><td>Queue & Cache</td></tr>
+                </tbody>
+            </table>
+            
+            <h3>Frontend</h3>
+            <table class="tech-table">
+                <thead><tr><th>Composant</th><th>Version</th><th>Description</th></tr></thead>
+                <tbody>
+                    <tr><td>Next.js</td><td>15</td><td>Framework React</td></tr>
+                    <tr><td>React</td><td>19</td><td>Library UI</td></tr>
+                    <tr><td>TypeScript</td><td>5.x</td><td>Typage</td></tr>
+                    <tr><td>Tailwind CSS</td><td>4.x</td><td>Styling</td></tr>
+                </tbody>
+            </table>
+            
+            <h3>Mobile</h3>
+            <table class="tech-table">
+                <thead><tr><th>Composant</th><th>Version</th><th>Description</th></tr></thead>
+                <tbody>
+                    <tr><td>Expo</td><td>54</td><td>Framework React Native</td></tr>
+                    <tr><td>React Native</td><td>0.74+</td><td>Framework mobile</td></tr>
+                    <tr><td>expo-camera</td><td>15.x</td><td>Camera & scan</td></tr>
+                </tbody>
+            </table>
+            
+            <div style="margin-top: 1rem;">
+                <span class="tech-badge highlight">PHP 8.3</span>
+                <span class="tech-badge highlight">Laravel 12</span>
+                <span class="tech-badge highlight">Next.js 15</span>
+                <span class="tech-badge highlight">React 19</span>
+                <span class="tech-badge">TypeScript</span>
+                <span class="tech-badge">Tailwind CSS 4</span>
+                <span class="tech-badge">Expo 54</span>
+                <span class="tech-badge">MySQL 8</span>
+                <span class="tech-badge">Redis 7</span>
+            </div>
+        </section>
+        
+        <!-- Base de données -->
+        <section id="database" class="card">
+            <h2>🗄️ Base de données</h2>
+            
+            <h3>Tables principales</h3>
+            <table class="tech-table">
+                <thead><tr><th>Table</th><th>Description</th></tr></thead>
+                <tbody>
+                    <tr><td>users</td><td>Utilisateurs du système</td></tr>
+                    <tr><td>categories</td><td>Catégories de produits</td></tr>
+                    <tr><td>produits</td><td>Produits du catalogue</td></tr>
+                    <tr><td>clients</td><td>Clients de la boutique</td></tr>
+                    <tr><td>ventes</td><td>Ventes effectuées</td></tr>
+                    <tr><td>ligne_ventes</td><td>Lignes de vente (détails)</td></tr>
+                    <tr><td>mouvements_stock</td><td>Mouvements de stock</td></tr>
+                </tbody>
+            </table>
+            
+            <div class="alert alert-warning">
+                ⚠️ <strong>Migrations en attente (2)</strong> : fcm_tokens, ai_predictions<br>
+                <strong>Action requise</strong> : <code>php artisan migrate</code>
+            </div>
+        </section>
+        
+        <!-- API -->
+        <section id="api" class="card">
+            <h2>🔌 API Backend</h2>
+            
+            <h3>Authentification</h3>
+            <pre><code>POST /api/login
+Body: { email, password }
+Response: { token, user: { id, name, email, role } }
+
+POST /api/logout
+Headers: Authorization: Bearer {token}</code></pre>
+            
+            <h3>Endpoints principaux</h3>
+            <table class="tech-table">
+                <thead><tr><th>Endpoint</th><th>Méthode</th><th>Description</th></tr></thead>
+                <tbody>
+                    <tr><td>/api/produits</td><td>GET</td><td>Liste produits</td></tr>
+                    <tr><td>/api/produits</td><td>POST</td><td>Créer produit</td></tr>
+                    <tr><td>/api/ventes</td><td>GET/POST</td><td>Gestion ventes</td></tr>
+                    <tr><td>/api/ventes/{id}/checkout</td><td>POST</td><td>Checkout vente</td></tr>
+                    <tr><td>/api/mouvements-stock</td><td>GET/POST</td><td>Gestion stock</td></tr>
+                    <tr><td>/api/analytics/stats-globales</td><td>GET</td><td>Stats globales</td></tr>
+                    <tr><td>/api/predictions/demande</td><td>GET</td><td>Prédictions IA</td></tr>
+                </tbody>
+            </table>
+        </section>
+        
+        <!-- Workflows -->
+        <section id="workflows" class="card">
+            <h2>🔄 Workflows métier</h2>
+            
+            <h3>Workflow Vente</h3>
+            <div class="timeline">
+                <div class="timeline-item">1. Caissier ouvre page caisse</div>
+                <div class="timeline-item">2. Scan code-barres produit</div>
+                <div class="timeline-item">3. Produit ajouté au panier</div>
+                <div class="timeline-item">4. Sélection client (optionnel)</div>
+                <div class="timeline-item">5. Sélection mode paiement</div>
+                <div class="timeline-item">6. Click "Payer"</div>
+                <div class="timeline-item">7. Création vente → Décrémentation stock</div>
+                <div class="timeline-item">8. Génération facture PDF</div>
+                <div class="timeline-item">9. Vente finalisée ✅</div>
+            </div>
+            
+            <h3>Workflow Offline Sync</h3>
+            <div class="timeline">
+                <div class="timeline-item">📱 Mobile détecte offline → Ventes stockées localement</div>
+                <div class="timeline-item">📶 Mobile détecte online → Sync automatique</div>
+                <div class="timeline-item">🔌 POST /api/ventes/sync-offline-batch</div>
+                <div class="timeline-item">✅ Backend traite → Stock décrémenté → Queue locale vidée</div>
+            </div>
+        </section>
+        
+        <!-- Fonctionnalités -->
+        <section id="features" class="card">
+            <h2>✨ Fonctionnalités détaillées</h2>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem;">
+                <div style="background: #f7fafc; padding: 1rem; border-radius: 12px;">
+                    <h4>📦 Produits</h4>
+                    <ul style="margin-left: 1rem; font-size: 0.9rem;">
+                        <li>CRUD complet</li>
+                        <li>Recherche/filtres</li>
+                        <li>Scan code-barres</li>
+                        <li>Upload images</li>
+                    </ul>
+                </div>
+                <div style="background: #f7fafc; padding: 1rem; border-radius: 12px;">
+                    <h4>📊 Stock</h4>
+                    <ul style="margin-left: 1rem; font-size: 0.9rem;">
+                        <li>Mouvements entrée/sortie</li>
+                        <li>Validation (gérant)</li>
+                        <li>Alertes seuil</li>
+                        <li>Export mouvements</li>
+                    </ul>
+                </div>
+                <div style="background: #f7fafc; padding: 1rem; border-radius: 12px;">
+                    <h4>💰 Caisse</h4>
+                    <ul style="margin-left: 1rem; font-size: 0.9rem;">
+                        <li>POS intuitif</li>
+                        <li>Scan produits</li>
+                        <li>Multi-paiements</li>
+                        <li>Mode offline</li>
+                    </ul>
+                </div>
+                <div style="background: #f7fafc; padding: 1rem; border-radius: 12px;">
+                    <h4>🤖 IA</h4>
+                    <ul style="margin-left: 1rem; font-size: 0.9rem;">
+                        <li>Prédictions demande</li>
+                        <li>Recommandations réappro</li>
+                        <li>Cross-selling</li>
+                        <li>Métriques performance</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Déploiement -->
+        <section id="deployment" class="card">
+            <h2>🚀 Déploiement</h2>
+            
+            <div class="alert alert-info">
+                📌 <strong>Pré-déploiement</strong> : Migrations → Optimisation → Build frontend → Build mobile
+            </div>
+            
+            <h3>Déploiement Backend (VPS)</h3>
+            <pre><code># Cloner et installer
+git clone &lt;repo-url&gt;
+cd sgci-backend
+composer install --no-dev --optimize-autoloader
+
+# Configurer et migrer
+cp .env.example .env
+php artisan key:generate
+php artisan migrate --force
+
+# Queue worker avec Supervisor
+php artisan queue:work
+
+# Scheduler
+crontab -e
+# * * * * * cd /path && php artisan schedule:run >> /dev/null 2>&1</code></pre>
+            
+            <h3>Déploiement Frontend (Vercel)</h3>
+            <pre><code>npm run build
+vercel --prod</code></pre>
+        </section>
+        
+        <!-- Roadmap -->
+        <section id="roadmap" class="card">
+            <h2>🗺️ Roadmap</h2>
+            
+            <div class="timeline">
+                <div class="timeline-item">
+                    <strong>✅ Version 2.0 (actuelle)</strong><br>
+                    Production-Ready, migrations en attente
+                </div>
+                <div class="timeline-item">
+                    <strong>🔜 Version 2.1 (Court terme)</strong><br>
+                    FCM, SMTP, SMS, tests E2E
+                </div>
+                <div class="timeline-item">
+                    <strong>🚀 Version 3.0 (Moyen terme)</strong><br>
+                    SaaS multi-boutiques, dashboard IA temps réel, 2FA
+                </div>
+                <div class="timeline-item">
+                    <strong>🌟 Version 4.0 (Long terme)</strong><br>
+                    Marketplace intégré, API publique, webhooks
+                </div>
+            </div>
+            
+            <div class="progress-bar" style="margin-top: 1rem;">
+                <div class="progress-fill" style="width: 95%;"></div>
+            </div>
+            <p style="text-align: center; color: #718096;">Progression globale : 95% · Production-Ready</p>
+        </section>
+        
+        <!-- Conclusion -->
+        <section class="card">
+            <h2>🏁 Conclusion</h2>
+            <p>SGCI Bénin est une solution complète de gestion commerciale intelligente conçue pour les commerçants au Bénin. Avec ses fonctionnalités avancées d'IA, son mode offline-first et son interface intuitive, il offre une expérience utilisateur exceptionnelle tout en optimisant la gestion quotidienne.</p>
+            
+            <div class="alert alert-success" style="margin-top: 1rem;">
+                🎯 <strong>Pour commencer</strong> : Exécutez les migrations en attente, démarrez les serveurs, et testez avec :<br>
+                📧 Gérant : gerant@sgci.bj / password<br>
+                📧 Caissier : caissier@sgci.bj / password
+            </div>
+            
+            <p style="text-align: center; margin-top: 2rem; font-size: 1.2rem;">
+                🚀 <strong>Bonne chance avec SGCI Bénin !</strong>
+            </p>
+        </section>
+    </main>
+</div>
+
+<footer class="footer">
+    <p>SGCI Bénin - Système de Gestion Commerciale Intelligente v2.0</p>
+    <p style="font-size: 0.8rem;">Documentation technique - Production-Ready · 2 juin 2026</p>
+    <p style="font-size: 0.7rem;">📧 support@sgci.bj | 🔗 github.com/sgci-benin</p>
+</footer>
+
+</body>
+</html>

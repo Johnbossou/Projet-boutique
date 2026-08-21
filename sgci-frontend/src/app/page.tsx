@@ -235,7 +235,7 @@ export default function Home() {
             transition={{ delay: 0.9 }}
             className="flex flex-col sm:flex-row items-center justify-center gap-4"
           >
-            <Link href="/login">
+            <Link href="/register">
               <motion.button
                 whileHover={{ 
                   scale: 1.05,
@@ -247,20 +247,21 @@ export default function Home() {
                 <div className="absolute inset-0 bg-gradient-to-r from-orange-600 to-red-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                 <span className="relative flex items-center space-x-3">
                   <Zap className="w-5 h-5" />
-                  <span className="text-lg">Démarrer Maintenant</span>
+                  <span className="text-lg">Créer un compte</span>
                   <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform duration-300" />
                 </span>
               </motion.button>
             </Link>
 
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="group flex items-center space-x-3 bg-white/10 backdrop-blur-lg border border-white/20 text-white font-medium py-4 px-8 rounded-2xl hover:bg-white/15 transition-all duration-300"
-            >
-              <Play className="w-5 h-5" />
-              <span>Voir la Démo</span>
-            </motion.button>
+            <Link href="/login">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="group flex items-center space-x-3 bg-white/10 backdrop-blur-lg border border-white/20 text-white font-medium py-4 px-8 rounded-2xl hover:bg-white/15 transition-all duration-300"
+              >
+                <span>Se connecter</span>
+              </motion.button>
+            </Link>
           </motion.div>
 
           {/* Trust Badges */}

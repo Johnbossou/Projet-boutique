@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\VerifieBoutique;
 use App\Services\FacturePdfService;
 use App\Models\BoutiqueSetting;
 use App\Models\Client;
@@ -18,9 +19,16 @@ use Illuminate\Validation\Rule;
 
 class VenteController extends Controller
 {
+    use VerifieBoutique;
+
     public function index(Request $request): JsonResponse
     {
         $query = Vente::with(['user', 'ligneVentes.produit', 'client']);
+
+        // Filtre par boutique courante (multi-tenancy)
+        if ($request->user()->current_boutique_id) {
+            $query->where('boutique_id', $request->user()->current_boutique_id);
+        }
 
         if ($request->filled('date')) {
             $query->whereDate('created_at', $request->date);
@@ -50,6 +58,20 @@ class VenteController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        // Idempotence : une vente offline renvoyée après perte de réseau
+        // ne doit jamais être créée deux fois (double décrément de stock)
+        if ($key = $request->input('idempotency_key')) {
+            $existante = Vente::where('boutique_id', $request->user()->current_boutique_id)
+                ->where('idempotency_key', $key)
+                ->first();
+
+            if ($existante) {
+                $existante->load(['user', 'ligneVentes.produit', 'client']);
+
+                return response()->json($existante, 200);
+            }
+        }
+
         try {
             $validated = $this->validateVentePayload($request);
         } catch (\Illuminate\Validation\ValidationException $e) {
@@ -57,7 +79,7 @@ class VenteController extends Controller
         }
 
         try {
-            return DB::transaction(function () use ($validated, $request) {
+            return DB::transaction(function () use ($validated, $request, $key) {
                 $montantTotal = $this->calculerMontantTotal($validated['ligne_ventes'], $validated['remise'] ?? 0);
                 $tauxTva = $this->tauxTva();
 
@@ -71,6 +93,8 @@ class VenteController extends Controller
                         'statut' => 'termine',
                         'montant_total' => $montantTotal,
                         'tva' => round($montantTotal * $tauxTva, 2),
+                        'boutique_id' => $request->user()->current_boutique_id,
+                        'idempotency_key' => $key,
                     ]
                 ));
 
@@ -91,6 +115,8 @@ class VenteController extends Controller
 
     public function show(Vente $vente): JsonResponse
     {
+        $this->verifierBoutiqueDe($vente);
+
         $vente->load(['user', 'ligneVentes.produit', 'client']);
 
         return response()->json($vente);
@@ -98,15 +124,19 @@ class VenteController extends Controller
 
     public function update(Request $request, Vente $vente): JsonResponse
     {
+        $this->verifierBoutiqueDe($vente);
+
         if ($request->has('statut') && $request->statut === 'annule') {
             return $this->annuler($vente);
         }
 
-        return response()->json(['message' => 'Action non autorisée'], 403);
+        return response()->json(['message' => 'Action non autorisÃ©e'], 403);
     }
 
     public function destroy(Vente $vente): JsonResponse
     {
+        $this->verifierBoutiqueDe($vente);
+
         if ($vente->statut !== 'annule') {
             return response()->json([
                 'message' => 'Annulez la vente avant suppression (POST /ventes/{id}/annuler).',
@@ -120,7 +150,7 @@ class VenteController extends Controller
             $this->mettreAJourMetriquesClient($clientId);
         }
 
-        return response()->json(['message' => 'Vente supprimée avec succès']);
+        return response()->json(['message' => 'Vente supprimÃ©e avec succÃ¨s']);
     }
 
     public function checkout(Request $request): JsonResponse
@@ -139,6 +169,7 @@ class VenteController extends Controller
                 'statut' => 'en_cours',
                 'montant_total' => $montantTotal,
                 'tva' => round($montantTotal * $tauxTva, 2),
+                'boutique_id' => $request->user()->current_boutique_id,
             ]);
 
             foreach ($validated['ligne_ventes'] as $ligne) {
@@ -164,8 +195,10 @@ class VenteController extends Controller
 
     public function terminer(Request $request, Vente $vente): JsonResponse
     {
+        $this->verifierBoutiqueDe($vente);
+
         if ($vente->statut !== 'en_cours') {
-            return response()->json(['message' => 'Seule une vente en cours peut être terminée.'], 422);
+            return response()->json(['message' => 'Seule une vente en cours peut Ãªtre terminÃ©e.'], 422);
         }
 
         $validated = $request->validate([
@@ -185,7 +218,10 @@ class VenteController extends Controller
             $vente->update($paiement);
 
             foreach ($vente->ligneVentes as $ligne) {
-                $produit = $ligne->produit;
+                // Re-lire le produit SOUS VERROU : évite le survente si deux
+                // caisses terminent des ventes sur le même stock simultanément.
+                $produit = Produit::whereKey($ligne->produit_id)->lockForUpdate()->first();
+
                 if (!$produit) {
                     continue;
                 }
@@ -206,9 +242,10 @@ class VenteController extends Controller
                     'reference_bon' => (string) $vente->id,
                     'notes' => 'Sortie de stock pour vente #' . $vente->id,
                     'user_id' => $request->user()->id,
-                    'statut' => 'accepté',
+                    'statut' => 'acceptÃ©',
                     'quantite_avant' => $quantiteAvant,
                     'quantite_apres' => $quantiteApres,
+                    'boutique_id' => $vente->boutique_id,
                 ]);
             }
 
@@ -226,8 +263,10 @@ class VenteController extends Controller
 
     public function annuler(Vente $vente): JsonResponse
     {
+        $this->verifierBoutiqueDe($vente);
+
         if ($vente->statut === 'annule') {
-            return response()->json(['message' => 'Cette vente est déjà annulée.'], 422);
+            return response()->json(['message' => 'Cette vente est dÃ©jÃ  annulÃ©e.'], 422);
         }
 
         if ($vente->statut === 'termine') {
@@ -236,7 +275,7 @@ class VenteController extends Controller
 
             if ($delai > 0 && $vente->created_at->diffInMinutes(now()) > $delai) {
                 return response()->json([
-                    'message' => "Délai d'annulation dépassé ({$delai} minutes).",
+                    'message' => "DÃ©lai d'annulation dÃ©passÃ© ({$delai} minutes).",
                 ], 422);
             }
 
@@ -252,7 +291,7 @@ class VenteController extends Controller
         $vente->load(['user', 'ligneVentes.produit', 'client']);
 
         return response()->json([
-            'message' => 'Vente annulée',
+            'message' => 'Vente annulÃ©e',
             'vente' => $vente,
         ]);
     }
@@ -260,6 +299,12 @@ class VenteController extends Controller
     public function statsVentesAujourdhui(): JsonResponse
     {
         $query = Vente::whereDate('created_at', today())->where('statut', 'termine');
+
+        // Filtre par boutique courante (multi-tenancy)
+        if (auth()->user()->current_boutique_id) {
+            $query->where('boutique_id', auth()->user()->current_boutique_id);
+        }
+
         $nombre = $query->count();
         $montant = (float) $query->sum('montant_total');
 
@@ -273,6 +318,8 @@ class VenteController extends Controller
 
     public function genererFacture(Vente $vente): JsonResponse
     {
+        $this->verifierBoutiqueDe($vente);
+
         $service = app(FacturePdfService::class);
         $vente->load(['user', 'ligneVentes.produit', 'client']);
         $boutique = BoutiqueSetting::current();
@@ -308,11 +355,15 @@ class VenteController extends Controller
 
     public function genererFacturePdf(Vente $vente)
     {
+        $this->verifierBoutiqueDe($vente);
+
         return app(FacturePdfService::class)->download($vente);
     }
 
     public function genererFactureHtml(Vente $vente)
     {
+        $this->verifierBoutiqueDe($vente);
+
         $html = app(FacturePdfService::class)->html($vente);
 
         return response($html)->header('Content-Type', 'text/html; charset=UTF-8');
@@ -320,7 +371,14 @@ class VenteController extends Controller
 
     public function statistiques(Request $request): JsonResponse
     {
-        $caParJour = Vente::where('statut', 'termine')
+        $query = Vente::where('statut', 'termine');
+
+        // Filtre par boutique courante (multi-tenancy)
+        if (auth()->user()->current_boutique_id) {
+            $query->where('boutique_id', auth()->user()->current_boutique_id);
+        }
+
+        $caParJour = (clone $query)
             ->selectRaw('DATE(created_at) as date, SUM(montant_total) as total')
             ->groupBy('date')
             ->orderBy('date', 'desc')
@@ -328,19 +386,20 @@ class VenteController extends Controller
             ->get();
 
         $produitsPopulaires = LigneVente::with('produit')
+            ->whereIn('vente_id', $query->pluck('id'))
             ->select('produit_id', DB::raw('SUM(quantite) as total_vendus'))
             ->groupBy('produit_id')
             ->orderBy('total_vendus', 'desc')
             ->limit(10)
             ->get();
 
-        $caAujourdhui = Vente::whereDate('created_at', today())
-            ->where('statut', 'termine')
+        $caAujourdhui = (clone $query)
+            ->whereDate('created_at', today())
             ->sum('montant_total');
 
-        $caMois = Vente::whereYear('created_at', now()->year)
+        $caMois = (clone $query)
+            ->whereYear('created_at', now()->year)
             ->whereMonth('created_at', now()->month)
-            ->where('statut', 'termine')
             ->sum('montant_total');
 
         return response()->json([
@@ -409,7 +468,8 @@ class VenteController extends Controller
     private function creerLignesEtMouvementsStock(Vente $vente, array $lignes, int $userId): void
     {
         foreach ($lignes as $ligne) {
-            $produit = Produit::findOrFail($ligne['produit_id']);
+            // Verrou pessimiste : sérialise les sorties de stock concurrentes
+            $produit = Produit::whereKey($ligne['produit_id'])->lockForUpdate()->firstOrFail();
             $prixUnitaire = $produit->prix;
 
             LigneVente::create([
@@ -437,9 +497,10 @@ class VenteController extends Controller
                 'reference_bon' => (string) $vente->id,
                 'notes' => 'Sortie de stock pour vente #' . $vente->id,
                 'user_id' => $userId,
-                'statut' => 'accepté',
+                'statut' => 'acceptÃ©',
                 'quantite_avant' => $quantiteAvant,
                 'quantite_apres' => $quantiteApres,
+                'boutique_id' => $vente->boutique_id,
             ]);
         }
     }
@@ -472,10 +533,104 @@ class VenteController extends Controller
                 ]);
             }
         } catch (\Exception $e) {
-            Log::error('Mise à jour métriques client', [
+            Log::error('Mise Ã  jour mÃ©triques client', [
                 'client_id' => $clientId,
                 'error' => $e->getMessage(),
             ]);
+        }
+    }
+
+    public function syncOfflineBatch(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'ventes' => 'required|array|min:1|max:100',
+            'ventes.*.ligne_ventes' => 'required|array|min:1',
+            'ventes.*.ligne_ventes.*.produit_id' => 'required|exists:produits,id',
+            'ventes.*.ligne_ventes.*.quantite' => 'required|integer|min:1',
+            'ventes.*.remise' => 'sometimes|numeric|min:0',
+            'ventes.*.notes' => 'nullable|string|max:1000',
+            'ventes.*.client_id' => 'nullable|exists:clients,id',
+            'ventes.*.mode_paiement' => ['nullable', Rule::in(['especes', 'mtn', 'moov', 'carte'])],
+            'ventes.*.montant_recu' => 'nullable|numeric|min:0',
+            'ventes.*.numero_transaction' => 'nullable|string|max:100',
+            'ventes.*.reference_carte' => 'nullable|string|max:100',
+            'ventes.*.banque' => 'nullable|string|max:100',
+            'ventes.*.created_at' => 'nullable|date',
+        ]);
+
+        $results = [];
+        $succes = 0;
+        $echecs = 0;
+
+        DB::beginTransaction();
+
+        try {
+            foreach ($validated['ventes'] as $index => $venteData) {
+                try {
+                    $montantTotal = $this->calculerMontantTotal($venteData['ligne_ventes'], $venteData['remise'] ?? 0);
+                    $tauxTva = $this->tauxTva();
+
+                    $vente = Vente::create(array_merge(
+                        $this->extraireChampsPaiement($venteData, $montantTotal),
+                        [
+                            'user_id' => $request->user()->id,
+                            'client_id' => $venteData['client_id'] ?? null,
+                            'remise' => $venteData['remise'] ?? 0,
+                            'notes' => $venteData['notes'] ?? null,
+                            'statut' => 'termine',
+                            'montant_total' => $montantTotal,
+                            'tva' => round($montantTotal * $tauxTva, 2),
+                            'created_at' => $venteData['created_at'] ?? now(),
+                            'boutique_id' => $request->user()->current_boutique_id,
+                        ]
+                    ));
+
+                    $this->creerLignesEtMouvementsStock($vente, $venteData['ligne_ventes'], $request->user()->id);
+
+                    if ($vente->client_id) {
+                        $this->mettreAJourMetriquesClient($vente->client_id);
+                    }
+
+                    $vente->load(['user', 'ligneVentes.produit', 'client']);
+
+                    $results[] = [
+                        'index' => $index,
+                        'success' => true,
+                        'vente' => $vente,
+                    ];
+                    $succes++;
+                } catch (\Exception $e) {
+                    $results[] = [
+                        'index' => $index,
+                        'success' => false,
+                        'error' => $e->getMessage(),
+                    ];
+                    $echecs++;
+                    Log::error('Sync offline batch erreur', [
+                        'index' => $index,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'message' => "Synchronisation terminÃ©e: {$succes} succÃ¨s, {$echecs} Ã©checs",
+                'succes' => $succes,
+                'echecs' => $echecs,
+                'results' => $results,
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Sync offline batch transaction erreur', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Erreur lors de la synchronisation batch',
+                'error' => $e->getMessage(),
+            ], 500);
         }
     }
 }

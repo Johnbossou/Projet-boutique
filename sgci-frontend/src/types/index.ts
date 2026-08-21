@@ -1,11 +1,38 @@
+export interface Boutique {
+  id: number;
+  nom: string;
+  adresse?: string | null;
+  telephone?: string | null;
+  email?: string | null;
+  proprietaire_id: number;
+  created_at: string;
+  updated_at: string;
+  proprietaire?: User;
+  users?: BoutiqueUser[];
+}
+
+export interface BoutiqueUser {
+  boutique_id: number;
+  user_id: number;
+  role_dans_boutique: 'gerant' | 'caissier';
+  created_at: string;
+  updated_at: string;
+  boutique?: Boutique;
+  user?: User;
+}
+
 export interface User {
   id: number;
   name: string;
   email: string;
-  role: 'gerant' | 'caissier';
+  role: 'proprietaire' | 'gerant' | 'caissier';
   telephone?: string | null;
   derniere_connexion?: string;
   est_actif?: boolean;
+  two_factor_enabled?: boolean;
+  current_boutique_id?: number | null;
+  boutiques?: Boutique[];
+  current_boutique?: Boutique | null;
 }
 
 export interface Categorie {

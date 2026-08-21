@@ -23,7 +23,8 @@ class MouvementStock extends Model
         'statut', // 'en_attente', 'accepté', 'rejeté'
         'notes',
         'quantite_avant',
-        'quantite_apres'
+        'quantite_apres',
+        'boutique_id',
     ];
 
     protected $casts = [
@@ -43,6 +44,11 @@ class MouvementStock extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function boutique()
+    {
+        return $this->belongsTo(Boutique::class);
     }
 
     // ==================== SCOPES ====================

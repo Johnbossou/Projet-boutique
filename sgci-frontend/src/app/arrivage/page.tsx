@@ -270,7 +270,8 @@ export default function ArrivagePage() {
                     </SelectTrigger>
                     <SelectContent>
                       {produitsFiltres.length === 0 ? (
-                        <SelectItem value="">Aucun produit trouvé</SelectItem>
+                        // ✅ CORRIGÉ : value="none" au lieu de value=""
+                        <SelectItem value="none" disabled>Aucun produit trouvé</SelectItem>
                       ) : (
                         produitsFiltres.map((produit) => (
                           <SelectItem key={produit.id} value={produit.id.toString()}>

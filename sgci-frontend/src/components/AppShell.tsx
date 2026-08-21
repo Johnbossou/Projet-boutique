@@ -16,10 +16,12 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { NotificationBell } from '@/components/NotificationBell';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { BoutiqueSelector } from '@/components/BoutiqueSelector';
 import { cn } from '@/lib/utils';
 
 const NAV = [
   { href: '/dashboard', label: 'Dashboard', icon: BarChart3 },
+  { href: '/boutiques', label: 'Mes Boutiques', icon: Store, role: 'proprietaire' },
   { href: '/produits', label: 'Produits', icon: Package },
   { href: '/stock', label: 'Stock', icon: History },
   { href: '/arrivage', label: 'Arrivage', icon: TrendingUp },
@@ -50,6 +52,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
           {NAV.map((item) => {
+            // Masquer les items réservés aux propriétaires si l'utilisateur n'est pas propriétaire
+            if (item.role === 'proprietaire' && user?.role !== 'proprietaire') {
+              return null;
+            }
+
             const active = pathname === item.href || pathname.startsWith(item.href + '/');
             const Icon = item.icon;
             return (
@@ -75,6 +82,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <header className="h-14 border-b border-border flex items-center justify-between px-4 lg:px-6 bg-card/60 backdrop-blur sticky top-0 z-40">
           <p className="text-sm font-medium text-muted-foreground lg:hidden">SGCI Bénin</p>
           <div className="flex items-center gap-2 ml-auto">
+            <BoutiqueSelector />
             <ThemeToggle />
             <NotificationBell />
             <span className="text-sm text-muted-foreground hidden sm:inline">{user?.name}</span>

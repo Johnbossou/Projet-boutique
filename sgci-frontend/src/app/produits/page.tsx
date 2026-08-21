@@ -22,7 +22,8 @@ import {
   ChevronLeft,
   ChevronRight,
   MoreVertical,
-  TrendingUp
+  TrendingUp,
+  Link2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -251,6 +252,12 @@ export default function ProduitsPage() {
       console.error('Erreur chargement stats:', message);
     }
   }, []);
+
+  // 🎯 CHARGEMENT INITIAL DES DONNÉES
+  useEffect(() => {
+    chargerDonnees();
+    chargerStats();
+  }, [chargerDonnees, chargerStats]);
 
   // 🎯 GESTION PRODUITS (CRUD)
   const handleCreateProduit = async (e: React.FormEvent) => {
@@ -944,7 +951,7 @@ export default function ProduitsPage() {
               />
             </div>
             <Button type="button" onClick={addImageUrl} variant="outline">
-              <Link className="w-4 h-4 mr-2" />
+              <Link2 className="w-4 h-4 mr-2" />
               Ajouter
             </Button>
           </div>
@@ -2003,7 +2010,7 @@ export default function ProduitsPage() {
             <Button 
               variant="destructive" 
               onClick={handleDeleteCategorie}
-              disabled={categorieToDelete && (categorieToDelete.produits_count || 0) > 0}
+              disabled={categorieToDelete ? (categorieToDelete.produits_count || 0) > 0 : false}
             >
               <Trash2 className="w-4 h-4 mr-2" />
               Supprimer

@@ -20,17 +20,29 @@ class Produit extends Model
         'code_qr',
         'unite_mesure',
         'image_url',
+        'boutique_id',
+        'date_peremption',
+        'date_fabrication',
+        'lot_numero',
+        'duree_conservation_jours',
     ];
 
     protected $casts = [
         'est_perissable' => 'boolean',
         'prix' => 'decimal:2',
+        'date_peremption' => 'date',
+        'date_fabrication' => 'date',
     ];
 
     // Relations
     public function categorie()
     {
         return $this->belongsTo(Categorie::class);
+    }
+
+    public function boutique()
+    {
+        return $this->belongsTo(Boutique::class);
     }
 
     public function ligneVentes()
@@ -89,5 +101,40 @@ class Produit extends Model
     public function scopePerissables($query)
     {
         return $query->where('est_perissable', true);
+    }
+
+    public function scopePerimes($query)
+    {
+        return $query->where('est_perissable', true)
+            ->where('date_peremption', '<', now());
+    }
+
+    public function scopeProchesPeremption($query, $jours = 7)
+    {
+        return $query->where('est_perissable', true)
+            ->where('date_peremption', '>', now())
+            ->where('date_peremption', '<=', now()->addDays($jours));
+    }
+
+    public function estPerime(): bool
+    {
+        return $this->est_perissable && $this->date_peremption && $this->date_peremption < now();
+    }
+
+    public function estProchePeremption(int $jours = 7): bool
+    {
+        return $this->est_perissable 
+            && $this->date_peremption 
+            && $this->date_peremption > now() 
+            && $this->date_peremption <= now()->addDays($jours);
+    }
+
+    public function getJoursRestantsAttribute(): ?int
+    {
+        if (!$this->est_perissable || !$this->date_peremption) {
+            return null;
+        }
+        
+        return now()->diffInDays($this->date_peremption, false);
     }
 }

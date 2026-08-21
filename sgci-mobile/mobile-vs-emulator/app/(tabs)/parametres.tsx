@@ -60,7 +60,7 @@ import {
   apiToLocal,
 } from "@/lib/boutique-settings";
 import * as Sharing from "expo-sharing";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import { UsersManagement } from "@/components/UsersManagement";
 import { useSgciTheme } from "@/contexts/ThemeContext";
 
@@ -84,7 +84,7 @@ interface BoutiqueSettings {
 }
 
 export default function ParametresScreen() {
-  const { user, logout } = useAuth();
+  const { user, logout, switchBoutique } = useAuth();
   const { setDarkMode } = useSgciTheme();
   const [activeTab, setActiveTab] = useState("profil");
   const [isLoading, setIsLoading] = useState(false);
@@ -505,6 +505,14 @@ export default function ParametresScreen() {
               isActive={activeTab === "equipe"}
             />
           )}
+          {user?.role === "proprietaire" && (
+            <TabButton
+              value="mes-boutiques"
+              label="Mes Boutiques"
+              icon={Store}
+              isActive={activeTab === "mes-boutiques"}
+            />
+          )}
         </ScrollView>
       </Animated.View>
 
@@ -525,8 +533,7 @@ export default function ParametresScreen() {
               <BlurView intensity={10} style={styles.profileCard}>
                 <LinearGradient
                   colors={["#3b82f6", "#8b5cf6"]}
-                  style={StyleSheet.absoluteFill}
-                  opacity={0.2}
+                  style={[StyleSheet.absoluteFill, { opacity: 0.2 }]}
                 />
                 <View style={styles.profileHeader}>
                   <LinearGradient
@@ -1283,6 +1290,80 @@ export default function ParametresScreen() {
               <UsersManagement />
             </View>
           )}
+
+          {activeTab === "mes-boutiques" && user?.role === "proprietaire" && (
+            <View style={styles.tabContent}>
+              <BlurView intensity={10} style={styles.sectionCard}>
+                <View style={styles.sectionHeader}>
+                  <View
+                    style={[
+                      styles.sectionIcon,
+                      { backgroundColor: "#f9731620" },
+                    ]}
+                  >
+                    <Store size={20} color="#f97316" />
+                  </View>
+                  <Text style={styles.sectionTitle}>Mes Boutiques</Text>
+                </View>
+                <View style={styles.sectionContent}>
+                  {user.boutiques && user.boutiques.length > 0 ? (
+                    <View style={styles.boutiquesList}>
+                      {user.boutiques.map((boutique: any) => (
+                        <TouchableOpacity
+                          key={boutique.id}
+                          style={[
+                            styles.boutiqueCard,
+                            boutique.id === user.current_boutique_id && styles.boutiqueCardActive,
+                          ]}
+                          onPress={() => switchBoutique(boutique.id)}
+                          activeOpacity={0.7}
+                        >
+                          <View style={styles.boutiqueCardIcon}>
+                            <Store 
+                              size={24} 
+                              color={boutique.id === user.current_boutique_id ? "#3b82f6" : "#f97316"} 
+                            />
+                          </View>
+                          <View style={styles.boutiqueCardInfo}>
+                            <Text style={styles.boutiqueCardName}>{boutique.nom}</Text>
+                            <Text style={styles.boutiqueCardAddress}>
+                              {boutique.adresse || 'Adresse non renseignée'}
+                            </Text>
+                            {boutique.telephone && (
+                              <Text style={styles.boutiqueCardPhone}>{boutique.telephone}</Text>
+                            )}
+                          </View>
+                          {boutique.id === user.current_boutique_id && (
+                            <View style={styles.currentBoutiqueBadge}>
+                              <Text style={styles.currentBoutiqueBadgeText}>Actuelle</Text>
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  ) : (
+                    <View style={styles.emptyState}>
+                      <Store size={48} color="#64748b" />
+                      <Text style={styles.emptyStateTitle}>
+                        Aucune boutique
+                      </Text>
+                      <Text style={styles.emptyStateText}>
+                        Vous n'avez pas encore de boutique. Contactez l'administrateur.
+                      </Text>
+                    </View>
+                  )}
+
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.createBoutiqueButton]}
+                    onPress={() => Alert.alert("Info", "Création de boutique en développement")}
+                  >
+                    <Store size={20} color="#ffffff" />
+                    <Text style={styles.actionButtonText}>Créer une boutique</Text>
+                  </TouchableOpacity>
+                </View>
+              </BlurView>
+            </View>
+          )}
         </ScrollView>
       </Animated.View>
     </SafeAreaView>
@@ -1809,5 +1890,79 @@ const styles = StyleSheet.create({
     color: "#ef4444",
     fontSize: 16,
     fontWeight: "600",
+  },
+  // Boutique Management Styles
+  boutiquesList: {
+    gap: 12,
+  },
+  boutiqueCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
+  },
+  boutiqueCardActive: {
+    backgroundColor: "rgba(59, 130, 246, 0.1)",
+    borderColor: "#3b82f6",
+  },
+  boutiqueCardIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: "rgba(249, 115, 22, 0.1)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 16,
+  },
+  boutiqueCardInfo: {
+    flex: 1,
+  },
+  boutiqueCardName: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#ffffff",
+    marginBottom: 4,
+  },
+  boutiqueCardAddress: {
+    fontSize: 14,
+    color: "#94a3b8",
+    marginBottom: 2,
+  },
+  boutiqueCardPhone: {
+    fontSize: 13,
+    color: "#64748b",
+  },
+  currentBoutiqueBadge: {
+    backgroundColor: "#3b82f6",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  currentBoutiqueBadgeText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#ffffff",
+  },
+  emptyState: {
+    alignItems: "center",
+    paddingVertical: 40,
+    gap: 16,
+  },
+  emptyStateTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#ffffff",
+  },
+  emptyStateText: {
+    fontSize: 14,
+    color: "#94a3b8",
+    textAlign: "center",
+  },
+  createBoutiqueButton: {
+    backgroundColor: "#f97316",
+    marginTop: 16,
   },
 });

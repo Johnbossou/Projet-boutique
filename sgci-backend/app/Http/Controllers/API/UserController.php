@@ -15,6 +15,13 @@ class UserController extends Controller
     {
         $query = User::query()->orderBy('name');
 
+        // Filtre par boutique courante (multi-tenancy)
+        if ($request->user()->current_boutique_id) {
+            $query->whereHas('boutiques', function ($q) use ($request) {
+                $q->where('boutique_id', $request->user()->current_boutique_id);
+            });
+        }
+
         if ($request->boolean('actifs_seulement', true)) {
             $query->where('est_actif', true);
         }
@@ -23,17 +30,26 @@ class UserController extends Controller
             $query->where('role', $request->role);
         }
 
-        $users = $query->get(['id', 'name', 'email', 'role', 'telephone', 'est_actif', 'derniere_connexion', 'created_at']);
+        $perPage = min((int) ($request->per_page ?? 20), 100);
+        $users = $query->paginate($perPage, ['id', 'name', 'email', 'role', 'telephone', 'est_actif', 'derniere_connexion', 'created_at']);
 
         return response()->json($users);
     }
 
     public function caissiers(): JsonResponse
     {
-        $caissiers = User::where('role', 'caissier')
+        $query = User::where('role', 'caissier')
             ->where('est_actif', true)
-            ->orderBy('name')
-            ->get(['id', 'name', 'email', 'telephone', 'derniere_connexion']);
+            ->orderBy('name');
+
+        // Filtre par boutique courante (multi-tenancy)
+        if (auth()->user()->current_boutique_id) {
+            $query->whereHas('boutiques', function ($q) {
+                $q->where('boutique_id', auth()->user()->current_boutique_id);
+            });
+        }
+
+        $caissiers = $query->get(['id', 'name', 'email', 'telephone', 'derniere_connexion']);
 
         return response()->json($caissiers);
     }
@@ -43,10 +59,19 @@ class UserController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email',
-            'password' => 'required|string|min:6',
+            'password' => 'required|string|min:8',
             'telephone' => 'nullable|string|max:30',
-            'role' => ['required', Rule::in(['gerant', 'caissier'])],
+            'role' => ['required', Rule::in(['proprietaire', 'gerant', 'caissier'])],
+            'boutique_id' => 'nullable|exists:boutiques,id',
+            'role_dans_boutique' => 'nullable|in:gerant,caissier',
         ]);
+
+        // Anti-escalade : seul un propriétaire peut créer un autre propriétaire
+        if ($validated['role'] === 'proprietaire' && $request->user()->role !== 'proprietaire') {
+            return response()->json([
+                'message' => 'Seul un propriétaire peut créer un compte propriétaire.',
+            ], 403);
+        }
 
         // Un seul gérant actif recommandé — on autorise la création mais le seed garde le principal
         $user = User::create([
@@ -57,6 +82,13 @@ class UserController extends Controller
             'role' => $validated['role'],
             'est_actif' => true,
         ]);
+
+        // Assignation à une boutique via pivot (multi-tenancy)
+        if (isset($validated['boutique_id']) && isset($validated['role_dans_boutique'])) {
+            $user->boutiques()->attach($validated['boutique_id'], [
+                'role_dans_boutique' => $validated['role_dans_boutique'],
+            ]);
+        }
 
         return response()->json([
             'message' => 'Utilisateur créé',
@@ -70,10 +102,26 @@ class UserController extends Controller
             'name' => 'sometimes|string|max:255',
             'email' => ['sometimes', 'email', Rule::unique('users', 'email')->ignore($user->id)],
             'telephone' => 'nullable|string|max:30',
-            'role' => ['sometimes', Rule::in(['gerant', 'caissier'])],
-            'password' => 'sometimes|string|min:6',
+            'role' => ['sometimes', Rule::in(['proprietaire', 'gerant', 'caissier'])],
+            'password' => 'sometimes|string|min:8',
             'est_actif' => 'sometimes|boolean',
         ]);
+
+        $acteur = $request->user();
+
+        // Anti-escalade : seul un propriétaire peut attribuer/promouvoir vers « proprietaire »
+        if (($validated['role'] ?? null) === 'proprietaire' && $acteur->role !== 'proprietaire') {
+            return response()->json([
+                'message' => 'Seul un propriétaire peut attribuer le rôle propriétaire.',
+            ], 403);
+        }
+
+        // Personne ne modifie son propre rôle (auto-promotion)
+        if (isset($validated['role']) && $user->id === $acteur->id) {
+            return response()->json([
+                'message' => 'Vous ne pouvez pas modifier votre propre rôle.',
+            ], 422);
+        }
 
         if (isset($validated['password'])) {
             $validated['password'] = Hash::make($validated['password']);
@@ -101,6 +149,37 @@ class UserController extends Controller
         $user->update(['est_actif' => false]);
 
         return response()->json(['message' => 'Utilisateur désactivé']);
+    }
+
+    public function assignBoutique(Request $request, User $user): JsonResponse
+    {
+        $validated = $request->validate([
+            'boutique_id' => 'required|exists:boutiques,id',
+            'role_dans_boutique' => 'required|in:gerant,caissier',
+        ]);
+
+        // Vérifier que l'utilisateur a accès à cette boutique
+        if (!$request->user()->aAccesBoutique($validated['boutique_id'])) {
+            return response()->json(['message' => 'Accès non autorisé à cette boutique'], 403);
+        }
+
+        $user->boutiques()->attach($validated['boutique_id'], [
+            'role_dans_boutique' => $validated['role_dans_boutique'],
+        ]);
+
+        return response()->json(['message' => 'Utilisateur assigné à la boutique']);
+    }
+
+    public function removeBoutique(Request $request, User $user, $boutiqueId): JsonResponse
+    {
+        // Vérifier que l'utilisateur a accès à cette boutique
+        if (!$request->user()->aAccesBoutique($boutiqueId)) {
+            return response()->json(['message' => 'Accès non autorisé à cette boutique'], 403);
+        }
+
+        $user->boutiques()->detach($boutiqueId);
+
+        return response()->json(['message' => 'Utilisateur retiré de la boutique']);
     }
 
     private function formatUser(User $user): array

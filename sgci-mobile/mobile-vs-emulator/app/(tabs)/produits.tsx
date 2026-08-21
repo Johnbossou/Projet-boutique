@@ -3,6 +3,7 @@ import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
+import * as SecureStore from "expo-secure-store";
 import {
     AlertTriangle,
     BarChart,
@@ -32,6 +33,7 @@ import {
     Animated,
     Dimensions,
     Easing,
+    FlatList,
     Image,
     Modal,
     Platform,
@@ -1223,44 +1225,22 @@ export default function ProduitsScreen() {
           },
         ]}
       >
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor="#f97316"
-              colors={["#f97316"]}
-            />
-          }
-        >
-          {vue === "grid" ? (
-            // Vue Grid
-            <View style={styles.gridContainer}>
-              {isLoading ? (
-                // Skeleton Grid
-                Array.from({ length: 6 }).map((_, index) => (
-                  <View key={index} style={styles.skeletonCard}>
-                    <View style={styles.skeletonImage} />
-                    <View style={styles.skeletonContent}>
-                      <View style={styles.skeletonLine} />
-                      <View style={[styles.skeletonLine, { width: "80%" }]} />
-                      <View style={[styles.skeletonLine, { width: "60%" }]} />
-                      <View style={[styles.skeletonLine, { width: "40%" }]} />
-                    </View>
-                  </View>
-                ))
-              ) : produits.length > 0 ? (
-                <View style={styles.grid}>
-                  {produits.map((produit, index) => (
-                    <ProductCard
-                      key={produit.id}
-                      produit={produit}
-                      index={index}
-                    />
-                  ))}
-                </View>
-              ) : (
+        {vue === "grid" ? (
+          // Vue Grid with FlatList
+          <FlatList
+            data={produits}
+            renderItem={({ item, index }) => (
+              <ProductCard
+                key={item.id}
+                produit={item}
+                index={index}
+              />
+            )}
+            keyExtractor={(item) => item.id.toString()}
+            numColumns={2}
+            contentContainerStyle={styles.gridContainer}
+            ListEmptyComponent={
+              !isLoading ? (
                 <View style={styles.emptyState}>
                   <Package size={64} color="#94a3b8" />
                   <Text style={styles.emptyStateTitle}>
@@ -1270,37 +1250,49 @@ export default function ProduitsScreen() {
                     Aucun produit ne correspond à vos critères de recherche.
                   </Text>
                 </View>
-              )}
-            </View>
-          ) : (
-            // Vue Liste
-            <View style={styles.listContainer}>
-              {isLoading ? (
-                // Skeleton List
-                Array.from({ length: 10 }).map((_, index) => (
-                  <View key={index} style={styles.skeletonRow}>
-                    <View style={styles.skeletonRowLeft}>
-                      <View style={styles.skeletonRowImage} />
-                      <View style={styles.skeletonRowText}>
+              ) : null
+            }
+            ListHeaderComponent={
+              isLoading ? (
+                <View style={styles.gridContainer}>
+                  {Array.from({ length: 6 }).map((_, index) => (
+                    <View key={index} style={styles.skeletonCard}>
+                      <View style={styles.skeletonImage} />
+                      <View style={styles.skeletonContent}>
                         <View style={styles.skeletonLine} />
+                        <View style={[styles.skeletonLine, { width: "80%" }]} />
                         <View style={[styles.skeletonLine, { width: "60%" }]} />
+                        <View style={[styles.skeletonLine, { width: "40%" }]} />
                       </View>
                     </View>
-                    <View style={styles.skeletonRowRight}>
-                      <View style={[styles.skeletonLine, { width: 80 }]} />
-                      <View style={[styles.skeletonLine, { width: 40 }]} />
-                    </View>
-                  </View>
-                ))
-              ) : produits.length > 0 ? (
-                produits.map((produit, index) => (
-                  <ProductRow
-                    key={produit.id}
-                    produit={produit}
-                    index={index}
-                  />
-                ))
-              ) : (
+                  ))}
+                </View>
+              ) : null
+            }
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor="#f97316"
+                colors={["#f97316"]}
+              />
+            }
+          />
+        ) : (
+          // Vue Liste with FlatList
+          <FlatList
+            data={produits}
+            renderItem={({ item, index }) => (
+              <ProductRow
+                key={item.id}
+                produit={item}
+                index={index}
+              />
+            )}
+            keyExtractor={(item) => item.id.toString()}
+            contentContainerStyle={styles.listContainer}
+            ListEmptyComponent={
+              !isLoading ? (
                 <View style={styles.emptyState}>
                   <Package size={64} color="#94a3b8" />
                   <Text style={styles.emptyStateTitle}>
@@ -1310,98 +1302,127 @@ export default function ProduitsScreen() {
                     Aucun produit ne correspond à vos critères de recherche.
                   </Text>
                 </View>
-              )}
-            </View>
-          )}
+              ) : null
+            }
+            ListHeaderComponent={
+              isLoading ? (
+                <View style={styles.listContainer}>
+                  {Array.from({ length: 10 }).map((_, index) => (
+                    <View key={index} style={styles.skeletonRow}>
+                      <View style={styles.skeletonRowLeft}>
+                        <View style={styles.skeletonRowImage} />
+                        <View style={styles.skeletonRowText}>
+                          <View style={styles.skeletonLine} />
+                          <View style={[styles.skeletonLine, { width: "60%" }]} />
+                        </View>
+                      </View>
+                      <View style={styles.skeletonRowRight}>
+                        <View style={[styles.skeletonLine, { width: 80 }]} />
+                        <View style={[styles.skeletonLine, { width: 40 }]} />
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              ) : null
+            }
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor="#f97316"
+                colors={["#f97316"]}
+              />
+            }
+          />
+        )}
 
-          {/* Pagination */}
-          {!isLoading && pagination.last_page > 1 && (
-            <View style={styles.pagination}>
-              <Text style={styles.paginationInfo}>
-                Affichage de {pagination.from} à {pagination.to} sur{" "}
-                {pagination.total} produits
-              </Text>
-              <View style={styles.paginationButtons}>
-                <TouchableOpacity
-                  style={[
-                    styles.paginationButton,
-                    pagination.current_page === 1 &&
-                      styles.paginationButtonDisabled,
-                  ]}
-                  onPress={() => handlePageChange(pagination.current_page - 1)}
-                  disabled={pagination.current_page === 1}
-                >
-                  <ChevronLeft
-                    size={20}
-                    color={
-                      pagination.current_page === 1 ? "#94a3b8" : "#ffffff"
-                    }
-                  />
-                </TouchableOpacity>
-
-                {Array.from(
-                  { length: Math.min(5, pagination.last_page) },
-                  (_, i) => {
-                    let pageNum;
-                    if (pagination.last_page <= 5) {
-                      pageNum = i + 1;
-                    } else if (pagination.current_page <= 3) {
-                      pageNum = i + 1;
-                    } else if (
-                      pagination.current_page >=
-                      pagination.last_page - 2
-                    ) {
-                      pageNum = pagination.last_page - 4 + i;
-                    } else {
-                      pageNum = pagination.current_page - 2 + i;
-                    }
-
-                    return (
-                      <TouchableOpacity
-                        key={pageNum}
-                        style={[
-                          styles.paginationButton,
-                          pagination.current_page === pageNum &&
-                            styles.paginationButtonActive,
-                        ]}
-                        onPress={() => handlePageChange(pageNum)}
-                      >
-                        <Text
-                          style={[
-                            styles.paginationButtonText,
-                            pagination.current_page === pageNum &&
-                              styles.paginationButtonTextActive,
-                          ]}
-                        >
-                          {pageNum}
-                        </Text>
-                      </TouchableOpacity>
-                    );
+        {/* Pagination */}
+        {!isLoading && pagination.last_page > 1 && (
+          <View style={styles.pagination}>
+            <Text style={styles.paginationInfo}>
+              Affichage de {pagination.from} à {pagination.to} sur{" "}
+              {pagination.total} produits
+            </Text>
+            <View style={styles.paginationButtons}>
+              <TouchableOpacity
+                style={[
+                  styles.paginationButton,
+                  pagination.current_page === 1 &&
+                    styles.paginationButtonDisabled,
+                ]}
+                onPress={() => handlePageChange(pagination.current_page - 1)}
+                disabled={pagination.current_page === 1}
+              >
+                <ChevronLeft
+                  size={20}
+                  color={
+                    pagination.current_page === 1 ? "#94a3b8" : "#ffffff"
                   }
-                )}
+                />
+              </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={[
-                    styles.paginationButton,
-                    pagination.current_page === pagination.last_page &&
-                      styles.paginationButtonDisabled,
-                  ]}
-                  onPress={() => handlePageChange(pagination.current_page + 1)}
-                  disabled={pagination.current_page === pagination.last_page}
-                >
-                  <ChevronRight
-                    size={20}
-                    color={
-                      pagination.current_page === pagination.last_page
-                        ? "#94a3b8"
-                        : "#ffffff"
-                    }
-                  />
-                </TouchableOpacity>
-              </View>
+              {Array.from(
+                { length: Math.min(5, pagination.last_page) },
+                (_, i) => {
+                  let pageNum;
+                  if (pagination.last_page <= 5) {
+                    pageNum = i + 1;
+                  } else if (pagination.current_page <= 3) {
+                    pageNum = i + 1;
+                  } else if (
+                    pagination.current_page >=
+                    pagination.last_page - 2
+                  ) {
+                    pageNum = pagination.last_page - 4 + i;
+                  } else {
+                    pageNum = pagination.current_page - 2 + i;
+                  }
+
+                  return (
+                    <TouchableOpacity
+                      key={pageNum}
+                      style={[
+                        styles.paginationButton,
+                        pagination.current_page === pageNum &&
+                          styles.paginationButtonActive,
+                      ]}
+                      onPress={() => handlePageChange(pageNum)}
+                    >
+                      <Text
+                        style={[
+                          styles.paginationButtonText,
+                          pagination.current_page === pageNum &&
+                            styles.paginationButtonTextActive,
+                        ]}
+                      >
+                        {pageNum}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                }
+              )}
+
+              <TouchableOpacity
+                style={[
+                  styles.paginationButton,
+                  pagination.current_page === pagination.last_page &&
+                    styles.paginationButtonDisabled,
+                ]}
+                onPress={() => handlePageChange(pagination.current_page + 1)}
+                disabled={pagination.current_page === pagination.last_page}
+              >
+                <ChevronRight
+                  size={20}
+                  color={
+                    pagination.current_page === pagination.last_page
+                      ? "#94a3b8"
+                      : "#ffffff"
+                  }
+                />
+              </TouchableOpacity>
             </View>
-          )}
-        </ScrollView>
+          </View>
+        )}
       </Animated.View>
 
       {/* Modal Détails Produit */}
@@ -2182,8 +2203,9 @@ export default function ProduitsScreen() {
                   style={[styles.alertButton, styles.alertButtonConfirm]}
                   onPress={handleDeleteCategorie}
                   disabled={
-                    categorieToDelete &&
-                    (categorieToDelete.produits_count || 0) > 0
+                    categorieToDelete
+                      ? (categorieToDelete.produits_count || 0) > 0
+                      : false
                   }
                 >
                   <Trash2 size={20} color="#ffffff" />

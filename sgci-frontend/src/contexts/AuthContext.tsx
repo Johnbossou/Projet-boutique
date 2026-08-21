@@ -9,7 +9,7 @@ import React, {
   useMemo,
 } from 'react';
 import { useRouter } from 'next/navigation';
-import { User } from '@/types';
+import { User, Boutique } from '@/types';
 import { apiFetch } from '@/lib/api-client';
 import { fetchBoutiqueSettings } from '@/lib/boutique-settings';
 
@@ -19,6 +19,7 @@ interface AuthContextType {
   logout: () => void;
   isLoading: boolean;
   getToken: () => Promise<string | null>;
+  switchBoutique: (boutiqueId: number) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -94,7 +95,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       setUser(userData);
       fetchBoutiqueSettings().catch(() => undefined);
-      router.push('/dashboard');
+      
+      // Redirection selon le rôle
+      if (userData.role === 'proprietaire') {
+        router.push('/selection-boutique');
+      } else {
+        router.push('/dashboard');
+      }
     } catch (error: unknown) {
       localStorage.removeItem('auth_token');
       localStorage.removeItem('user_data');
@@ -122,6 +129,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [router]);
 
+  const switchBoutique = useCallback(async (boutiqueId: number) => {
+    try {
+      setIsLoading(true);
+      const response = await apiFetch('/switch-boutique', {
+        method: 'POST',
+        body: JSON.stringify({ boutique_id: boutiqueId }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({
+          message: 'Erreur lors du changement de boutique',
+        }));
+        throw new Error(errorData.message || 'Erreur lors du changement de boutique');
+      }
+
+      const data = await response.json();
+      // Update user data with new boutique info
+      setUser((prevUser) => {
+        if (!prevUser) return null;
+        return {
+          ...prevUser,
+          current_boutique_id: data.current_boutique_id,
+          current_boutique: data.current_boutique,
+        };
+      });
+    } catch (error: unknown) {
+      throw new Error(
+        error instanceof Error ? error.message : 'Échec du changement de boutique'
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   const contextValue = useMemo(
     () => ({
       user,
@@ -129,8 +170,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       logout,
       isLoading,
       getToken,
+      switchBoutique,
     }),
-    [user, login, logout, isLoading, getToken]
+    [user, login, logout, isLoading, getToken, switchBoutique]
   );
 
   return (

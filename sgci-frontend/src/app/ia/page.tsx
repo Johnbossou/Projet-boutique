@@ -97,7 +97,9 @@ interface PerformanceData {
   historique: any[];
   statut_modele: {
     statut: string;
+    libelle?: string;
     dernier_entrainement: any;
+    dernier_recalcul?: any;
     prochaine_mise_a_jour: string | null;
   };
   donnees_temps_reel: {

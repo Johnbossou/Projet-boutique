@@ -14,6 +14,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role.gerant' => \App\Http\Middleware\EnsureUserIsGerant::class,
             'user.active' => \App\Http\Middleware\EnsureUserIsActive::class,
+            'proprietaire' => \App\Http\Middleware\ProprietaireMiddleware::class,
+            'boutique.scope' => \App\Http\Middleware\BoutiqueScopeMiddleware::class,
+            'boutique.ownership' => \App\Http\Middleware\VerifyBoutiqueOwnership::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

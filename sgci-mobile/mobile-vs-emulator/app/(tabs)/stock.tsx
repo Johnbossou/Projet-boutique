@@ -1,6 +1,6 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { apiFetch } from "@/lib/api-client";
-import { useRouter } from "expo-router";
+import { useRouter, type Href } from "expo-router";
 import { ArrowLeft, CheckCircle2, History, XCircle } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -102,7 +102,7 @@ export default function StockScreen() {
         >
           <Text style={styles.filterText}>En attente</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.linkBtn} onPress={() => router.push("/(tabs)/arrivage")}>
+        <TouchableOpacity style={styles.linkBtn} onPress={() => router.push("/arrivage" as Href)}>
           <Text style={styles.linkText}>+ Arrivage</Text>
         </TouchableOpacity>
       </View>

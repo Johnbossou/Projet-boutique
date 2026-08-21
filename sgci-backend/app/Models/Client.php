@@ -20,7 +20,8 @@ class Client extends Model
         'notes',
         'total_achats',
         'nombre_commandes',
-        'derniere_commande'
+        'derniere_commande',
+        'boutique_id',
     ];
 
     protected $casts = [
@@ -32,6 +33,11 @@ class Client extends Model
     public function ventes()
     {
         return $this->hasMany(Vente::class);
+    }
+
+    public function boutique()
+    {
+        return $this->belongsTo(Boutique::class);
     }
 
     // Scopes

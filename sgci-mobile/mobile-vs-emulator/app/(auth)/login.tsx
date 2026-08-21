@@ -33,12 +33,13 @@ const { width, height } = Dimensions.get("window");
 
 export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
+  const [showBoutiqueSelection, setShowBoutiqueSelection] = useState(false);
   const [formData, setFormData] = useState({
-    email: "gerant@sgci.bj",
-    password: "password",
+    email: "",
+    password: "",
   });
 
-  const { login, isLoading } = useAuth();
+  const { login, isLoading, user, switchBoutique } = useAuth();
 
   // Animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -155,6 +156,11 @@ export default function LoginScreen() {
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       await login(formData.email, formData.password);
+      
+      // Check if user is a proprietaire with multiple boutiques
+      if (user && user.role === 'proprietaire' && user.boutiques && user.boutiques.length > 1) {
+        setShowBoutiqueSelection(true);
+      }
     } catch (error: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert(
@@ -168,6 +174,86 @@ export default function LoginScreen() {
     inputRange: [0, 1],
     outputRange: ["0deg", "360deg"],
   });
+
+  const handleSwitchBoutique = async (boutiqueId: number) => {
+    try {
+      await switchBoutique(boutiqueId);
+      setShowBoutiqueSelection(false);
+      // Navigation will be handled by AuthContext
+    } catch (error: any) {
+      Alert.alert("Erreur", error.message || "Erreur lors du changement de boutique");
+    }
+  };
+
+  // Show boutique selection modal for proprietaires with multiple boutiques
+  if (showBoutiqueSelection && user && user.role === 'proprietaire' && user.boutiques && user.boutiques.length > 1) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <LinearGradient
+          colors={["#0f172a", "#4c1d95", "#0f172a"]}
+          style={StyleSheet.absoluteFill}
+        />
+        <View style={styles.boutiqueSelectionContainer}>
+          <Animated.View
+            style={[
+              styles.boutiqueSelectionCard,
+              {
+                opacity: fadeAnim,
+                transform: [{ scale: scaleAnim }],
+              },
+            ]}
+          >
+            <BlurView intensity={20} style={styles.boutiqueSelectionBlur}>
+              <View style={styles.boutiqueSelectionHeader}>
+                <LinearGradient
+                  colors={["#f97316", "#ef4444"]}
+                  style={styles.boutiqueSelectionLogo}
+                >
+                  <Store size={32} color="#ffffff" />
+                </LinearGradient>
+                <Text style={styles.boutiqueSelectionTitle}>Sélectionnez votre boutique</Text>
+                <Text style={styles.boutiqueSelectionSubtitle}>
+                  Vous avez accès à {user.boutiques.length} boutique(s)
+                </Text>
+              </View>
+
+              <ScrollView style={styles.boutiqueList}>
+                {user.boutiques.map((boutique: any) => (
+                  <TouchableOpacity
+                    key={boutique.id}
+                    onPress={() => handleSwitchBoutique(boutique.id)}
+                    style={[
+                      styles.boutiqueListItem,
+                      boutique.id === user.current_boutique_id && styles.boutiqueListItemActive,
+                    ]}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.boutiqueListItemIcon}>
+                      <Store 
+                        size={24} 
+                        color={boutique.id === user.current_boutique_id ? "#3b82f6" : "#f97316"} 
+                      />
+                    </View>
+                    <View style={styles.boutiqueListItemInfo}>
+                      <Text style={styles.boutiqueListItemName}>{boutique.nom}</Text>
+                      <Text style={styles.boutiqueListItemAddress}>
+                        {boutique.adresse || 'Adresse non renseignée'}
+                      </Text>
+                    </View>
+                    {boutique.id === user.current_boutique_id && (
+                      <View style={styles.currentBadge}>
+                        <Text style={styles.currentBadgeText}>Actuelle</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </BlurView>
+          </Animated.View>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -955,5 +1041,107 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#64748b",
     textAlign: "center",
+  },
+  // Boutique Selection Styles
+  boutiqueSelectionContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  boutiqueSelectionCard: {
+    width: "100%",
+    maxWidth: 400,
+    borderRadius: 24,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.2)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.3,
+    shadowRadius: 30,
+    elevation: 10,
+  },
+  boutiqueSelectionBlur: {
+    padding: 24,
+  },
+  boutiqueSelectionHeader: {
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  boutiqueSelectionLogo: {
+    width: 64,
+    height: 64,
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+    shadowColor: "#f97316",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  boutiqueSelectionTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#ffffff",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  boutiqueSelectionSubtitle: {
+    fontSize: 16,
+    color: "#cbd5e1",
+    textAlign: "center",
+  },
+  boutiqueList: {
+    maxHeight: 400,
+  },
+  boutiqueListItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
+  },
+  boutiqueListItemActive: {
+    backgroundColor: "rgba(59, 130, 246, 0.1)",
+    borderColor: "#3b82f6",
+  },
+  boutiqueListItemIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: "rgba(249, 115, 22, 0.1)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 16,
+  },
+  boutiqueListItemInfo: {
+    flex: 1,
+  },
+  boutiqueListItemName: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#ffffff",
+    marginBottom: 4,
+  },
+  boutiqueListItemAddress: {
+    fontSize: 14,
+    color: "#94a3b8",
+  },
+  currentBadge: {
+    backgroundColor: "#3b82f6",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  currentBadgeText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#ffffff",
   },
 });

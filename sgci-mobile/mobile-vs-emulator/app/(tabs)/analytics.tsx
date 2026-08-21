@@ -1,7 +1,8 @@
 import { BlurView } from "expo-blur";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
+import * as SecureStore from "expo-secure-store";
 import * as Sharing from "expo-sharing";
 import {
     AlertTriangle,
@@ -1839,6 +1840,11 @@ const styles = StyleSheet.create({
   venteSkeletonInfo: {
     flex: 1,
     gap: 8,
+  },
+  venteSkeletonLine: {
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
   },
   venteSkeletonRight: {
     alignItems: "flex-end",

@@ -8,12 +8,17 @@ class Categorie extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $fillable = ['nom', 'description', 'couleur', 'icone'];
+    protected $fillable = ['nom', 'description', 'couleur', 'icone', 'boutique_id'];
 
     // Relations
     public function produits()
     {
         return $this->hasMany(Produit::class);
+    }
+
+    public function boutique()
+    {
+        return $this->belongsTo(Boutique::class);
     }
 
     // Méthodes statistiques

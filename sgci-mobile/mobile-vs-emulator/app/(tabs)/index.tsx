@@ -3,7 +3,7 @@ import * as Haptics from "expo-haptics";
 import * as SecureStore from "expo-secure-store";
 import { Alert } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
+import { router, usePathname } from "expo-router";
 import {
   AlertTriangle,
   BarChart3,
@@ -43,6 +43,7 @@ import {
 } from "react-native";
 import { useAuth } from "../../contexts/AuthContext";
 import { NotificationBell } from "@/components/NotificationBell";
+import BoutiqueSelector from "@/components/BoutiqueSelector";
 import { apiFetch } from "@/lib/api-client";
 
 const { width, height } = Dimensions.get("window");
@@ -85,6 +86,7 @@ interface ProduitPopulaire {
 }
 
 export default function DashboardScreen() {
+  const pathname = usePathname();
   const { user, logout } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -196,7 +198,15 @@ export default function DashboardScreen() {
   };
 
   // 🎯 STATS CALCULÉES EN TEMPS RÉEL
-  const calculatedStats = [
+  const calculatedStats: {
+    title: string;
+    value: string;
+    icon: React.ComponentType<{ size: number; color: string }>;
+    trend: string;
+    color: string;
+    gradient: [string, string];
+    description: string;
+  }[] = [
     {
       title: "Chiffre d'Affaires",
       value: stats
@@ -382,20 +392,20 @@ export default function DashboardScreen() {
                   <TouchableOpacity
                     style={[
                       styles.navItem,
-                      router.route === item.route && styles.navItemActive,
+                      pathname === item.route && styles.navItemActive,
                     ]}
                     onPress={() => router.push(item.route as any)}
                   >
                     <item.icon
                       size={20}
                       color={
-                        router.route === item.route ? "#ffffff" : "#64748b"
+                        pathname === item.route ? "#ffffff" : "#64748b"
                       }
                     />
                     <Text
                       style={[
                         styles.navText,
-                        router.route === item.route && styles.navTextActive,
+                        pathname === item.route && styles.navTextActive,
                       ]}
                     >
                       {item.label}
@@ -511,6 +521,8 @@ export default function DashboardScreen() {
               </TouchableOpacity>
 
               <NotificationBell />
+
+              <BoutiqueSelector />
 
               <TouchableOpacity style={styles.userButton}>
                 <LinearGradient
@@ -856,12 +868,12 @@ export default function DashboardScreen() {
             >
               <item.icon
                 size={24}
-                color={router.route === item.route ? "#f97316" : "#94a3b8"}
+                color={pathname === item.route ? "#f97316" : "#94a3b8"}
               />
               <Text
                 style={[
                   styles.tabLabel,
-                  router.route === item.route && styles.tabLabelActive,
+                  pathname === item.route && styles.tabLabelActive,
                 ]}
               >
                 {item.label}

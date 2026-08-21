@@ -1,11 +1,11 @@
 import React from "react";
-import { StyleSheet, Text, TextStyle, View, ViewStyle } from "react-native";
+import { StyleSheet, Text, StyleProp, TextStyle, View, ViewStyle } from "react-native";
 
 interface BadgeProps {
   children: React.ReactNode;
   variant?: "default" | "secondary" | "destructive" | "outline";
-  style?: ViewStyle;
-  textStyle?: TextStyle;
+  style?: StyleProp<ViewStyle>;
+  textStyle?: StyleProp<TextStyle>;
 }
 
 // 🎯 CHANGER ICI : export function → export default function

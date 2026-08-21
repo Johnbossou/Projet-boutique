@@ -4,11 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 
 class Vente extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
         'numero_vente',
@@ -25,6 +26,8 @@ class Vente extends Model
         'numero_transaction',
         'reference_carte',
         'banque',
+        'boutique_id',
+        'idempotency_key',
     ];
 
     protected $casts = [
@@ -35,24 +38,49 @@ class Vente extends Model
         'monnaie_rendue' => 'decimal:2',
     ];
 
-    // Génération automatique du numéro de vente
+    // GÃ©nÃ©ration automatique du numÃ©ro de vente
     protected static function boot()
     {
         parent::boot();
 
         static::creating(function ($vente) {
             if (empty($vente->numero_vente)) {
-                $currentYear = date('Y');
-                $nextId = self::whereYear('created_at', $currentYear)->count() + 1;
-                $vente->numero_vente = 'VENT-' . $currentYear . '-' . str_pad($nextId, 4, '0', STR_PAD_LEFT);
+                $vente->numero_vente = static::genererNumeroVente();
             }
         });
+    }
+
+    /**
+     * GÃ©nÃ¨re un numÃ©ro unique basÃ© sur le max existant (et non count()+1,
+     * qui produit des collisions quand des ventes sont supprimÃ©es ou crÃ©Ã©es
+     * avec une created_at rÃ©trodatÃ©e).
+     */
+    public static function genererNumeroVente(): string
+    {
+        $currentYear = date('Y');
+        $prefixe = "VENT-{$currentYear}-";
+
+        // withTrashed : les numÃ©ros des ventes supprimÃ©es logiquement restent
+        // rÃ©servÃ©s (la contrainte UNIQUE les voit toujours).
+        $dernier = static::withTrashed()
+            ->where('numero_vente', 'like', $prefixe.'%')
+            ->orderBy('numero_vente', 'desc')
+            ->value('numero_vente');
+
+        $nextId = $dernier ? ((int) substr($dernier, strlen($prefixe))) + 1 : 1;
+
+        return $prefixe . str_pad((string) $nextId, 4, '0', STR_PAD_LEFT);
     }
 
     // Relations
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function boutique()
+    {
+        return $this->belongsTo(Boutique::class);
     }
 
     public function ligneVentes()
@@ -65,7 +93,7 @@ class Vente extends Model
         return $this->hasManyThrough(Produit::class, LigneVente::class, 'vente_id', 'id', 'id', 'produit_id');
     }
 
-    // Méthodes métier
+    // MÃ©thodes mÃ©tier
     public function calculerTotal()
     {
         return $this->ligneVentes->sum('sous_total');
@@ -110,7 +138,7 @@ class Vente extends Model
         });
     }
 
-    // Scope pour les requêtes courantes
+    // Scope pour les requÃªtes courantes
     public function scopeTerminees($query)
     {
         return $query->where('statut', 'termine');

@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import {
   Settings,
   User,
@@ -23,7 +24,9 @@ import {
   Mail,
   Phone,
   Store,
-  CreditCard
+  CreditCard,
+  Plus,
+  Edit
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -32,6 +35,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiFetch } from '@/lib/api-client';
 import {
@@ -56,6 +60,7 @@ interface UserProfile {
   email: string;
   telephone: string;
   role: string;
+  two_factor_enabled?: boolean;
 }
 
 interface BoutiqueSettings {
@@ -93,13 +98,33 @@ export default function ParametresPage() {
     currentPassword: '',
     newPassword: '',
     confirmPassword: '',
-    twoFactor: false,
+    twoFactorEnabled: false,
+    twoFactorCode: '',
+    twoFactorSecret: '',
+    twoFactorQRCode: '',
+    showTwoFactorSetup: false,
     sessionTimeout: 30
   });
 
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // 🎯 États pour les modals de boutique
+  const [showCreateBoutiqueModal, setShowCreateBoutiqueModal] = useState(false);
+  const [showEditBoutiqueModal, setShowEditBoutiqueModal] = useState(false);
+  const [editingBoutique, setEditingBoutique] = useState<any>(null);
+  const [newBoutique, setNewBoutique] = useState<{
+    nom: string;
+    adresse: string;
+    telephone: string;
+    email: string;
+  }>({
+    nom: '',
+    adresse: '',
+    telephone: '',
+    email: ''
+  });
 
   // 🎯 CHARGEMENT DES DONNÉES
   useEffect(() => {
@@ -109,7 +134,9 @@ export default function ParametresPage() {
         email: user.email,
         telephone: user.telephone ?? '',
         role: user.role,
+        two_factor_enabled: user.two_factor_enabled || false,
       });
+      setSecurite(prev => ({ ...prev, twoFactorEnabled: user.two_factor_enabled || false }));
     }
     setPreferences(loadUserPreferences());
     const local = loadBoutiqueSettings();
@@ -222,6 +249,76 @@ export default function ParametresPage() {
     }
   };
 
+  const activerTwoFactor = async () => {
+    setSaving(true);
+    try {
+      const response = await apiFetch('/2fa/enable', {
+        method: 'POST',
+      });
+      if (!response.ok) {
+        throw new Error('Erreur lors de l\'activation du 2FA');
+      }
+      const data = await response.json();
+      setSecurite(prev => ({
+        ...prev,
+        twoFactorSecret: data.secret,
+        twoFactorQRCode: data.qr_code_uri,
+        showTwoFactorSetup: true,
+      }));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Erreur lors de l\'activation du 2FA');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const confirmerTwoFactor = async () => {
+    setSaving(true);
+    try {
+      const response = await apiFetch('/2fa/confirm', {
+        method: 'POST',
+        body: JSON.stringify({ code: securite.twoFactorCode }),
+      });
+      if (!response.ok) {
+        throw new Error('Code 2FA invalide');
+      }
+      toast.success('2FA activé avec succès');
+      setSecurite(prev => ({
+        ...prev,
+        twoFactorEnabled: true,
+        showTwoFactorSetup: false,
+        twoFactorCode: '',
+        twoFactorSecret: '',
+        twoFactorQRCode: '',
+      }));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Erreur lors de la confirmation du 2FA');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const desactiverTwoFactor = async () => {
+    setSaving(true);
+    try {
+      const response = await apiFetch('/2fa/disable', {
+        method: 'POST',
+      });
+      if (!response.ok) {
+        throw new Error('Erreur lors de la désactivation du 2FA');
+      }
+      toast.success('2FA désactivé avec succès');
+      setSecurite(prev => ({
+        ...prev,
+        twoFactorEnabled: false,
+      }));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Erreur lors de la désactivation du 2FA');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const exporterDonnees = async () => {
     setSaving(true);
     try {
@@ -255,6 +352,73 @@ export default function ParametresPage() {
 
   const importerDonnees = () => {
     toast.info('Fonctionnalité d\'import en développement');
+  };
+
+  // 🎯 Fonctions pour les boutiques
+  const creerBoutique = async () => {
+    if (!newBoutique.nom || !newBoutique.adresse) {
+      toast.error('Le nom et l\'adresse sont obligatoires');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const response = await apiFetch('/boutiques', {
+        method: 'POST',
+        body: JSON.stringify(newBoutique),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.message || 'Erreur lors de la création');
+      }
+      toast.success('Boutique créée avec succès');
+      setShowCreateBoutiqueModal(false);
+      setNewBoutique({ nom: '', adresse: '', telephone: '', email: '' });
+      // Recharger les données utilisateur
+      window.location.reload();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Erreur lors de la création');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const modifierBoutique = async () => {
+    if (!editingBoutique || !editingBoutique.nom || !editingBoutique.adresse) {
+      toast.error('Le nom et l\'adresse sont obligatoires');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const response = await apiFetch(`/boutiques/${editingBoutique.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          nom: editingBoutique.nom,
+          adresse: editingBoutique.adresse,
+          telephone: editingBoutique.telephone,
+          email: editingBoutique.email,
+        }),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.message || 'Erreur lors de la modification');
+      }
+      toast.success('Boutique modifiée avec succès');
+      setShowEditBoutiqueModal(false);
+      setEditingBoutique(null);
+      // Recharger les données utilisateur
+      window.location.reload();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Erreur lors de la modification');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const openEditModal = (boutique: any) => {
+    setEditingBoutique({ ...boutique });
+    setShowEditBoutiqueModal(true);
   };
 
   if (!user) {
@@ -303,7 +467,7 @@ export default function ParametresPage() {
       <main className="p-6 max-w-7xl mx-auto">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           {/* Navigation Tabs */}
-          <TabsList className={`grid gap-2 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm border border-slate-200/50 dark:border-slate-700/50 p-1 ${user.role === 'gerant' ? 'grid-cols-6' : 'grid-cols-5'}`}>
+          <TabsList className={`grid gap-2 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm border border-slate-200/50 dark:border-slate-700/50 p-1 ${user.role === 'proprietaire' ? 'grid-cols-7' : user.role === 'gerant' ? 'grid-cols-6' : 'grid-cols-5'}`}>
             <TabsTrigger value="profil" className="flex items-center space-x-2">
               <User className="w-4 h-4" />
               <span>Profil</span>
@@ -312,6 +476,12 @@ export default function ParametresPage() {
               <Store className="w-4 h-4" />
               <span>Boutique</span>
             </TabsTrigger>
+            {user.role === 'proprietaire' && (
+              <TabsTrigger value="mes-boutiques" className="flex items-center space-x-2">
+                <Store className="w-4 h-4" />
+                <span>Mes Boutiques</span>
+              </TabsTrigger>
+            )}
             <TabsTrigger value="preferences" className="flex items-center space-x-2">
               <Palette className="w-4 h-4" />
               <span>Préférences</span>
@@ -577,6 +747,73 @@ export default function ParametresPage() {
             </Card>
           </TabsContent>
 
+          {/* Tab Mes Boutiques (Proprietaire only) */}
+          {user.role === 'proprietaire' && (
+            <TabsContent value="mes-boutiques" className="space-y-6">
+              <Card className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm border-slate-200/50 dark:border-slate-700/50">
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <Store className="w-5 h-5 text-orange-500" />
+                    <span>Gestion de vos boutiques</span>
+                  </CardTitle>
+                  <CardDescription>
+                    Créez et gérez vos boutiques, assignez des utilisateurs
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-slate-600 dark:text-slate-400">
+                        Vous avez accès à {user.boutiques?.length || 0} boutique(s)
+                      </p>
+                    </div>
+                    <Button
+                      onClick={() => setShowCreateBoutiqueModal(true)}
+                      className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Nouvelle boutique
+                    </Button>
+                  </div>
+
+                  <div className="space-y-3">
+                    {user.boutiques?.map((boutique: any) => (
+                      <div
+                        key={boutique.id}
+                        className="flex items-center justify-between p-4 bg-white/50 dark:bg-slate-700/50 rounded-lg border border-slate-200/50 dark:border-slate-600/50"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 bg-orange-500/20 rounded-lg flex items-center justify-center">
+                            <Store className="w-5 h-5 text-orange-500" />
+                          </div>
+                          <div>
+                            <p className="font-medium">{boutique.nom}</p>
+                            <p className="text-sm text-slate-500">{boutique.adresse || 'Adresse non renseignée'}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {boutique.id === user.current_boutique_id && (
+                            <Badge className="bg-green-500/10 text-green-600 border-green-500/20">
+                              Actuelle
+                            </Badge>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openEditModal(boutique)}
+                          >
+                            <Edit className="w-4 h-4 mr-2" />
+                            Modifier
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
+
           {/* Tab Préférences */}
           <TabsContent value="preferences" className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -817,25 +1054,94 @@ export default function ParametresPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center space-x-2">
                     <Shield className="w-5 h-5 text-blue-500" />
-                    <span>Sécurité Avancée</span>
+                    <span>Double Authentification (2FA)</span>
                   </CardTitle>
                   <CardDescription>
-                    Renforcez la sécurité de votre compte
+                    Renforcez la sécurité de votre compte avec 2FA
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>Authentification à deux facteurs</Label>
-                      <p className="text-sm text-slate-500">Sécurisez votre compte avec 2FA</p>
+                  {securite.showTwoFactorSetup ? (
+                    // Setup 2FA
+                    <div className="space-y-4">
+                      <div className="text-center space-y-2">
+                        <p className="text-sm text-muted-foreground">
+                          Scannez ce QR code avec Google Authenticator
+                        </p>
+                        {securite.twoFactorQRCode && (
+                          <div className="flex justify-center bg-white p-2 rounded-lg">
+                            <QRCodeSVG
+                              value={securite.twoFactorQRCode}
+                              size={200}
+                              aria-label="QR Code 2FA"
+                            />
+                          </div>
+                        )}
+                        <p className="text-xs text-muted-foreground">
+                          Secret (saisie manuelle): <code className="bg-muted px-2 py-1 rounded">{securite.twoFactorSecret}</code>
+                        </p>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="two-factor-code">Code de vérification</Label>
+                        <Input
+                          id="two-factor-code"
+                          value={securite.twoFactorCode}
+                          onChange={(e) => setSecurite(prev => ({ ...prev, twoFactorCode: e.target.value }))}
+                          placeholder="Entrez le code à 6 chiffres"
+                          maxLength={6}
+                        />
+                      </div>
+                      
+                      <div className="flex gap-2">
+                        <Button 
+                          onClick={confirmerTwoFactor}
+                          disabled={saving || !securite.twoFactorCode}
+                          className="flex-1"
+                        >
+                          {saving ? 'Vérification...' : 'Activer 2FA'}
+                        </Button>
+                        <Button 
+                          variant="outline"
+                          onClick={() => setSecurite(prev => ({ ...prev, showTwoFactorSetup: false }))}
+                          disabled={saving}
+                        >
+                          Annuler
+                        </Button>
+                      </div>
                     </div>
-                    <Switch
-                      checked={securite.twoFactor}
-                      onCheckedChange={(checked) => 
-                        setSecurite(prev => ({ ...prev, twoFactor: checked }))
-                      }
-                    />
-                  </div>
+                  ) : (
+                    // Toggle 2FA
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <Label>Authentification à deux facteurs</Label>
+                          <p className="text-sm text-slate-500">
+                            {securite.twoFactorEnabled ? '2FA est activé' : 'Sécurisez votre compte avec 2FA'}
+                          </p>
+                        </div>
+                        <Switch
+                          checked={securite.twoFactorEnabled}
+                          onCheckedChange={async (checked) => {
+                            if (checked) {
+                              await activerTwoFactor();
+                            } else {
+                              await desactiverTwoFactor();
+                            }
+                          }}
+                          disabled={saving}
+                        />
+                      </div>
+
+                      {securite.twoFactorEnabled && (
+                        <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                          <p className="text-sm text-green-700 dark:text-green-300">
+                            ✓ 2FA est activé sur votre compte
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <div className="space-y-2">
                     <Label htmlFor="session-timeout">Délai de session (minutes)</Label>
@@ -960,6 +1266,170 @@ export default function ParametresPage() {
           )}
         </Tabs>
       </main>
+
+      {/* Modal Création Boutique */}
+      <Dialog open={showCreateBoutiqueModal} onOpenChange={setShowCreateBoutiqueModal}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Créer une nouvelle boutique</DialogTitle>
+            <DialogDescription>
+              Remplissez les informations pour créer une nouvelle boutique
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="new-boutique-nom">Nom de la boutique *</Label>
+              <Input
+                id="new-boutique-nom"
+                value={newBoutique.nom}
+                onChange={(e) => setNewBoutique(prev => ({ ...prev, nom: e.target.value }))}
+                placeholder="Ex: Ma Boutique Principale"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-boutique-adresse">Adresse *</Label>
+              <Input
+                id="new-boutique-adresse"
+                value={newBoutique.adresse}
+                onChange={(e) => setNewBoutique(prev => ({ ...prev, adresse: e.target.value }))}
+                placeholder="Ex: 123 Rue du Commerce, Cotonou"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-boutique-telephone">Téléphone</Label>
+              <Input
+                id="new-boutique-telephone"
+                value={newBoutique.telephone}
+                onChange={(e) => setNewBoutique(prev => ({ ...prev, telephone: e.target.value }))}
+                placeholder="Ex: +229 XX XX XX XX"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-boutique-email">Email</Label>
+              <Input
+                id="new-boutique-email"
+                type="email"
+                value={newBoutique.email}
+                onChange={(e) => setNewBoutique(prev => ({ ...prev, email: e.target.value }))}
+                placeholder="Ex: contact@boutique.bj"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowCreateBoutiqueModal(false);
+                setNewBoutique({ nom: '', adresse: '', telephone: '', email: '' });
+              }}
+              disabled={saving}
+            >
+              Annuler
+            </Button>
+            <Button
+              onClick={creerBoutique}
+              disabled={saving}
+              className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600"
+            >
+              {saving ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  Création...
+                </>
+              ) : (
+                <>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Créer la boutique
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Modification Boutique */}
+      <Dialog open={showEditBoutiqueModal} onOpenChange={setShowEditBoutiqueModal}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Modifier la boutique</DialogTitle>
+            <DialogDescription>
+              Modifiez les informations de la boutique
+            </DialogDescription>
+          </DialogHeader>
+          {editingBoutique && (
+            <>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-boutique-nom">Nom de la boutique *</Label>
+                  <Input
+                    id="edit-boutique-nom"
+                    value={editingBoutique.nom}
+                    onChange={(e) => setEditingBoutique((prev: any) => ({ ...prev, nom: e.target.value }))}
+                    placeholder="Ex: Ma Boutique Principale"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-boutique-adresse">Adresse *</Label>
+                  <Input
+                    id="edit-boutique-adresse"
+                    value={editingBoutique.adresse}
+                    onChange={(e) => setEditingBoutique((prev: any) => ({ ...prev, adresse: e.target.value }))}
+                    placeholder="Ex: 123 Rue du Commerce, Cotonou"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-boutique-telephone">Téléphone</Label>
+                  <Input
+                    id="edit-boutique-telephone"
+                    value={editingBoutique.telephone}
+                    onChange={(e) => setEditingBoutique((prev: any) => ({ ...prev, telephone: e.target.value }))}
+                    placeholder="Ex: +229 XX XX XX XX"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-boutique-email">Email</Label>
+                  <Input
+                    id="edit-boutique-email"
+                    type="email"
+                    value={editingBoutique.email}
+                    onChange={(e) => setEditingBoutique((prev: any) => ({ ...prev, email: e.target.value }))}
+                    placeholder="Ex: contact@boutique.bj"
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowEditBoutiqueModal(false);
+                    setEditingBoutique(null);
+                  }}
+                  disabled={saving}
+                >
+                  Annuler
+                </Button>
+                <Button
+                  onClick={modifierBoutique}
+                  disabled={saving}
+                  className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600"
+                >
+                  {saving ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                      Modification...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4 mr-2" />
+                      Enregistrer
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

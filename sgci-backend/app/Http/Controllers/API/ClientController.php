@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\VerifieBoutique;
 use App\Models\Client;
 use App\Models\Vente;
 use Illuminate\Http\Request;
@@ -13,6 +14,8 @@ use Illuminate\Support\Facades\Validator;
 
 class ClientController extends Controller
 {
+    use VerifieBoutique;
+
     /**
      * Liste des clients avec pagination, filtres et relations
      */
@@ -20,6 +23,11 @@ class ClientController extends Controller
     {
         try {
             $query = Client::query();
+
+            // Filtre par boutique courante (multi-tenancy)
+            if ($request->user()->current_boutique_id) {
+                $query->where('boutique_id', $request->user()->current_boutique_id);
+            }
 
             // Filtre par recherche
             if ($request->has('search') && $request->search) {
@@ -119,6 +127,9 @@ class ClientController extends Controller
             $validated['total_achats'] = 0;
             $validated['nombre_commandes'] = 0;
 
+            // Ajouter boutique_id automatiquement (multi-tenancy)
+            $validated['boutique_id'] = $request->user()->current_boutique_id;
+
             $client = Client::create($validated);
 
             return response()->json([
@@ -142,6 +153,8 @@ class ClientController extends Controller
  */
     public function show(Client $client): JsonResponse
     {
+        $this->verifierBoutiqueDe($client);
+
         try {
             // Vérifier d'abord si le client existe
             if (!$client) {
@@ -211,6 +224,8 @@ class ClientController extends Controller
      */
     public function update(Request $request, Client $client): JsonResponse
     {
+        $this->verifierBoutiqueDe($client);
+
         try {
             $validator = Validator::make($request->all(), [
                 'nom' => 'sometimes|string|max:255',
@@ -255,6 +270,8 @@ class ClientController extends Controller
      */
     public function destroy(Client $client): JsonResponse
     {
+        $this->verifierBoutiqueDe($client);
+
         try {
             // Vérifier si le client a des commandes en cours
             $commandesEnCours = $client->ventes()
@@ -287,26 +304,36 @@ class ClientController extends Controller
     public function statistiques(): JsonResponse
     {
         try {
-            $totalClients = Client::count();
-            $clientsActifs = Client::actifs()->count();
-            $clientsVip = Client::vip()->count();
-            $clientsInactifs = Client::inactifs()->count();
+            $query = Client::query();
 
-            $chiffreAffairesTotal = Client::sum('total_achats');
-            $commandesTotal = Client::sum('nombre_commandes');
+            // Filtre par boutique courante (multi-tenancy)
+            if (auth()->user()->current_boutique_id) {
+                $query->where('boutique_id', auth()->user()->current_boutique_id);
+            }
+
+            $totalClients = $query->count();
+            $clientsActifs = (clone $query)->actifs()->count();
+            $clientsVip = (clone $query)->vip()->count();
+            $clientsInactifs = (clone $query)->inactifs()->count();
+
+            $chiffreAffairesTotal = $query->sum('total_achats');
+            $commandesTotal = $query->sum('nombre_commandes');
             $panierMoyen = $commandesTotal > 0 ? $chiffreAffairesTotal / $commandesTotal : 0;
 
             // Statistiques mensuelles
-            $chiffreAffairesMensuel = Client::whereYear('created_at', now()->year)
+            $chiffreAffairesMensuel = (clone $query)
+                ->whereYear('created_at', now()->year)
                 ->whereMonth('created_at', now()->month)
                 ->sum('total_achats');
 
-            $nouveauxClientsMois = Client::whereYear('created_at', now()->year)
+            $nouveauxClientsMois = (clone $query)
+                ->whereYear('created_at', now()->year)
                 ->whereMonth('created_at', now()->month)
                 ->count();
 
             // Top 5 clients VIP
-            $topClients = Client::vip()
+            $topClients = (clone $query)
+                ->vip()
                 ->orderBy('total_achats', 'desc')
                 ->take(5)
                 ->get(['id', 'nom', 'total_achats', 'nombre_commandes']);
@@ -338,6 +365,8 @@ class ClientController extends Controller
      */
     public function promouvoirVip(Client $client): JsonResponse
     {
+        $this->verifierBoutiqueDe($client);
+
         try {
             // Vérifier si le client peut être promu VIP
             if ($client->statut === 'vip') {
@@ -372,6 +401,8 @@ class ClientController extends Controller
      */
     public function retrograderVip(Client $client): JsonResponse
     {
+        $this->verifierBoutiqueDe($client);
+
         try {
             if ($client->statut !== 'vip') {
                 return response()->json([
@@ -406,11 +437,16 @@ class ClientController extends Controller
                 return response()->json([]);
             }
 
-            $clients = Client::where('nom', 'like', "%{$query}%")
+            $clientsQuery = Client::where('nom', 'like', "%{$query}%")
                 ->orWhere('email', 'like', "%{$query}%")
-                ->orWhere('telephone', 'like', "%{$query}%")
-                ->limit(10)
-                ->get(['id', 'nom', 'email', 'telephone', 'statut', 'ville']);
+                ->orWhere('telephone', 'like', "%{$query}%");
+
+            // Filtre par boutique courante (multi-tenancy)
+            if (auth()->user()->current_boutique_id) {
+                $clientsQuery->where('boutique_id', auth()->user()->current_boutique_id);
+            }
+
+            $clients = $clientsQuery->limit(10)->get(['id', 'nom', 'email', 'telephone', 'statut', 'ville']);
 
             return response()->json($clients);
 
@@ -429,6 +465,11 @@ class ClientController extends Controller
     {
         try {
             $query = Client::query();
+
+            // Filtre par boutique courante (multi-tenancy)
+            if ($request->user()->current_boutique_id) {
+                $query->where('boutique_id', $request->user()->current_boutique_id);
+            }
 
             // Appliquer les mêmes filtres que l'index
             if ($request->has('search') && $request->search) {
@@ -482,8 +523,15 @@ class ClientController extends Controller
      */
     public function commandes(Client $client, Request $request): JsonResponse
     {
+        $this->verifierBoutiqueDe($client);
+
         try {
             $query = $client->ventes();
+
+            // Filtre par boutique courante (multi-tenancy)
+            if ($request->user()->current_boutique_id) {
+                $query->where('boutique_id', $request->user()->current_boutique_id);
+            }
 
             // Filtre par statut de commande
             if ($request->has('statut')) {

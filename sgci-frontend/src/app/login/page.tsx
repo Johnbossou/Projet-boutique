@@ -10,17 +10,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import AnimatedParticles from '@/components/AnimatedParticles';
+import Link from 'next/link';
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
+  const [requiresTwoFactor, setRequiresTwoFactor] = useState(false);
+  const [twoFactorCode, setTwoFactorCode] = useState('');
   const [formData, setFormData] = useState({
     email: '',
     password: ''
   });
   
-  const { login, isLoading, user } = useAuth();
-
-  // SUPPRIME le useEffect de redirection - c'est maintenant dans AuthContext
+  const { user, login, isLoading } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,16 +31,63 @@ export default function LoginPage() {
       return;
     }
 
+    if (requiresTwoFactor && !twoFactorCode) {
+      toast.error('Veuillez entrer le code 2FA');
+      return;
+    }
+
     try {
       console.log('🔄 Tentative de connexion avec:', formData.email);
-      await login(formData.email, formData.password);
-      // La redirection se fait maintenant DANS AuthContext.login()
+      
+      if (requiresTwoFactor) {
+        // Login avec 2FA
+        const response = await fetch('http://localhost:8000/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: formData.email,
+            password: formData.password,
+            two_factor_code: twoFactorCode,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.message || 'Erreur de connexion');
+        }
+
+        // Stocker le token et les données utilisateur
+        localStorage.setItem('auth_token', data.token);
+        localStorage.setItem('user_data', JSON.stringify(data.user));
+        if (data.expires_at) {
+          localStorage.setItem('token_expires_at', data.expires_at);
+        }
+
+        toast.success('Connexion réussie');
+        
+        // Redirection selon le rôle
+        if (data.user.role === 'proprietaire') {
+          window.location.href = '/selection-boutique';
+        } else {
+          window.location.href = '/dashboard';
+        }
+      } else {
+        // Login normal - la redirection est gérée par AuthContext
+        await login(formData.email, formData.password);
+      }
       
     } catch (error: unknown) {
       console.error('🚨 Erreur de connexion:', error);
       
       if (error instanceof Error) {
-        toast.error(error.message || 'Erreur de connexion');
+        // Vérifier si le 2FA est requis
+        if (error.message.includes('Code 2FA requis') || error.message.includes('requires_two_factor')) {
+          setRequiresTwoFactor(true);
+          toast.info('Code 2FA requis');
+        } else {
+          toast.error(error.message || 'Erreur de connexion');
+        }
       } else {
         toast.error('Erreur de connexion inattendue');
       }
@@ -283,6 +331,32 @@ export default function LoginPage() {
                     </div>
                   </motion.div>
 
+                  {/* Champ Code 2FA */}
+                  {requiresTwoFactor && (
+                    <motion.div
+                      initial={{ y: 20, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      transition={{ delay: 0.75 }}
+                      className="space-y-3"
+                    >
+                      <Label htmlFor="two-factor-code" className="text-white text-sm font-medium">
+                        Code 2FA
+                      </Label>
+                      <div className="relative">
+                        <Input
+                          id="two-factor-code"
+                          type="text"
+                          value={twoFactorCode}
+                          onChange={(e) => setTwoFactorCode(e.target.value)}
+                          placeholder="Code à 6 chiffres"
+                          className="bg-white/5 border-white/20 text-white placeholder:text-gray-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all duration-300 h-12 rounded-2xl pl-4"
+                          required
+                          maxLength={6}
+                        />
+                      </div>
+                    </motion.div>
+                  )}
+
                   {/* Bouton de connexion */}
                   <motion.div
                     initial={{ y: 20, opacity: 0 }}
@@ -317,6 +391,24 @@ export default function LoginPage() {
                     </Button>
                   </motion.div>
                 </form>
+
+                {/* Lien mot de passe oublié */}
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.9 }}
+                  className="text-center space-y-2"
+                >
+                  <Link href="/forgot-password" className="text-sm text-gray-300 hover:text-orange-400 transition-colors">
+                    Mot de passe oublié ?
+                  </Link>
+                  <div className="text-sm text-gray-300">
+                    Pas encore de compte ?{' '}
+                    <Link href="/register" className="text-orange-400 hover:text-orange-300 font-semibold transition-colors">
+                      Créer un compte
+                    </Link>
+                  </div>
+                </motion.div>
 
                 {/* Informations de test */}
                 <motion.div

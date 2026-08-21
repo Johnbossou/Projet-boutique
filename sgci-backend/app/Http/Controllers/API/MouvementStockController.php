@@ -24,6 +24,11 @@ class MouvementStockController extends Controller
         $query = MouvementStock::with(['produit', 'user'])
             ->orderBy('created_at', 'desc');
 
+        // Filtre par boutique courante (multi-tenancy)
+        if ($request->user()->current_boutique_id) {
+            $query->where('boutique_id', $request->user()->current_boutique_id);
+        }
+
         // Filtres
         if ($request->has('produit_id')) {
             $query->where('produit_id', $request->produit_id);
@@ -85,6 +90,7 @@ class MouvementStockController extends Controller
                 'statut' => 'en_attente',
                 'quantite_avant' => $quantiteAvant,
                 'quantite_apres' => $quantiteAvant, // Sera mis à jour lors de l'acceptation
+                'boutique_id' => auth()->user()->current_boutique_id,
             ]);
 
             DB::commit();
@@ -199,9 +205,15 @@ class MouvementStockController extends Controller
         $dateFin = now();
         $dateDebut = $dateFin->clone()->subDays($request->jours ?? 30);
 
-        $mouvements = MouvementStock::acceptes()
-            ->whereBetween('created_at', [$dateDebut, $dateFin])
-            ->get();
+        $query = MouvementStock::acceptes()
+            ->whereBetween('created_at', [$dateDebut, $dateFin]);
+
+        // Filtre par boutique courante (multi-tenancy)
+        if (auth()->user()->current_boutique_id) {
+            $query->where('boutique_id', auth()->user()->current_boutique_id);
+        }
+
+        $mouvements = $query->get();
 
         return response()->json([
             'total_entrees' => $mouvements->where('type', 'entrée')->sum('quantite'),
@@ -224,6 +236,11 @@ class MouvementStockController extends Controller
     public function export(Request $request): JsonResponse
     {
         $query = MouvementStock::with(['produit', 'user']);
+
+        // Filtre par boutique courante (multi-tenancy)
+        if ($request->user()->current_boutique_id) {
+            $query->where('boutique_id', $request->user()->current_boutique_id);
+        }
 
         if ($request->has('date_debut') && $request->has('date_fin')) {
             $query->whereBetween('created_at', [

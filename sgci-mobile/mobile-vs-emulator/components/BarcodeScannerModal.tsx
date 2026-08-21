@@ -1,5 +1,5 @@
-import { BarCodeScanner } from "expo-barcode-scanner";
-import { useEffect, useState } from "react";
+import { CameraView, useCameraPermissions } from "expo-camera";
+import { useEffect } from "react";
 import {
   Modal,
   SafeAreaView,
@@ -17,15 +17,18 @@ type Props = {
 };
 
 export function BarcodeScannerModal({ visible, onClose, onScan }: Props) {
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [permission, requestPermission] = useCameraPermissions();
 
   useEffect(() => {
     if (!visible) return;
+    if (permission?.granted) return;
     (async () => {
-      const { status } = await BarCodeScanner.requestPermissionsAsync();
-      setHasPermission(status === "granted");
+      const { granted } = await requestPermission();
+      if (!granted) return;
     })();
-  }, [visible]);
+  }, [visible, permission, requestPermission]);
+
+  const hasPermission = permission?.granted ?? false;
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
@@ -37,17 +40,21 @@ export function BarcodeScannerModal({ visible, onClose, onScan }: Props) {
           <Text style={styles.title}>Scanner code produit</Text>
           <View style={{ width: 24 }} />
         </View>
-        {hasPermission === null && (
-          <Text style={styles.msg}>Demande d&apos;accès caméra...</Text>
-        )}
-        {hasPermission === false && (
-          <Text style={styles.msg}>Autorisez la caméra dans les réglages</Text>
+        {!hasPermission && (
+          <Text style={styles.msg}>
+            {permission === null
+              ? "Demande d'accès caméra..."
+              : "Autorisez la caméra dans les réglages"}
+          </Text>
         )}
         {hasPermission && (
-          <BarCodeScanner
-            onBarCodeScanned={({ data }) => {
+          <CameraView
+            onBarcodeScanned={({ data }) => {
               onScan(data);
               onClose();
+            }}
+            barcodeScannerSettings={{
+              barcodeTypes: ["qr", "ean13", "ean8", "code128", "code39", "upc_a"],
             }}
             style={StyleSheet.absoluteFillObject}
           />

@@ -242,7 +242,7 @@ export default function ArrivageScreen() {
       <BarcodeScannerModal
         visible={showScanner}
         onClose={() => setShowScanner(false)}
-        onCodeScanned={handleCodeScanned}
+        onScan={handleCodeScanned}
       />
     </SafeAreaView>
   );

@@ -48,7 +48,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Badge } from "../../components/ui/Badge";
+import Badge from "../../components/ui/Badge";
 import * as SecureStore from "expo-secure-store";
 import { useAuth } from "../../contexts/AuthContext";
 import { apiFetch } from "@/lib/api-client";
@@ -809,12 +809,12 @@ export default function CaisseScreen() {
                     : "default"
               }
               style={[
-                styles.productStock,
                 produit.quantite_stock === 0 && styles.productOutOfStock,
                 produit.quantite_stock < 5 &&
                   produit.quantite_stock > 0 &&
                   styles.productLowStock,
               ]}
+              textStyle={styles.productStock}
             >
               Stock: {produit.quantite_stock}
             </Badge>

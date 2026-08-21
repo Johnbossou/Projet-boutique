@@ -14,15 +14,17 @@ import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Produit, MouvementStock } from '@/types';
 
+// ✅ CORRIGÉ : value="all" au lieu de value="" (évite l'erreur Select.Item)
 const STATUTS = [
-  { value: '', label: 'Tous les statuts' },
+  { value: 'all', label: 'Tous les statuts' },
   { value: 'en_attente', label: 'En attente' },
   { value: 'accepté', label: 'Accepté' },
   { value: 'rejeté', label: 'Rejeté' },
 ];
 
+// ✅ CORRIGÉ : value="all" au lieu de value=""
 const RAISONS = [
-  { value: '', label: 'Toutes les raisons' },
+  { value: 'all', label: 'Toutes les raisons' },
   { value: 'arrivage', label: 'Arrivage' },
   { value: 'vente', label: 'Vente' },
   { value: 'ajustement', label: 'Ajustement' },
@@ -35,9 +37,10 @@ export default function StockHistoryPage() {
   const [produits, setProduits] = useState<Produit[]>([]);
   const [mouvements, setMouvements] = useState<MouvementStock[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedProduit, setSelectedProduit] = useState<string>('');
-  const [statut, setStatut] = useState<string>('');
-  const [raison, setRaison] = useState<string>('');
+  // ✅ CORRIGÉ : valeurs initiales 'all' au lieu de ''
+  const [selectedProduit, setSelectedProduit] = useState<string>('all');
+  const [statut, setStatut] = useState<string>('all');
+  const [raison, setRaison] = useState<string>('all');
   const [dateDebut, setDateDebut] = useState('');
   const [dateFin, setDateFin] = useState('');
   const [searchProduit, setSearchProduit] = useState('');
@@ -59,9 +62,10 @@ export default function StockHistoryPage() {
     try {
       const params = new URLSearchParams();
       params.set('per_page', '50');
-      if (selectedProduit) params.set('produit_id', selectedProduit);
-      if (statut) params.set('statut', statut);
-      if (raison) params.set('raison', raison);
+      // ✅ CORRIGÉ : n'envoyer les filtres au backend que si la valeur n'est pas 'all'
+      if (selectedProduit && selectedProduit !== 'all') params.set('produit_id', selectedProduit);
+      if (statut && statut !== 'all') params.set('statut', statut);
+      if (raison && raison !== 'all') params.set('raison', raison);
       if (dateDebut) params.set('date_debut', dateDebut);
       if (dateFin) params.set('date_fin', dateFin);
 
@@ -171,12 +175,14 @@ export default function StockHistoryPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="produit">Produit</Label>
-              <Select onValueChange={(value) => setSelectedProduit(value)}>
+              {/* ✅ CORRIGÉ : value contrôlé + onValueChange */}
+              <Select value={selectedProduit} onValueChange={(value) => setSelectedProduit(value)}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Tous les produits" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Tous les produits</SelectItem>
+                  {/* ✅ CORRIGÉ : value="all" au lieu de value="" */}
+                  <SelectItem value="all">Tous les produits</SelectItem>
                   {produitsFiltres.map((produit) => (
                     <SelectItem key={produit.id} value={produit.id.toString()}>
                       {produit.nom}
@@ -187,7 +193,8 @@ export default function StockHistoryPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="raison">Raison</Label>
-              <Select onValueChange={(value) => setRaison(value)}>
+              {/* ✅ CORRIGÉ : value contrôlé + onValueChange */}
+              <Select value={raison} onValueChange={(value) => setRaison(value)}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Toutes les raisons" />
                 </SelectTrigger>
@@ -202,7 +209,8 @@ export default function StockHistoryPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="statut">Statut</Label>
-              <Select onValueChange={(value) => setStatut(value)}>
+              {/* ✅ CORRIGÉ : value contrôlé + onValueChange */}
+              <Select value={statut} onValueChange={(value) => setStatut(value)}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Tous les statuts" />
                 </SelectTrigger>
@@ -240,9 +248,10 @@ export default function StockHistoryPage() {
               <Search className="mr-2 h-4 w-4" /> Appliquer
             </Button>
             <Button variant="outline" onClick={() => {
-              setSelectedProduit('');
-              setStatut('');
-              setRaison('');
+              // ✅ CORRIGÉ : réinitialiser avec 'all' au lieu de ''
+              setSelectedProduit('all');
+              setStatut('all');
+              setRaison('all');
               setDateDebut('');
               setDateFin('');
               setSearchProduit('');

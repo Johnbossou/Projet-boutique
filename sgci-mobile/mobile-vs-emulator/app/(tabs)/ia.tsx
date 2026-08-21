@@ -19,6 +19,7 @@ import {
 } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
 import {
+    Alert,
     Animated,
     Dimensions,
     Easing,
@@ -107,7 +108,9 @@ interface PerformanceData {
   historique: any[];
   statut_modele: {
     statut: string;
+    libelle?: string;
     dernier_entrainement: any;
+    dernier_recalcul?: any;
     prochaine_mise_a_jour: string | null;
   };
   donnees_temps_reel: {
@@ -260,7 +263,7 @@ export default function IAScreen() {
     prediction: Prediction;
     index: number;
   }) => {
-    const getCouleurUrgence = (niveau: string) => {
+    const getCouleurUrgence = (niveau: string): [string, string] => {
       switch (niveau) {
         case "critical":
           return ["#ef4444", "#f97316"];
@@ -458,7 +461,7 @@ export default function IAScreen() {
     reco: RecommandationPromo;
     index: number;
   }) => {
-    const getCouleurScore = (score: number) => {
+    const getCouleurScore = (score: number): [string, string] => {
       if (score >= 80) return ["#ef4444", "#ec4899"];
       if (score >= 60) return ["#f97316", "#ef4444"];
       if (score >= 40) return ["#eab308", "#f97316"];
@@ -601,7 +604,14 @@ export default function IAScreen() {
   };
 
   // KPI Cards
-  const kpiData = [
+  const kpiData: {
+    label: string;
+    value: string;
+    subtext: string;
+    icon: React.ComponentType<{ size: number; color: string }>;
+    gradient: [string, string];
+    index: number;
+  }[] = [
     {
       label: "Indice stock",
       value: performanceData
@@ -746,8 +756,7 @@ export default function IAScreen() {
                   colors={kpi.gradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
-                  style={styles.kpiGradient}
-                  opacity={0.1}
+                  style={[styles.kpiGradient, { opacity: 0.1 }]}
                 />
 
                 <View style={styles.kpiContent}>
@@ -1815,9 +1824,6 @@ const styles = StyleSheet.create({
     color: "#059669",
     marginLeft: 6,
   },
-  impactContent: {
-    gap: 4,
-  },
   impactText: {
     fontSize: 12,
     color: "#059669",
@@ -1857,22 +1863,10 @@ const styles = StyleSheet.create({
   metricsGrid: {
     gap: 16,
   },
-  metricItem: {
-    marginBottom: 12,
-  },
   metricHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     marginBottom: 6,
-  },
-  metricLabel: {
-    fontSize: 14,
-    color: "#94a3b8",
-  },
-  metricValue: {
-    fontSize: 14,
-    color: "#ffffff",
-    fontWeight: "600",
   },
   metricBar: {
     height: 6,

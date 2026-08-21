@@ -3,18 +3,29 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\VerifieBoutique;
 use App\Models\Categorie;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
 class CategorieController extends Controller
 {
+    use VerifieBoutique;
+
     /**
      * Affiche la liste des catégories
      */
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $categories = Categorie::withCount('produits')->get();
+        $query = Categorie::withCount('produits');
+
+        // Filtre par boutique courante (multi-tenancy)
+        if (auth()->user()->current_boutique_id) {
+            $query->where('boutique_id', auth()->user()->current_boutique_id);
+        }
+
+        $perPage = min((int) ($request->per_page ?? 20), 100);
+        $categories = $query->paginate($perPage);
 
         return response()->json($categories);
     }
@@ -31,6 +42,9 @@ class CategorieController extends Controller
             'icone' => 'nullable|string|max:50',
         ]);
 
+        // Ajouter boutique_id automatiquement (multi-tenancy)
+        $validated['boutique_id'] = $request->user()->current_boutique_id;
+
         $categorie = Categorie::create($validated);
 
         return response()->json($categorie, 201);
@@ -41,6 +55,8 @@ class CategorieController extends Controller
      */
     public function show(Categorie $categorie): JsonResponse
     {
+        $this->verifierBoutiqueDe($categorie);
+
         $categorie->load('produits');
         return response()->json($categorie);
     }
@@ -50,6 +66,8 @@ class CategorieController extends Controller
      */
     public function update(Request $request, Categorie $categorie): JsonResponse
     {
+        $this->verifierBoutiqueDe($categorie);
+
         $validated = $request->validate([
             'nom' => 'sometimes|string|max:255|unique:categories,nom,' . $categorie->id,
             'description' => 'nullable|string',
@@ -67,6 +85,8 @@ class CategorieController extends Controller
      */
     public function destroy(Categorie $categorie): JsonResponse
     {
+        $this->verifierBoutiqueDe($categorie);
+
         // Vérifier si la catégorie a des produits
         if ($categorie->produits()->count() > 0) {
             return response()->json([
@@ -85,7 +105,16 @@ class CategorieController extends Controller
     public function produits($id): JsonResponse
     {
         $categorie = Categorie::findOrFail($id);
-        $produits = $categorie->produits()->with('categorie')->orderBy('nom')->get();
+        $this->verifierBoutiqueDe($categorie);
+
+        $query = $categorie->produits()->with('categorie')->orderBy('nom');
+
+        // Filtre par boutique courante (multi-tenancy)
+        if (auth()->user()->current_boutique_id) {
+            $query->where('boutique_id', auth()->user()->current_boutique_id);
+        }
+
+        $produits = $query->get();
 
         return response()->json($produits);
     }
@@ -97,7 +126,14 @@ class CategorieController extends Controller
 
     public function statistiques(): JsonResponse
     {
-        $categories = Categorie::withCount('produits')->get();
+        $query = Categorie::withCount('produits');
+
+        // Filtre par boutique courante (multi-tenancy)
+        if (auth()->user()->current_boutique_id) {
+            $query->where('boutique_id', auth()->user()->current_boutique_id);
+        }
+
+        $categories = $query->get();
 
         $statistiques = $categories->map(function ($categorie) {
             return [

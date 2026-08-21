@@ -19,8 +19,64 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
+          title: 'Accueil',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="caisse"
+        options={{
+          title: 'Caisse',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="cart.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="produits"
+        options={{
+          title: 'Produits',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="cube.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="stock"
+        options={{
+          title: 'Stock',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="archivebox.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="clients"
+        options={{
+          title: 'Clients',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.2.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="analytics"
+        options={{
+          title: 'Analytics',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="chart.bar.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="ia"
+        options={{
+          title: 'IA',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="brain.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="parametres"
+        options={{
+          title: 'Paramètres',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="gearshape.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="arrivage"
+        options={{
+          title: 'Arrivage',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="box.truck.fill" color={color} />,
         }}
       />
       <Tabs.Screen
@@ -29,14 +85,6 @@ export default function TabLayout() {
           href: null,
         }}
       />
-      <Tabs.Screen name="produits" options={{ href: null }} />
-      <Tabs.Screen name="caisse" options={{ href: null }} />
-      <Tabs.Screen name="clients" options={{ href: null }} />
-      <Tabs.Screen name="analytics" options={{ href: null }} />
-      <Tabs.Screen name="ia" options={{ href: null }} />
-      <Tabs.Screen name="parametres" options={{ href: null }} />
-      <Tabs.Screen name="arrivage" options={{ href: null }} />
-      <Tabs.Screen name="stock" options={{ href: null }} />
     </Tabs>
   );
 }

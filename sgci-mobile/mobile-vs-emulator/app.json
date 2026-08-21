@@ -44,7 +44,10 @@
         {
           "cameraPermission": "Permet de scanner les codes QR et code-barres pour l'arrivage de stock"
         }
-      ]
+      ],
+      "expo-font",
+      "expo-secure-store",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

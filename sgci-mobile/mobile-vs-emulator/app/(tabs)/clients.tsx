@@ -163,7 +163,7 @@ export default function ClientsScreen() {
 
   // Debounce pour la recherche
   const [rechercheDebouncee, setRechercheDebouncee] = useState("");
-  const debounceTimer = useRef<NodeJS.Timeout>();
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     // Animation d'entrée
@@ -207,8 +207,9 @@ export default function ClientsScreen() {
 
   // CHARGEMENT DES DONNÉES
   useEffect(() => {
-    chargerClients();
+    chargerClientsAvecFiltres();
     chargerStatistiques();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Chargement avec filtres

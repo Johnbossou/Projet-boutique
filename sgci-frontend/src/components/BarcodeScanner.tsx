@@ -22,7 +22,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
   const [manualInput, setManualInput] = useState('');
   const [error, setError] = useState('');
   const [lastDetection, setLastDetection] = useState<{ code: string; timestamp: number } | null>(null);
-  const animationFrameRef = useRef<number>();
+  const animationFrameRef = useRef<number | undefined>(undefined);
 
   // Démarrer le scanner caméra
   const startScanning = async () => {

@@ -3,7 +3,7 @@
 import { usePathname } from 'next/navigation';
 import { AppShell } from '@/components/AppShell';
 
-const PUBLIC = ['/', '/login'];
+const PUBLIC = ['/', '/login', '/register', '/forgot-password', '/reset-password'];
 
 export function AppChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();

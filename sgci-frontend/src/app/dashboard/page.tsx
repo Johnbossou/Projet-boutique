@@ -9,26 +9,22 @@ import {
   AlertTriangle,
   DollarSign,
   BarChart3,
-  Settings,
-  LogOut,
-  Store,
-  Bell,
-  Search,
-  RefreshCw,
-  // 🆕 AJOUTE CES IMPORTS MANQUANTS :
   Brain,
   Sparkles,
-  Zap
+  Zap,
+  Settings,
+  Plus,
+  Minus,
+  GripVertical
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiFetch } from '@/lib/api-client';
-import { NotificationBell } from '@/components/NotificationBell';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 
 // Types pour les données réelles
 interface DashboardStats {
@@ -67,13 +63,33 @@ interface ProduitPopulaire {
   };
 }
 
+type WidgetType = 'stats' | 'alertes' | 'populaires' | 'ventes' | 'clients' | 'stock';
+
+interface Widget {
+  id: string;
+  type: WidgetType;
+  title: string;
+  enabled: boolean;
+  order: number;
+}
+
+const DEFAULT_WIDGETS: Widget[] = [
+  { id: 'stats', type: 'stats', title: 'Statistiques', enabled: true, order: 0 },
+  { id: 'alertes', type: 'alertes', title: 'Alertes Stock', enabled: true, order: 1 },
+  { id: 'populaires', type: 'populaires', title: 'Produits Populaires', enabled: true, order: 2 },
+  { id: 'ventes', type: 'ventes', title: 'Ventes Récentes', enabled: false, order: 3 },
+  { id: 'clients', type: 'clients', title: 'Clients VIP', enabled: false, order: 4 },
+  { id: 'stock', type: 'stock', title: 'État du Stock', enabled: false, order: 5 },
+];
+
 export default function Dashboard() {
-  const { user, logout } = useAuth();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [produitsAlerte, setProduitsAlerte] = useState<Produit[]>([]);
   const [produitsPopulaires, setProduitsPopulaires] = useState<ProduitPopulaire[]>([]);
+  const [widgets, setWidgets] = useState<Widget[]>(DEFAULT_WIDGETS);
+  const [showWidgetSettings, setShowWidgetSettings] = useState(false);
 
   // 🎯 FONCTION POUR RÉCUPÉRER LES DONNÉES RÉELLES
   const fetchDashboardData = async () => {
@@ -81,12 +97,30 @@ export default function Dashboard() {
       setIsLoading(true);
       console.log('🔄 Début du chargement des données...');
 
+      // Récupérer les stats de la boutique courante de l'utilisateur
       const statsResponse = await apiFetch('/analytics/stats-globales');
       
-      if (!statsResponse.ok) throw new Error('Erreur stats globales');
-      const statsData = await statsResponse.json();
-      console.log('📊 STATS GLOBALES:', statsData);
-      setStats(statsData);
+      if (!statsResponse.ok) {
+        console.warn('⚠️ API stats non disponible, affichage de données vides');
+        setStats({
+          ventes: {
+            total_ventes: 0,
+            chiffre_affaires_total: 0,
+            panier_moyen: 0,
+          },
+          produits: {
+            total_produits: 0,
+            total_stock: 0,
+            valeur_stock_total: 0,
+            produits_en_alerte: 0,
+            produits_en_rupture: 0,
+          },
+        });
+      } else {
+        const statsData = await statsResponse.json();
+        console.log('📊 STATS GLOBALES:', statsData);
+        setStats(statsData);
+      }
 
       // Récupérer les produits en alerte - AVEC GESTION D'ERREUR
       try {
@@ -130,8 +164,51 @@ export default function Dashboard() {
       if (user.role === 'gerant') {
         apiFetch('/notifications/sync-stock-alerts', { method: 'POST' }).catch(() => undefined);
       }
+      
+      // Charger les préférences de widgets
+      const savedWidgets = localStorage.getItem(`dashboard_widgets_${user.id}`);
+      if (savedWidgets) {
+        try {
+          setWidgets(JSON.parse(savedWidgets));
+        } catch (e) {
+          console.error('Erreur lors du chargement des widgets:', e);
+        }
+      }
     }
   }, [user]);
+
+  // Sauvegarder les préférences de widgets
+  useEffect(() => {
+    if (user) {
+      localStorage.setItem(`dashboard_widgets_${user.id}`, JSON.stringify(widgets));
+    }
+  }, [widgets, user]);
+
+  const toggleWidget = (widgetId: string) => {
+    setWidgets(widgets.map(w => 
+      w.id === widgetId ? { ...w, enabled: !w.enabled } : w
+    ));
+  };
+
+  const moveWidgetUp = (widgetId: string) => {
+    const index = widgets.findIndex(w => w.id === widgetId);
+    if (index > 0) {
+      const newWidgets = [...widgets];
+      [newWidgets[index - 1], newWidgets[index]] = [newWidgets[index], newWidgets[index - 1]];
+      setWidgets(newWidgets.map((w, i) => ({ ...w, order: i })));
+    }
+  };
+
+  const moveWidgetDown = (widgetId: string) => {
+    const index = widgets.findIndex(w => w.id === widgetId);
+    if (index < widgets.length - 1) {
+      const newWidgets = [...widgets];
+      [newWidgets[index], newWidgets[index + 1]] = [newWidgets[index + 1], newWidgets[index]];
+      setWidgets(newWidgets.map((w, i) => ({ ...w, order: i })));
+    }
+  };
+
+  const enabledWidgets = widgets.filter(w => w.enabled).sort((a, b) => a.order - b.order);
 
   // 🎯 STATS CALCULÉES EN TEMPS RÉEL - VERSION CORRIGÉE
   const calculatedStats = [
@@ -182,202 +259,6 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800">
-      {/* Sidebar Élite */}
-      <motion.div
-        initial={{ x: -300 }}
-        animate={{ x: 0 }}
-        className={`fixed inset-y-0 left-0 z-50 w-80 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-r border-slate-200/50 dark:border-slate-700/50 transition-all duration-300 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
-      >
-        <div className="flex flex-col h-full">
-          {/* Header Sidebar */}
-          <div className="p-6 border-b border-slate-200/50 dark:border-slate-700/50">
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              className="flex items-center space-x-3"
-            >
-              <div className="w-12 h-12 bg-gradient-to-r from-orange-500 to-red-500 rounded-2xl flex items-center justify-center shadow-lg">
-                <Store className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-slate-900 dark:text-white">SGCI BÉNIN</h1>
-                <p className="text-sm text-slate-600 dark:text-slate-400">Dashboard Premium</p>
-              </div>
-            </motion.div>
-          </div>
-
-          {/* Navigation Fonctionnelle */}
-          <nav className="flex-1 p-6 space-y-2">
-            {[
-              { 
-                icon: BarChart3, 
-                label: 'Dashboard', 
-                active: true,
-                href: '/dashboard'
-              },
-              { 
-                icon: Brain, 
-                label: 'Assistant stock', 
-                active: false,
-                href: '/ia'
-              },
-              { 
-                icon: Package, 
-                label: 'Produits', 
-                active: false,
-                href: '/produits'
-              },
-              { 
-                icon: Store, 
-                label: 'Stock', 
-                active: false,
-                href: '/stock'
-              },
-              { 
-                icon: Package, 
-                label: 'Arrivage', 
-                active: false,
-                href: '/arrivage'
-              },
-              { 
-                icon: ShoppingCart, 
-                label: 'Caisse', 
-                active: false,
-                href: '/caisse'
-              },
-              { 
-                icon: TrendingUp, 
-                label: 'Analytics', 
-                active: false,
-                href: '/analytics'
-              },
-              { 
-                icon: Users, 
-                label: 'Clients', 
-                active: false,
-                href: '/clients'
-              },
-              { 
-                icon: Settings, 
-                label: 'Paramètres', 
-                active: false,
-                href: '/parametres'
-              },
-            ].map((item, index) => (
-              <motion.button
-                key={item.label}
-                initial={{ x: -20, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                transition={{ delay: index * 0.1 }}
-                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-2xl text-left transition-all duration-200 ${
-                  typeof window !== 'undefined' && window.location.pathname === item.href
-                    ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg' 
-                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-orange-600 dark:hover:text-orange-400'
-                }`}
-                onClick={() => {
-                  window.location.href = item.href;
-                }}
-              >
-                <item.icon className="w-5 h-5" />
-                <span className="font-medium">{item.label}</span>
-                
-                {item.label === 'Assistant stock' && (
-                  <Badge variant="secondary" className="ml-auto bg-purple-500/10 text-purple-600 border-purple-500/20 text-xs">
-                    <Sparkles className="w-3 h-3 mr-1" />
-                    IA
-                  </Badge>
-                )}
-                {item.label === 'Caisse' && (
-                  <Badge variant="secondary" className="ml-auto bg-green-500/10 text-green-600 border-green-500/20 text-xs">
-                    Nouveau
-                  </Badge>
-                )}
-                {item.label === 'Analytics' && (
-                  <Badge variant="secondary" className="ml-auto bg-blue-500/10 text-blue-600 border-blue-500/20 text-xs">
-                    Premium
-                  </Badge>
-                )}
-              </motion.button>
-            ))}
-          </nav>
-
-          {/* Footer Sidebar */}
-          <div className="p-6 border-t border-slate-200/50 dark:border-slate-700/50">
-            <div className="flex items-center space-x-3 mb-4">
-              <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl flex items-center justify-center">
-                <span className="text-white font-bold text-sm">
-                  {user.name.split(' ').map(n => n[0]).join('')}
-                </span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-slate-900 dark:text-white truncate">
-                  {user.name}
-                </p>
-                <p className="text-xs text-slate-600 dark:text-slate-400 capitalize">
-                  {user.role}
-                </p>
-              </div>
-            </div>
-            <Button
-              onClick={logout}
-              variant="outline"
-              className="w-full justify-start text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600"
-            >
-              <LogOut className="w-4 h-4 mr-2" />
-              Déconnexion
-            </Button>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* Main Content */}
-      <div className={`transition-all duration-300 ${isSidebarOpen ? 'ml-80' : 'ml-0'}`}>
-        {/* Top Bar Élite */}
-        <header className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl border-b border-slate-200/50 dark:border-slate-700/50">
-          <div className="flex items-center justify-between p-6">
-            <div className="flex items-center space-x-4">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                className="text-slate-600 dark:text-slate-400"
-              >
-                <div className="w-6 h-6">
-                  <div className={`transform transition-all duration-300 ${isSidebarOpen ? 'rotate-0' : 'rotate-180'}`}>
-                    ☰
-                  </div>
-                </div>
-              </Button>
-              
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
-                <Input
-                  placeholder="Rechercher produits, ventes..."
-                  className="pl-10 w-80 bg-white/50 dark:bg-slate-700/50 border-slate-300 dark:border-slate-600"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-4">
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={fetchDashboardData}
-                disabled={isLoading}
-                className="relative"
-              >
-                <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
-              </Button>
-              
-              <NotificationBell />
-              
-              <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
-                {user.name[0]}
-              </div>
-            </div>
-          </div>
-        </header>
-
         {/* Dashboard Content */}
         <main className="p-8">
           {/* Welcome Section */}
@@ -396,9 +277,18 @@ export default function Dashboard() {
                 </p>
               </div>
               
-              <div className="flex items-center space-x-2 text-sm text-slate-500 dark:text-slate-400">
-                <Zap className="w-4 h-4 text-green-500" />
-                <span>Données en temps réel</span>
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-2 text-sm text-slate-500 dark:text-slate-400">
+                  <Zap className="w-4 h-4 text-green-500" />
+                  <span>Données en temps réel</span>
+                </div>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setShowWidgetSettings(true)}
+                >
+                  <Settings className="w-5 h-5" />
+                </Button>
               </div>
             </div>
           </motion.div>
@@ -585,7 +475,61 @@ export default function Dashboard() {
             </motion.div>
           </div>
         </main>
-      </div>
+
+        {/* Widget Settings Dialog */}
+        <Dialog open={showWidgetSettings} onOpenChange={setShowWidgetSettings}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>Personnaliser le Dashboard</DialogTitle>
+              <DialogDescription>
+                Activez ou désactivez les widgets et réorganisez-les selon vos préférences
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              {widgets.map((widget) => (
+                <div key={widget.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                  <div className="flex items-center space-x-3">
+                    <GripVertical className="w-5 h-5 text-slate-400" />
+                    <span className="font-medium">{widget.title}</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => moveWidgetUp(widget.id)}
+                      disabled={widget.order === 0}
+                    >
+                      <Plus className="w-4 h-4 rotate-180" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => moveWidgetDown(widget.id)}
+                      disabled={widget.order === widgets.length - 1}
+                    >
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant={widget.enabled ? "default" : "outline"}
+                      size="icon"
+                      onClick={() => toggleWidget(widget.id)}
+                    >
+                      {widget.enabled ? <Minus className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setWidgets(DEFAULT_WIDGETS)}>
+                Réinitialiser
+              </Button>
+              <Button onClick={() => setShowWidgetSettings(false)}>
+                Fermer
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
     </div>
   );
 }

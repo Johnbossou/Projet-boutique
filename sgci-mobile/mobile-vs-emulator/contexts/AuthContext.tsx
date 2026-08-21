@@ -12,14 +12,7 @@ import React, {
 import { Alert } from 'react-native';
 import { apiFetch } from '@/lib/api-client';
 import { fetchBoutiqueSettings } from '@/lib/boutique-settings';
-
-interface User {
-  id: number;
-  name: string;
-  email: string;
-  role: 'gerant' | 'caissier';
-  telephone?: string | null;
-}
+import { User, Boutique } from '@/types';
 
 interface AuthContextType {
   user: User | null;
@@ -28,6 +21,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   getToken: () => Promise<string | null>;
+  switchBoutique: (boutiqueId: number) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -119,6 +113,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.replace('/(auth)/login');
   }, [router]);
 
+  const switchBoutique = useCallback(async (boutiqueId: number) => {
+    setIsLoading(true);
+    try {
+      const response = await apiFetch('/switch-boutique', {
+        method: 'POST',
+        body: JSON.stringify({ boutique_id: boutiqueId }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Erreur lors du changement de boutique');
+      }
+
+      const data = await response.json();
+      // Update user data with new boutique info
+      setUser((prevUser) => {
+        if (!prevUser) return null;
+        return {
+          ...prevUser,
+          current_boutique_id: data.current_boutique_id,
+          current_boutique: data.current_boutique,
+        };
+      });
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : 'Échec du changement de boutique';
+      Alert.alert('Erreur', message);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   const value = useMemo(
     () => ({
       user,
@@ -127,8 +154,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       login,
       logout,
       getToken,
+      switchBoutique,
     }),
-    [user, isLoading, login, logout, getToken]
+    [user, isLoading, login, logout, getToken, switchBoutique]
   );
 
   return (

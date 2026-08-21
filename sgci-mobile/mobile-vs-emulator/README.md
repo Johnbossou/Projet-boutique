@@ -1,50 +1,201 @@
-# Welcome to your Expo app 👋
+# SGCI Mobile App
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+<p align="center">
+  <a href="https://expo.dev" target="_blank"><img src="https://static.expo.dev/brand/square-512x512.png" width="200" alt="Expo Logo"></a>
+</p>
 
-## Get started
+<p align="center">
+  Système de Gestion Commerciale Intelligente - Mobile Application
+</p>
 
-1. Install dependencies
+## About SGCI Mobile
 
-   ```bash
-   npm install
-   ```
+SGCI Mobile is a React Native application built with Expo that provides a comprehensive mobile experience for managing retail businesses on the go. Features include:
 
-2. Start the app
+- Multi-tenant boutique management
+- Product inventory management
+- Sales and transaction processing
+- Customer relationship management
+- Stock movement tracking
+- Analytics and reporting
+- Offline support with AsyncStorage
+- Background sync when online
+- Memoized components for performance
+- FlatList for efficient list rendering
 
-   ```bash
-   npx expo start
-   ```
+## Features
 
-In the output, you'll find options to open the app in a
+### Core Features
+- **Multi-Tenancy**: Boutique selection and management for proprietaires
+- **Authentication**: JWT-based authentication with the backend API
+- **Offline Support**: Data caching with AsyncStorage for offline access
+- **Background Sync**: Automatic synchronization when device comes online
+- **Performance**: Memoized components and FlatList for large lists
+- **Barcode Scanning**: Product scanning with expo-barcode-scanner
+- **Camera Integration**: Product image capture
+- **Print Support**: Receipt printing with expo-print
+- **Real-time Updates**: Live data synchronization
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+### Screens
+- **Dashboard**: Overview with statistics and recent activity
+- **Products**: Product management (CRUD operations)
+- **Sales**: Sales processing and history
+- **Customers**: Customer management
+- **Inventory**: Stock management and movements
+- **Analytics**: Reports and charts
+- **Settings**: User and boutique settings
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+## Requirements
 
-## Get a fresh project
+- Node.js >= 18.x
+- npm, yarn, or pnpm
+- Expo CLI
+- iOS Simulator (Mac only) or Android Emulator
+- Physical iOS or Android device (optional)
+- SGCI Backend API running
 
-When you're ready, run:
+## Installation
 
+1. Clone the repository:
 ```bash
-npm run reset-project
+git clone <repository-url>
+cd sgci-mobile/mobile-vs-emulator
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+2. Install dependencies:
+```bash
+npm install
+# or
+yarn install
+# or
+pnpm install
+```
 
-## Learn more
+3. Start the development server:
+```bash
+npx expo start
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+4. Run on your preferred platform:
+- Press `a` to run on Android emulator
+- Press `i` to run on iOS simulator
+- Scan the QR code with Expo Go app on your physical device
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## Environment Variables
 
-## Join the community
+Create a `.env` file in the project root with the following variables:
 
-Join our community of developers creating universal apps.
+```env
+# Backend API Configuration
+EXPO_PUBLIC_API_URL=http://localhost:8000/api
+```
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+### Required Variables
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `EXPO_PUBLIC_API_URL` | Backend API URL | `http://localhost:8000/api` |
+
+## Project Structure
+
+```
+app/
+├── (auth)/            # Authentication screens
+│   └── login.tsx      # Login screen
+├── (tabs)/            # Tab-based navigation
+│   ├── index.tsx      # Dashboard
+│   ├── produits.tsx   # Products
+│   ├── caisse.tsx     # Sales/Cashier
+│   ├── clients.tsx    # Customers
+│   ├── arrivage.tsx   # Stock movements
+│   ├── analytics.tsx  # Analytics
+│   ├── ia.tsx         # AI features
+│   └── parametres.tsx # Settings
+├── _layout.tsx        # Root layout
+└── ...
+components/           # React components
+contexts/             # React contexts (Auth, Theme)
+services/             # Business logic services
+lib/                  # Utility functions
+types/                # TypeScript type definitions
+```
+
+## Available Scripts
+
+- `npm start` - Start the development server
+- `android` - Run on Android
+- `ios` - Run on iOS
+- `web` - Run on web
+- `lint` - Run ESLint
+
+## Tech Stack
+
+- **Framework**: React Native with Expo SDK 54
+- **Navigation**: Expo Router (file-based routing)
+- **Language**: TypeScript
+- **State Management**: React Context API
+- **HTTP Client**: Axios
+- **Storage**: AsyncStorage (@react-native-async-storage/async-storage)
+- **Icons**: Lucide React Native
+- **Charts**: Recharts
+- **Barcode**: expo-barcode-scanner
+- **Camera**: expo-camera
+- **Image Picker**: expo-image-picker
+- **Print**: expo-print
+
+## Performance Optimizations
+
+- **Memoization**: Components wrapped with React.memo
+- **useCallback**: Callback functions memoized with useCallback
+- **FlatList**: Efficient rendering of large lists instead of ScrollView
+- **Lazy Loading**: Code splitting with Expo Router
+- **Image Optimization**: expo-image for optimized image loading
+
+## Offline Support
+
+The app supports offline functionality through:
+
+- **AsyncStorage**: Caching of frequently accessed data
+- **Sync Queue**: Queued operations that sync when online
+- **Background Sync**: Automatic sync when app comes to foreground
+- **Network Detection**: Connectivity status monitoring
+
+## Deployment
+
+### EAS Build
+
+Build your app for production using Expo Application Services (EAS):
+
+```bash
+# Install EAS CLI
+npm install -g eas-cli
+
+# Configure EAS
+eas build:configure
+
+# Build for iOS
+eas build --platform ios
+
+# Build for Android
+eas build --platform android
+```
+
+### Expo Go
+
+For quick testing, use Expo Go app on your device and scan the QR code from the development server.
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
+
+## License
+
+The SGCI project is proprietary software. All rights reserved.
+
+## Support
+
+For support, please contact the development team.

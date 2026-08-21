@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { UserPlus, RefreshCw, Trash2, Save } from 'lucide-react';
+import { UserPlus, RefreshCw, Trash2, Save, Mail, Download, Upload, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { apiFetch } from '@/lib/api-client';
 import { toast } from 'sonner';
 interface ApiUser {
@@ -31,6 +32,9 @@ export function UsersManagement() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [showInviteDialog, setShowInviteDialog] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<'gerant' | 'caissier'>('caissier');
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -109,8 +113,89 @@ export function UsersManagement() {
     }
   };
 
+  const inviteUser = async () => {
+    if (!inviteEmail) {
+      toast.error('Email requis');
+      return;
+    }
+    setSaving(true);
+    try {
+      const response = await apiFetch('/users/invite', {
+        method: 'POST',
+        body: JSON.stringify({
+          email: inviteEmail,
+          role: inviteRole,
+        }),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.message || 'Invitation échouée');
+      }
+      toast.success('Invitation envoyée avec succès');
+      setShowInviteDialog(false);
+      setInviteEmail('');
+      setInviteRole('caissier');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Erreur');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const exportUsers = async () => {
+    try {
+      const response = await apiFetch('/users/export', {
+        method: 'POST',
+      });
+      if (!response.ok) throw new Error('Export échoué');
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `utilisateurs_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast.success('Export réussi');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Erreur');
+    }
+  };
+
+  const importUsers = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    setSaving(true);
+    try {
+      const response = await apiFetch('/users/import', {
+        method: 'POST',
+        body: formData,
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.message || 'Import échoué');
+      }
+      const result = await response.json();
+      toast.success(`${result.imported || 0} utilisateurs importés avec succès`);
+      await charger();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Erreur');
+    } finally {
+      setSaving(false);
+      event.target.value = '';
+    }
+  };
+
   return (
-    <Card className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm border-slate-200/50 dark:border-slate-700/50">
+    <>
+      <Card className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm border-slate-200/50 dark:border-slate-700/50">
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
           <CardTitle>Équipe & caissiers</CardTitle>
@@ -120,6 +205,25 @@ export function UsersManagement() {
           <Button variant="outline" size="sm" onClick={charger} disabled={loading}>
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </Button>
+          <Button variant="outline" size="sm" onClick={() => setShowInviteDialog(true)}>
+            <Mail className="w-4 h-4 mr-2" />
+            Inviter
+          </Button>
+          <Button variant="outline" size="sm" onClick={exportUsers}>
+            <Download className="w-4 h-4 mr-2" />
+            Exporter
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => document.getElementById('import-users')?.click()}>
+            <Upload className="w-4 h-4 mr-2" />
+            Importer
+          </Button>
+          <input
+            id="import-users"
+            type="file"
+            accept=".csv,.xlsx"
+            onChange={importUsers}
+            className="hidden"
+          />
           <Button size="sm" onClick={() => setShowForm((v) => !v)}>
             <UserPlus className="w-4 h-4 mr-2" />
             Nouveau
@@ -202,5 +306,50 @@ export function UsersManagement() {
         </Table>
       </CardContent>
     </Card>
+
+    {/* Invite Dialog */}
+    <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Inviter un membre</DialogTitle>
+          <DialogDescription>
+            Envoyez une invitation par email pour rejoindre votre équipe
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="invite-email">Email</Label>
+            <Input
+              id="invite-email"
+              type="email"
+              placeholder="email@exemple.com"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="invite-role">Rôle</Label>
+            <Select value={inviteRole} onValueChange={(value: any) => setInviteRole(value)}>
+              <SelectTrigger id="invite-role">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="gerant">Gérant</SelectItem>
+                <SelectItem value="caissier">Caissier</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setShowInviteDialog(false)}>
+            Annuler
+          </Button>
+          <Button onClick={inviteUser} disabled={saving}>
+            {saving ? 'Envoi...' : 'Envoyer l\'invitation'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  </>
   );
 }

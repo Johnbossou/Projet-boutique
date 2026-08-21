@@ -12,7 +12,8 @@ class EnsureUserIsGerant
     {
         $user = $request->user();
 
-        if (!$user || $user->role !== 'gerant') {
+        // Le propriétaire a tous les droits du gérant (et plus)
+        if (!$user || !in_array($user->role, ['gerant', 'proprietaire'], true)) {
             return response()->json([
                 'message' => 'Accès réservé au gérant.',
             ], 403);
