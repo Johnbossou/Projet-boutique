@@ -4,37 +4,97 @@ namespace App\Services;
 
 use App\Models\FcmToken;
 use App\Models\User;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Kreait\Firebase\Contract\Messaging;
-use Kreait\Firebase\Messaging\CloudMessage;
-use Kreait\Firebase\Messaging\Notification as FirebaseNotification;
 
 class FcmService
 {
-    protected ?Messaging $messaging = null;
+    protected ?array $credentials = null;
 
-    protected bool $messagingResolved = false;
+    protected bool $credentialsLoaded = false;
+
+    protected ?string $accessToken = null;
+
+    protected int $accessTokenExpiresAt = 0;
 
     /**
-     * Résolution paresseuse de Firebase : le service reste utilisable
+     * Chargement paresseux des identifiants : le service reste utilisable
      * (et instanciable) même quand Firebase n'est pas configuré,
      * typiquement en dev et dans les tests.
      */
-    public function messaging(): ?Messaging
+    protected function credentials(): ?array
     {
-        if (! $this->messagingResolved) {
-            $this->messagingResolved = true;
+        if (! $this->credentialsLoaded) {
+            $this->credentialsLoaded = true;
 
-            try {
-                $this->messaging = app(Messaging::class);
-            } catch (\Throwable $e) {
-                Log::warning('FCM indisponible : Firebase non configuré', [
-                    'reason' => $e->getMessage(),
-                ]);
+            $config = config('firebase.credentials');
+
+            if (! empty($config['project_id']) && ! empty($config['client_email']) && ! empty($config['private_key'])) {
+                $this->credentials = $config;
+            } else {
+                Log::warning('FCM indisponible : Firebase non configuré');
             }
         }
 
-        return $this->messaging;
+        return $this->credentials;
+    }
+
+    /**
+     * Jeton OAuth2 obtenu via un JWT RS256 signé avec la clé privée du
+     * compte de service (implémentation directe de l'API FCM HTTP v1,
+     * sans dépendance externe).
+     */
+    protected function accessToken(): ?string
+    {
+        if ($this->accessToken !== null && now()->getTimestamp() < $this->accessTokenExpiresAt - 60) {
+            return $this->accessToken;
+        }
+
+        $creds = $this->credentials();
+
+        if ($creds === null) {
+            return null;
+        }
+
+        $now = now()->getTimestamp();
+
+        $header = $this->base64UrlEncode((string) json_encode(['alg' => 'RS256', 'typ' => 'JWT']));
+        $claims = $this->base64UrlEncode((string) json_encode([
+            'iss' => $creds['client_email'],
+            'scope' => 'https://www.googleapis.com/auth/firebase.messaging',
+            'aud' => $creds['token_uri'],
+            'iat' => $now,
+            'exp' => $now + 3600,
+        ]));
+
+        $key = openssl_pkey_get_private(str_replace('\n', "\n", $creds['private_key']));
+
+        if ($key === false || ! openssl_sign($header.'.'.$claims, $signature, $key, OPENSSL_ALGO_SHA256)) {
+            Log::error('FCM : signature JWT impossible (clé privée invalide ?)');
+
+            return null;
+        }
+
+        $jwt = $header.'.'.$claims.'.'.$this->base64UrlEncode($signature);
+
+        $response = Http::asForm()->timeout(10)->post($creds['token_uri'], [
+            'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+            'assertion' => $jwt,
+        ]);
+
+        if ($response->failed() || ! $response->json('access_token')) {
+            Log::error('FCM : échec authentification OAuth2', [
+                'status' => $response->status(),
+                'body' => substr($response->body(), 0, 300),
+            ]);
+
+            return null;
+        }
+
+        $this->accessToken = $response->json('access_token');
+        $this->accessTokenExpiresAt = $now + (int) $response->json('expires_in', 3600);
+
+        return $this->accessToken;
     }
 
     public function sendToUser(User $user, string $title, string $body, array $data = []): array
@@ -60,9 +120,9 @@ class FcmService
             return ['success' => true, 'message' => 'Aucun token actif', 'sent' => 0];
         }
 
-        $messaging = $this->messaging();
+        $accessToken = $this->accessToken();
 
-        if ($messaging === null) {
+        if ($accessToken === null) {
             return [
                 'success' => false,
                 'message' => 'Firebase non configuré',
@@ -71,27 +131,40 @@ class FcmService
             ];
         }
 
-        $notification = FirebaseNotification::create($title, $body);
-        $message = CloudMessage::new()->withNotification($notification);
-
-        if (!empty($data)) {
-            $message = $message->withData($data);
-        }
+        $projectId = $this->credentials()['project_id'];
+        $url = "https://fcm.googleapis.com/v1/projects/{$projectId}/messages:send";
 
         $results = [];
         $successCount = 0;
 
-        foreach ($tokens as $token) {
+        foreach ($tokens as $deviceToken) {
             try {
-                $messaging->send($message->withChangedToken($token));
-                $successCount++;
-                $results[] = ['token' => $token, 'success' => true];
+                $response = Http::withToken($accessToken)
+                    ->acceptJson()
+                    ->timeout(10)
+                    ->post($url, [
+                        'message' => array_filter([
+                            'token' => $deviceToken,
+                            'notification' => ['title' => $title, 'body' => $body],
+                            'data' => ! empty($data) ? array_map('strval', $data) : null,
+                            'android' => [
+                                'priority' => config('firebase.fcm.default.priority', 'high'),
+                            ],
+                        ]),
+                    ]);
+
+                if ($response->successful()) {
+                    $successCount++;
+                    $results[] = ['token' => $deviceToken, 'success' => true];
+                } else {
+                    throw new \RuntimeException('HTTP '.$response->status().': '.substr($response->body(), 0, 200));
+                }
             } catch (\Exception $e) {
-                Log::error("Erreur envoi FCM token {$token}", ['error' => $e->getMessage()]);
-                $results[] = ['token' => $token, 'success' => false, 'error' => $e->getMessage()];
+                Log::error("Erreur envoi FCM token {$deviceToken}", ['error' => $e->getMessage()]);
+                $results[] = ['token' => $deviceToken, 'success' => false, 'error' => $e->getMessage()];
 
                 // Désactiver le token en erreur
-                FcmToken::where('token', $token)->update(['is_active' => false]);
+                FcmToken::where('token', $deviceToken)->update(['is_active' => false]);
             }
         }
 
@@ -143,5 +216,10 @@ class FcmService
                 'quantity' => $quantity,
             ]
         );
+    }
+
+    protected function base64UrlEncode(string $data): string
+    {
+        return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
     }
 }
