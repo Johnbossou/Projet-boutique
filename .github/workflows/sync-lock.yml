@@ -1,0 +1,29 @@
+name: Temp - Sync composer.lock
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/sync-lock.yml"
+
+jobs:
+  update-lock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: dom, curl, libxml, mbstring, zip, pdo_sqlite, sqlite3
+          coverage: none
+
+      - name: Update lock file
+        working-directory: sgci-backend
+        run: composer update --no-interaction --prefer-dist --no-progress
+
+      - name: Upload composer.lock
+        uses: actions/upload-artifact@v4
+        with:
+          name: composer-lock
+          path: sgci-backend/composer.lock

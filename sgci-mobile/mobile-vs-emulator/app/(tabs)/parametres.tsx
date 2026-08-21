@@ -1648,8 +1648,6 @@ const styles = StyleSheet.create({
   },
   spinner: {
     transform: [{ rotate: "0deg" }],
-    animationDuration: "1s",
-    animationIterationCount: "infinite",
   },
   saveButtonText: {
     color: "#ffffff",
