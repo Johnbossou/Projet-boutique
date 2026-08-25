@@ -63,7 +63,7 @@ class FactureController extends Controller
             return response()->json(['message' => 'Non autorisé'], 403);
         }
 
-        $facture->load(['client', 'boutique', 'vente.lignesVentes.produit', 'commandeClient.lignes.produit']);
+        $facture->load(['client', 'boutique', 'vente.ligneVentes.produit', 'commandeClient.lignes.produit']);
 
         return response()->json($facture);
     }

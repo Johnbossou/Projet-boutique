@@ -117,7 +117,7 @@ class FacturationService
                 'facture' => $facture,
                 'boutique' => $facture->boutique,
                 'client' => $facture->client,
-                'lignes' => $facture->vente ? $facture->vente->lignesVentes : $facture->commandeClient->lignes,
+                'lignes' => $facture->vente ? $facture->vente->ligneVentes : $facture->commandeClient->lignes,
             ];
 
             $pdf = Pdf::loadView('invoices.vente', $data);

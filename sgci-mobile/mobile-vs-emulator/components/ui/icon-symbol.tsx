@@ -29,6 +29,7 @@ const MAPPING = {
   'box.truck.fill': 'local-shipping',
   'arrow.triangle.2.circlepath': 'autorenew',
   'clipboard.list.fill': 'fact-check',
+  'document.text.fill': 'description',
 } as IconMapping;
 
 /**

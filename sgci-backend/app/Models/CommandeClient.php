@@ -143,4 +143,9 @@ class CommandeClient extends Model
     {
         return $this->montant_paye >= $this->montant_total;
     }
+
+    public function facture()
+    {
+        return $this->hasOne(Facture::class);
+    }
 }

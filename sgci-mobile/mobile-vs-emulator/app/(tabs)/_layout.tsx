@@ -104,6 +104,14 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="devis"
+        options={{
+          title: 'Devis',
+          href: peutGerer ? undefined : null,
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="document.text.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="arrivage"
         options={{
           title: 'Arrivage',
