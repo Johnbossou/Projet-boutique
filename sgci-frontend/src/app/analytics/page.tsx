@@ -564,7 +564,7 @@ export default function AnalyticsPage() {
                             />
                             <Tooltip
                               formatter={(value) => `${Number(value ?? 0).toLocaleString()} FCFA`}
-                              labelFormatter={(label) => new Date(label).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: '2-digit' })}
+                              labelFormatter={(label) => new Date(String(label ?? '')).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: '2-digit' })}
                             />
                             <Line
                               type="monotone"
