@@ -135,6 +135,24 @@ class ChatController extends Controller
         // Mettre à jour le timestamp de la conversation
         $conversation->touch();
 
+        // Notifier les autres participants en push (silencieux si FCM non configuré)
+        $participantIds = $conversation->participants()
+            ->wherePivot('user_id', '!=', $request->user()->id)
+            ->pluck('users.id')
+            ->all();
+
+        if ($participantIds !== []) {
+            app(\App\Services\FcmService::class)->sendToMultipleUsers(
+                $participantIds,
+                $conversation->titre . ' - ' . $request->user()->name,
+                mb_substr($validated['message'], 0, 120),
+                [
+                    'type' => 'nouveau_message',
+                    'conversation_id' => (string) $conversation->id,
+                ]
+            );
+        }
+
         return response()->json([
             'message' => 'Message envoyé avec succès',
             'data' => $message->load('user'),

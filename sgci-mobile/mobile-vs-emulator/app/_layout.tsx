@@ -1,10 +1,9 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import { useEffect } from 'react';
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { AuthGuard } from '@/components/AuthGuard';
 import { SgciThemeProvider } from '@/contexts/ThemeContext';
@@ -14,19 +13,18 @@ export const unstable_settings = {
   anchor: '(tabs)',
 };
 
+// Thème sombre assumé : tous les écrans sont conçus pour le mode nuit.
 function RootNavigation() {
-  const colorScheme = useColorScheme();
-
   return (
     <AuthProvider>
       <AuthGuard>
-        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <ThemeProvider value={DarkTheme}>
           <Stack>
             <Stack.Screen name="(auth)/login" options={{ headerShown: false }} />
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
           </Stack>
-          <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+          <StatusBar style="light" backgroundColor="#0f172a" />
         </ThemeProvider>
       </AuthGuard>
     </AuthProvider>

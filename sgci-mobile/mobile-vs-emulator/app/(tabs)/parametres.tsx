@@ -62,7 +62,6 @@ import {
 import * as Sharing from "expo-sharing";
 import * as FileSystem from "expo-file-system/legacy";
 import { UsersManagement } from "@/components/UsersManagement";
-import { useSgciTheme } from "@/contexts/ThemeContext";
 
 const { width, height } = Dimensions.get("window");
 
@@ -85,7 +84,6 @@ interface BoutiqueSettings {
 
 export default function ParametresScreen() {
   const { user, logout, switchBoutique } = useAuth();
-  const { setDarkMode } = useSgciTheme();
   const [activeTab, setActiveTab] = useState("profil");
   const [isLoading, setIsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -379,16 +377,17 @@ export default function ParametresScreen() {
     onValueChange,
     icon: Icon,
     color,
+    disabled = false,
   }: any) => (
     <View style={styles.switchItem}>
       <View style={styles.switchLeft}>
-        <View style={[styles.switchIcon, { backgroundColor: `${color}20` }]}>
+        <View style={[styles.switchIcon, { backgroundColor: `${color}20`, opacity: disabled ? 0.5 : 1 }]}>
           <Icon size={20} color={color} />
         </View>
         <View style={styles.switchContent}>
-          <Text style={styles.switchLabel}>{label}</Text>
+          <Text style={[styles.switchLabel, disabled && { opacity: 0.5 }]}>{label}</Text>
           {description && (
-            <Text style={styles.switchDescription}>{description}</Text>
+            <Text style={[styles.switchDescription, disabled && { opacity: 0.5 }]}>{description}</Text>
           )}
         </View>
       </View>
@@ -397,6 +396,7 @@ export default function ParametresScreen() {
         onValueChange={onValueChange}
         trackColor={{ false: "#94a3b8", true: color }}
         thumbColor="#ffffff"
+        disabled={disabled}
       />
     </View>
   );
@@ -876,15 +876,11 @@ export default function ParametresScreen() {
                 </View>
                 <View style={styles.sectionContent}>
                   <SwitchItem
-                    label="Mode nuit / jour"
-                    description="Nuit (sombre) ou jour (clair)"
-                    value={preferences.darkMode}
-                    onValueChange={async (value: boolean) => {
-                      const next = { ...preferences, darkMode: value };
-                      setPreferences(next);
-                      await saveUserPreferences(next);
-                      await setDarkMode(value);
-                    }}
+                    label="Mode nuit"
+                    description="Interface optimisée pour le mode nuit (thème clair bientôt disponible)"
+                    value={true}
+                    onValueChange={() => undefined}
+                    disabled
                     icon={Palette}
                     color="#8b5cf6"
                   />

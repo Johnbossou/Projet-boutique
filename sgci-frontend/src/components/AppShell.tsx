@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   BarChart3,
   Brain,
+  MessageCircle,
   Package,
   ShoppingCart,
   Users,
@@ -27,6 +28,7 @@ const NAV = [
   { href: '/arrivage', label: 'Arrivage', icon: TrendingUp },
   { href: '/caisse', label: 'Caisse', icon: ShoppingCart },
   { href: '/clients', label: 'Clients', icon: Users },
+  { href: '/messages', label: 'Messages', icon: MessageCircle },
   { href: '/analytics', label: 'Analytics', icon: BarChart3 },
   { href: '/ia', label: 'Assistant stock', icon: Brain },
   { href: '/parametres', label: 'Paramètres', icon: Settings },

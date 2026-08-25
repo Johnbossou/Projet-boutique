@@ -5,9 +5,15 @@ import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const { user } = useAuth();
+
+  // Modules de gestion réservés au gérant et au propriétaire :
+  // un caissier voit uniquement les outils de vente et de consultation.
+  const peutGerer = user?.role === 'gerant' || user?.role === 'proprietaire';
 
   return (
     <Tabs
@@ -52,9 +58,17 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="messages"
+        options={{
+          title: 'Messages',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="message.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="analytics"
         options={{
           title: 'Analytics',
+          href: peutGerer ? undefined : null,
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="chart.bar.fill" color={color} />,
         }}
       />
@@ -62,6 +76,7 @@ export default function TabLayout() {
         name="ia"
         options={{
           title: 'IA',
+          href: peutGerer ? undefined : null,
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="brain.fill" color={color} />,
         }}
       />
@@ -76,13 +91,8 @@ export default function TabLayout() {
         name="arrivage"
         options={{
           title: 'Arrivage',
+          href: peutGerer ? undefined : null,
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="box.truck.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="explore"
-        options={{
-          href: null,
         }}
       />
     </Tabs>
