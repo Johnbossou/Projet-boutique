@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "mobile-vs-emulator",
-    "slug": "mobile-vs-emulator",
+    "name": "SGCI",
+    "slug": "sgci-benin",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "mobilevsemulator",
+    "scheme": "sgci",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
