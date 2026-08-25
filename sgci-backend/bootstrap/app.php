@@ -17,6 +17,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'proprietaire' => \App\Http\Middleware\ProprietaireMiddleware::class,
             'boutique.scope' => \App\Http\Middleware\BoutiqueScopeMiddleware::class,
             'boutique.ownership' => \App\Http\Middleware\VerifyBoutiqueOwnership::class,
+            'login.safe' => \App\Http\Middleware\EnsureLoginAttemptsSafe::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

@@ -45,7 +45,7 @@ Route::get('/health', function () {
 });
 
 Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
-Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
+Route::post('/login', [AuthController::class, 'login'])->middleware(['throttle:30,1', 'login.safe']);
 Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:3,1');
 Route::post('/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:3,1');
 
@@ -154,6 +154,7 @@ Route::middleware(['auth:sanctum', 'user.active'])->group(function () {
 
     // Commandes fournisseurs
     Route::prefix('commandes-fournisseurs')->group(function () {
+        Route::get('/suggestions', [CommandeFournisseurController::class, 'suggestions'])->middleware('role.gerant');
         Route::get('/', [CommandeFournisseurController::class, 'index']);
         Route::post('/', [CommandeFournisseurController::class, 'store'])->middleware('role.gerant')->middleware('throttle:10,1');
         Route::get('/{commande}', [CommandeFournisseurController::class, 'show']);

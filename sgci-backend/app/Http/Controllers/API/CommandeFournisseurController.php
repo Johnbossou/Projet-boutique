@@ -217,4 +217,37 @@ class CommandeFournisseurController extends Controller
 
         return response()->json(['message' => 'Commande supprimée avec succès']);
     }
+
+    /**
+     * Liste les produits dont le stock est sous le seuil, avec quantité suggérée à commander.
+     * Ordonnance d'achat automatique pour le gérant.
+     */
+    public function suggestions(Request $request): JsonResponse
+    {
+        $boutiqueId = $request->user()->current_boutique_id;
+
+        $produits = \App\Models\Produit::where('boutique_id', $boutiqueId)
+            ->enAlerte()
+            ->with('categorie')
+            ->get()
+            ->map(function ($produit) {
+                // Commander 2× le seuil d'alerte pour avoir une marge
+                $quantiteSuggeree = max(1, ($produit->seuil_alerte * 2) - $produit->quantite_stock);
+
+                return [
+                    'produit_id' => $produit->id,
+                    'nom' => $produit->nom,
+                    'categorie' => $produit->categorie?->nom ?? 'Sans catégorie',
+                    'stock_actuel' => $produit->quantite_stock,
+                    'seuil_alerte' => $produit->seuil_alerte,
+                    'quantite_suggeree' => $quantiteSuggeree,
+                    'rupture' => $produit->estEnRupture(),
+                ];
+            });
+
+        return response()->json([
+            'data' => $produits,
+            'total' => $produits->count(),
+        ]);
+    }
 }
