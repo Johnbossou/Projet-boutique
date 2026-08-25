@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Concerns\VerifieBoutique;
 use App\Services\FacturePdfService;
+use App\Traits\Auditable;
 use App\Models\BoutiqueSetting;
 use App\Models\Client;
 use App\Models\LigneVente;
@@ -19,7 +20,7 @@ use Illuminate\Validation\Rule;
 
 class VenteController extends Controller
 {
-    use VerifieBoutique;
+    use VerifieBoutique, Auditable;
 
     public function index(Request $request): JsonResponse
     {
@@ -106,6 +107,8 @@ class VenteController extends Controller
 
                 $vente->load(['user', 'ligneVentes.produit', 'client']);
 
+                $this->auditCreate($vente);
+
                 return response()->json($vente, 201);
             });
         } catch (\RuntimeException $e) {
@@ -144,6 +147,7 @@ class VenteController extends Controller
         }
 
         $clientId = $vente->client_id;
+        $this->auditDelete($vente);
         $vente->delete();
 
         if ($clientId) {
@@ -269,6 +273,8 @@ class VenteController extends Controller
             return response()->json(['message' => 'Cette vente est dÃ©jÃ  annulÃ©e.'], 422);
         }
 
+        $ancienStatut = $vente->statut;
+
         if ($vente->statut === 'termine') {
             $delai = BoutiqueSetting::current()->delai_annulation_vente_minutes
                 ?? config('sgci.delai_annulation_vente_minutes', 5);
@@ -287,6 +293,8 @@ class VenteController extends Controller
         } else {
             $vente->update(['statut' => 'annule']);
         }
+
+        $this->auditUpdate($vente, ['statut' => $ancienStatut]);
 
         $vente->load(['user', 'ligneVentes.produit', 'client']);
 

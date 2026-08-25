@@ -120,7 +120,7 @@ class FacturationService
                 'lignes' => $facture->vente ? $facture->vente->lignesVentes : $facture->commandeClient->lignes,
             ];
 
-            $pdf = Pdf::loadView('factures.template', $data);
+            $pdf = Pdf::loadView('invoices.vente', $data);
 
             // Sauvegarder le PDF
             $filename = 'factures/' . $facture->numero_facture . '.pdf';

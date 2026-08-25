@@ -28,6 +28,8 @@ use App\Http\Controllers\API\FactureController;
 use App\Http\Controllers\API\NotificationChannelController;
 use App\Http\Controllers\API\ChatController;
 use App\Http\Controllers\API\FideliteController;
+use App\Http\Controllers\API\RetourVenteController;
+use App\Http\Controllers\API\InventaireController;
 
 /*
 |--------------------------------------------------------------------------
@@ -189,6 +191,7 @@ Route::middleware(['auth:sanctum', 'user.active'])->group(function () {
         Route::post('/{devis}/accepter', [DevisController::class, 'accepter'])->middleware('role.gerant')->middleware('throttle:10,1');
         Route::post('/{devis}/refuser', [DevisController::class, 'refuser'])->middleware('role.gerant')->middleware('throttle:10,1');
         Route::post('/{devis}/convertir-commande', [DevisController::class, 'convertirEnCommande'])->middleware('role.gerant')->middleware('throttle:10,1');
+        Route::get('/{devis}/pdf', [DevisController::class, 'pdf']);
     });
 
     Route::prefix('commandes-clients')->group(function () {
@@ -219,6 +222,26 @@ Route::middleware(['auth:sanctum', 'user.active'])->group(function () {
         Route::post('/{facture}/envoyer-email', [FactureController::class, 'envoyerEmail'])->middleware('throttle:10,1');
         Route::get('/{facture}/telecharger-pdf', [FactureController::class, 'telechargerPdf']);
         Route::post('/generer-du-jour', [FactureController::class, 'genererDuJour'])->middleware('proprietaire')->middleware('throttle:5,1');
+    });
+
+    // Retours et remboursements
+    Route::prefix('retours')->group(function () {
+        Route::get('/', [RetourVenteController::class, 'index']);
+        Route::post('/', [RetourVenteController::class, 'store'])->middleware('role.gerant')->middleware('throttle:10,1');
+        Route::get('/{retour}', [RetourVenteController::class, 'show']);
+        Route::post('/{retour}/valider', [RetourVenteController::class, 'valider'])->middleware('role.gerant')->middleware('throttle:10,1');
+        Route::post('/{retour}/refuser', [RetourVenteController::class, 'refuser'])->middleware('role.gerant')->middleware('throttle:10,1');
+    });
+
+    // Inventaire physique
+    Route::prefix('inventaires')->group(function () {
+        Route::get('/', [InventaireController::class, 'index']);
+        Route::post('/', [InventaireController::class, 'store'])->middleware('role.gerant')->middleware('throttle:5,1');
+        Route::get('/{inventaire}', [InventaireController::class, 'show']);
+        Route::post('/{inventaire}/compter', [InventaireController::class, 'compter'])->middleware('throttle:30,1');
+        Route::post('/{inventaire}/valider', [InventaireController::class, 'valider'])->middleware('role.gerant')->middleware('throttle:5,1');
+        Route::post('/{inventaire}/annuler', [InventaireController::class, 'annuler'])->middleware('role.gerant')->middleware('throttle:5,1');
+        Route::get('/{inventaire}/ecarts', [InventaireController::class, 'ecarts']);
     });
 
     // Notifications par email et SMS

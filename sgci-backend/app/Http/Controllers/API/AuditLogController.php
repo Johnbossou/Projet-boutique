@@ -20,6 +20,11 @@ class AuditLogController extends Controller
     {
         $query = \App\Models\AuditLog::with('user');
 
+        // Filtre par boutique courante (multi-tenancy)
+        if ($request->user()->current_boutique_id) {
+            $query->where('boutique_id', $request->user()->current_boutique_id);
+        }
+
         // Filtrer par utilisateur
         if ($request->has('user_id')) {
             $query->where('user_id', $request->user_id);
@@ -58,14 +63,21 @@ class AuditLogController extends Controller
         return response()->json($log);
     }
 
-    public function stats(): JsonResponse
+    public function stats(Request $request): JsonResponse
     {
+        $query = \App\Models\AuditLog::query();
+
+        // Filtre par boutique courante (multi-tenancy)
+        if ($request->user()->current_boutique_id) {
+            $query->where('boutique_id', $request->user()->current_boutique_id);
+        }
+
         $stats = [
-            'total_logs' => \App\Models\AuditLog::count(),
-            'logs_today' => \App\Models\AuditLog::whereDate('created_at', today())->count(),
-            'logs_this_week' => \App\Models\AuditLog::whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()])->count(),
-            'logs_this_month' => \App\Models\AuditLog::whereMonth('created_at', now()->month)->count(),
-            'top_actions' => \App\Models\AuditLog::select('action')
+            'total_logs' => (clone $query)->count(),
+            'logs_today' => (clone $query)->whereDate('created_at', today())->count(),
+            'logs_this_week' => (clone $query)->whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()])->count(),
+            'logs_this_month' => (clone $query)->whereMonth('created_at', now()->month)->count(),
+            'top_actions' => (clone $query)->select('action')
                 ->selectRaw('action, COUNT(*) as count')
                 ->groupBy('action')
                 ->orderByDesc('count')

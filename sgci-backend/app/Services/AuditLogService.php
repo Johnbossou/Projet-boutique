@@ -32,6 +32,7 @@ class AuditLogService
             'new_values' => $newValues,
             'ip_address' => $request?->ip(),
             'user_agent' => $request?->userAgent(),
+            'boutique_id' => $request?->user()?->current_boutique_id,
         ]);
     }
 

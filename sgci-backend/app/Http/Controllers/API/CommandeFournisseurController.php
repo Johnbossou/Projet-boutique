@@ -5,12 +5,14 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Models\CommandeFournisseur;
 use App\Models\LigneCommandeFournisseur;
+use App\Traits\Auditable;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 
 class CommandeFournisseurController extends Controller
 {
+    use Auditable;
     /**
      * Affiche la liste des commandes fournisseurs de la boutique courante
      */
@@ -96,6 +98,8 @@ class CommandeFournisseurController extends Controller
 
             $commande->update(['montant_total' => $montantTotal]);
 
+            $this->auditCreate($commande);
+
             return response()->json([
                 'message' => 'Commande fournisseur créée avec succès',
                 'data' => $commande->load('fournisseur', 'lignes.produit'),
@@ -167,6 +171,8 @@ class CommandeFournisseurController extends Controller
 
         $commande->update(['statut' => 'en_cours']);
 
+        $this->auditUpdate($commande, ['statut' => 'en_attente']);
+
         return response()->json([
             'message' => 'Commande validée avec succès',
             'data' => $commande,
@@ -189,7 +195,10 @@ class CommandeFournisseurController extends Controller
             ], 400);
         }
 
+        $ancienStatut = $commande->statut;
         $commande->update(['statut' => 'annule']);
+
+        $this->auditUpdate($commande, ['statut' => $ancienStatut]);
 
         return response()->json([
             'message' => 'Commande annulée avec succès',
@@ -213,6 +222,7 @@ class CommandeFournisseurController extends Controller
             ], 400);
         }
 
+        $this->auditDelete($commande);
         $commande->delete();
 
         return response()->json(['message' => 'Commande supprimée avec succès']);

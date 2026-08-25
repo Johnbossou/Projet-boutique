@@ -7,7 +7,10 @@ use App\Models\Devis;
 use App\Models\LigneDevis;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class DevisController extends Controller
 {
@@ -240,5 +243,27 @@ class DevisController extends Controller
                 'data' => $commande->load('client', 'lignes.produit'),
             ], 201);
         });
+    }
+
+    /**
+     * Génère le PDF d'un devis
+     */
+    public function pdf(Request $request, Devis $devis): Response
+    {
+        if ($devis->boutique_id !== $request->user()->current_boutique_id) {
+            abort(403, 'Non autorisé');
+        }
+
+        $devis->load(['client', 'user', 'lignes.produit', 'boutique']);
+
+        $pdf = Pdf::loadView('devis.template', [
+            'devis' => $devis,
+            'boutique' => $devis->boutique,
+        ]);
+
+        $filename = 'devis/' . $devis->numero_devis . '.pdf';
+        Storage::disk('public')->put($filename, $pdf->output());
+
+        return $pdf->download($devis->numero_devis . '.pdf');
     }
 }

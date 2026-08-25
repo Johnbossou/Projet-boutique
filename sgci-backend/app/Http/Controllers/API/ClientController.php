@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\Concerns\VerifieBoutique;
 use App\Models\Client;
 use App\Models\Vente;
+use App\Traits\Auditable;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log; // ✅ AJOUT DE L'IMPORT
@@ -14,7 +15,7 @@ use Illuminate\Support\Facades\Validator;
 
 class ClientController extends Controller
 {
-    use VerifieBoutique;
+    use VerifieBoutique, Auditable;
 
     /**
      * Liste des clients avec pagination, filtres et relations
@@ -132,6 +133,8 @@ class ClientController extends Controller
 
             $client = Client::create($validated);
 
+            $this->auditCreate($client);
+
             return response()->json([
                 'message' => 'Client créé avec succès',
                 'client' => $this->formatClientData($client)
@@ -245,7 +248,10 @@ class ClientController extends Controller
             }
 
             $validated = $validator->validated();
+            $oldValues = $client->only(array_keys($validated));
             $client->update($validated);
+
+            $this->auditUpdate($client, $oldValues);
 
             // Recharger le client avec les relations
             $client->load(['ventes' => function ($query) {
@@ -284,6 +290,7 @@ class ClientController extends Controller
                 ], 422);
             }
 
+            $this->auditDelete($client);
             $client->delete();
 
             return response()->json([

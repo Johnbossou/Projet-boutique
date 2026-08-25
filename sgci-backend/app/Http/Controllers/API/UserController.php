@@ -4,6 +4,7 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Traits\Auditable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -11,6 +12,7 @@ use Illuminate\Validation\Rule;
 
 class UserController extends Controller
 {
+    use Auditable;
     public function index(Request $request): JsonResponse
     {
         $query = User::query()->orderBy('name');
@@ -90,6 +92,8 @@ class UserController extends Controller
             ]);
         }
 
+        $this->auditCreate($user);
+
         return response()->json([
             'message' => 'Utilisateur créé',
             'user' => $this->formatUser($user),
@@ -132,7 +136,11 @@ class UserController extends Controller
             return response()->json(['message' => 'Vous ne pouvez pas désactiver votre propre compte.'], 422);
         }
 
+        $oldValues = $user->only(array_keys($validated));
+
         $user->update($validated);
+
+        $this->auditUpdate($user, $oldValues);
 
         return response()->json([
             'message' => 'Utilisateur mis à jour',
@@ -147,6 +155,8 @@ class UserController extends Controller
         }
 
         $user->update(['est_actif' => false]);
+
+        $this->auditUpdate($user, ['est_actif' => true]);
 
         return response()->json(['message' => 'Utilisateur désactivé']);
     }
