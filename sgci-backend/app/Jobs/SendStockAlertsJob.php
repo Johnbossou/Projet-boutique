@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Services\EmailService;
 use App\Services\FcmService;
 use App\Services\SmsService;
+use App\Events\StockAlerte;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -66,6 +67,12 @@ class SendStockAlertsJob implements ShouldQueue
                         $product->nom,
                         $product->quantite_stock
                     );
+
+                    // Broadcast en temps réel via WebSocket
+                    $niveau = $product->estEnRupture() ? 'rupture' : 'alerte';
+                    if ($product->boutique_id) {
+                        broadcast(new StockAlerte($product, $product->boutique_id, $niveau));
+                    }
 
                     // Envoyer SMS (si configuré)
                     if (env('SMS_ENABLED', false)) {

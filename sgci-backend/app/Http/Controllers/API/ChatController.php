@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
+use App\Events\NouveauMessageChat;
 use App\Models\ConversationChat;
 use App\Models\MessageChat;
 use Illuminate\Http\Request;
@@ -134,6 +135,9 @@ class ChatController extends Controller
 
         // Mettre à jour le timestamp de la conversation
         $conversation->touch();
+
+        // Broadcast en temps réel via WebSocket
+        broadcast(new NouveauMessageChat($message, $conversation->id));
 
         // Notifier les autres participants en push (silencieux si FCM non configuré)
         $participantIds = $conversation->participants()

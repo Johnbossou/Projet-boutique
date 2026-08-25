@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\Concerns\VerifieBoutique;
 use App\Services\FacturePdfService;
 use App\Traits\Auditable;
+use App\Events\VenteCreee;
 use App\Models\BoutiqueSetting;
 use App\Models\Client;
 use App\Models\LigneVente;
@@ -108,6 +109,10 @@ class VenteController extends Controller
                 $vente->load(['user', 'ligneVentes.produit', 'client']);
 
                 $this->auditCreate($vente);
+
+                if ($vente->boutique_id) {
+                    broadcast(new VenteCreee($vente, $vente->boutique_id));
+                }
 
                 return response()->json($vente, 201);
             });
