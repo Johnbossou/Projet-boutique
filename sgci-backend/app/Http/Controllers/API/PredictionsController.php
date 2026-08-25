@@ -621,9 +621,78 @@ class PredictionsController extends Controller
         $ventesMoisCourant = $this->calculerVentesPeriode($produitId, 30);
         $ventes3Mois = $this->calculerVentesPeriode($produitId, 90);
 
-        if ($ventes3Mois == 0) return 1.0;
+        $facteurSaison = 1.0;
+        if ($ventes3Mois > 0) {
+            $facteurSaison = $ventesMoisCourant / ($ventes3Mois / 3);
+        }
 
-        return $ventesMoisCourant / ($ventes3Mois / 3);
+        // Ajustement jours fériés béninois (±15 jours autour)
+        $facteurFeries = $this->facteurJoursFeriesBbeninois();
+        $facteurJourSemaine = $this->facteurJourSemaine();
+
+        return $facteurSaison * $facteurFeries * $facteurJourSemaine;
+    }
+
+    /**
+     * Jours fériés officiels du Bénin.
+     * Les dates fixes + shift de ±15 jours pour capter l'effet « veille/après ».
+     */
+    private function facteurJoursFeriesBbeninois(): float
+    {
+        $jour = (int) now()->format('j');
+        $mois = (int) now()->format('n');
+
+        $feries = [
+            [$mois === 1 && $jour === 1],   // Jour de l'An
+            [$mois === 1 && $jour === 10],  // Fête traditionnelle
+            [$mois === 4 && $jour === 27],  // Journée Nationale
+            [$mois === 5 && $jour === 1],   // Fête du Travail
+            [$mois === 5 && $jour === 25],  // Fête de l'Ascension
+            [$mois === 8 && $jour === 1],   // Fête Nationale
+            [$mois === 8 && $jour === 15],  // Assomption
+            [$mois === 10 && $jour === 26], // Fête des Armées
+            [$mois === 11 && $jour === 1],  // Toussaint
+            [$mois === 11 && $jour === 30], // Fête du ...
+            [$mois === 12 && $jour === 25], // Noël
+        ];
+
+        $aujourdHui = $mois * 100 + $jour;
+
+        foreach ($feries as $f) {
+            if (!empty($f[0])) {
+                return 1.25; // Boost ventes autour des fêtes
+            }
+        }
+
+        // Vérifier si on est à ±15 jours d'un férié fixe
+        foreach ([101, 110, 427, 501, 525, 801, 815, 1026, 1101, 1130, 1225] as $fDate) {
+            $fMois = intdiv($fDate, 100);
+            $fJour = $fDate % 100;
+            try {
+                $dateFerie = now()->setMonth($fMois)->setDay($fJour);
+                $diff = abs((int) now()->diffInDays($dateFerie, false));
+                if ($diff <= 15) {
+                    return 1.12; // Légère hausse 15j avant/après
+                }
+            } catch (\Throwable) {
+                // Ignorer dates invalides (30 fév etc.)
+            }
+        }
+
+        return 1.0;
+    }
+
+    /**
+     * Légère hausse le samedi (jour de marché au Bénin), baisse le dimanche.
+     */
+    private function facteurJourSemaine(): float
+    {
+        $jourSemaine = (int) now()->format('w'); // 0=dim, 6=sam
+        return match ($jourSemaine) {
+            6 => 1.15,  // Samedi : marché
+            0 => 0.75,  // Dimanche : calme
+            default => 1.0,
+        };
     }
 
     private function determinerNiveauUrgence($besoin, $seuilAlerte): string

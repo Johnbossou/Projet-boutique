@@ -64,11 +64,15 @@ class Paiement extends Model
             if (empty($paiement->numero_paiement)) {
                 $prefix = 'PAY-' . now()->format('Ymd');
 
-                $last = self::where('numero_paiement', 'like', $prefix . '-%')
-                    ->max('numero_paiement');
+                $query = self::where('numero_paiement', 'like', $prefix . '-%');
+
+                if ($paiement->boutique_id) {
+                    $query->where('boutique_id', $paiement->boutique_id);
+                }
+
+                $last = $query->max('numero_paiement');
 
                 $suffix = $last ? ((int) substr($last, strlen($prefix) + 1)) + 1 : 1;
-
                 $paiement->numero_paiement = $prefix . '-' . str_pad((string) $suffix, 4, '0', STR_PAD_LEFT);
             }
         });

@@ -6,6 +6,7 @@ use App\Jobs\SendStockAlertsJob;
 use App\Jobs\ValidatePredictionsJob;
 use App\Models\AiPrediction;
 use App\Models\BoutiqueSetting;
+use App\Models\Devis;
 use App\Models\User;
 use App\Models\Vente;
 use App\Services\EmailService;
@@ -84,3 +85,16 @@ Schedule::call(function () {
 })
     ->dailyAt('08:00')
     ->description('Envoyer rapport quotidien par email');
+
+// Expiration automatique des devis (toutes les heures)
+Schedule::call(function () {
+    try {
+        $expires = Devis::expire()->update(['statut' => 'expire']);
+
+        if ($expires > 0) {
+            Log::info("Devis expirés automatiquement", ['count' => $expires]);
+        }
+    } catch (\Throwable $e) {
+        Log::error('Erreur expiration devis', ['error' => $e->getMessage()]);
+    }
+})->hourly()->description('Expire les devis dont la date de validité est dépassée');

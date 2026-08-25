@@ -11,6 +11,15 @@ use Illuminate\Support\Facades\Http;
 class NotificationService
 {
     /**
+     * Vérifie si l'utilisateur souhaite recevoir ce type de notification.
+     * Retourne false si la préférence est explicitement désactivée.
+     */
+    private function shouldNotify(User $user, string $preferenceKey): bool
+    {
+        return $user->prefereNotification($preferenceKey);
+    }
+
+    /**
      * Envoie une notification par email
      */
     public function sendEmail(User $user, string $subject, string $content, array $data = []): bool
@@ -110,6 +119,10 @@ class NotificationService
      */
     public function sendStockAlert(User $user, string $productName, int $currentStock, int $threshold): array
     {
+        if (!$this->shouldNotify($user, 'alerte_stock')) {
+            return ['skipped' => true, 'reason' => 'preference_desactivee'];
+        }
+
         $subject = "⚠️ Alert Stock: {$productName}";
         
         $emailContent = "Bonjour {$user->name},\n\n" .
@@ -146,6 +159,10 @@ class NotificationService
      */
     public function sendPeremptionAlert(User $user, string $productName, string $expirationDate, int $daysRemaining): array
     {
+        if (!$this->shouldNotify($user, 'alerte_peremption')) {
+            return ['skipped' => true, 'reason' => 'preference_desactivee'];
+        }
+
         $subject = "⏰ Alert Péremption: {$productName}";
         
         $emailContent = "Bonjour {$user->name},\n\n" .
@@ -164,6 +181,10 @@ class NotificationService
      */
     public function sendNewOrderAlert(User $user, string $orderNumber, string $clientName, float $amount): array
     {
+        if (!$this->shouldNotify($user, 'nouvelle_vente')) {
+            return ['skipped' => true, 'reason' => 'preference_desactivee'];
+        }
+
         $subject = "📦 Nouvelle Commande: {$orderNumber}";
         
         $emailContent = "Bonjour {$user->name},\n\n" .
@@ -183,6 +204,10 @@ class NotificationService
      */
     public function sendPaymentReceived(User $user, string $paymentNumber, float $amount): array
     {
+        if (!$this->shouldNotify($user, 'nouvelle_vente')) {
+            return ['skipped' => true, 'reason' => 'preference_desactivee'];
+        }
+
         $subject = "💰 Paiement Reçu: {$paymentNumber}";
         
         $emailContent = "Bonjour {$user->name},\n\n" .

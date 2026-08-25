@@ -104,24 +104,30 @@ class NotificationChannelController extends Controller
     }
 
     /**
-     * Met à jour les préférences de notification de l'utilisateur
+     * Met à jour les préférences de notification de l'utilisateur.
+     * Reçoit un objet JSON avec les clés : alerte_stock, alerte_peremption,
+     * nouvelle_vente, validation_arrivage, nouveau_message, rapport_quotidien, push_mobile.
      */
     public function updatePreferences(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'notifications_email' => 'boolean',
-            'notifications_sms' => 'boolean',
-            'notifications_stock' => 'boolean',
-            'notifications_ventes' => 'boolean',
-            'notifications_paiements' => 'boolean',
+            'alerte_stock' => 'boolean',
+            'alerte_peremption' => 'boolean',
+            'nouvelle_vente' => 'boolean',
+            'validation_arrivage' => 'boolean',
+            'nouveau_message' => 'boolean',
+            'rapport_quotidien' => 'boolean',
+            'push_mobile' => 'boolean',
         ]);
 
         $user = $request->user();
-        $user->update($validated);
+        $prefs = $user->notification_preferences ?? [];
+        $user->notification_preferences = array_merge($prefs, $validated);
+        $user->save();
 
         return response()->json([
             'message' => 'Préférences de notification mises à jour',
-            'data' => $user,
+            'data' => $user->notification_preferences,
         ]);
     }
 
@@ -132,14 +138,18 @@ class NotificationChannelController extends Controller
     {
         $user = $request->user();
 
+        $defaults = [
+            'alerte_stock' => true,
+            'alerte_peremption' => true,
+            'nouvelle_vente' => true,
+            'validation_arrivage' => true,
+            'nouveau_message' => true,
+            'rapport_quotidien' => true,
+            'push_mobile' => true,
+        ];
+
         return response()->json([
-            'data' => [
-                'notifications_email' => $user->notifications_email ?? true,
-                'notifications_sms' => $user->notifications_sms ?? false,
-                'notifications_stock' => $user->notifications_stock ?? true,
-                'notifications_ventes' => $user->notifications_ventes ?? true,
-                'notifications_paiements' => $user->notifications_paiements ?? true,
-            ],
+            'data' => array_merge($defaults, $user->notification_preferences ?? []),
         ]);
     }
 }

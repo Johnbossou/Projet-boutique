@@ -11,7 +11,7 @@ class User extends Authenticatable
     use HasApiTokens, HasFactory, Notifiable, SoftDeletes;
 
     protected $fillable = [
-        'name', 'email', 'password', 'role', 'telephone', 'est_actif', 'current_boutique_id'
+        'name', 'email', 'password', 'role', 'telephone', 'est_actif', 'current_boutique_id', 'notification_preferences'
     ];
 
     protected $hidden = ['password', 'remember_token'];
@@ -19,7 +19,8 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
         'derniere_connexion' => 'datetime',
-        'est_actif' => 'boolean'
+        'est_actif' => 'boolean',
+        'notification_preferences' => 'array',
     ];
 
     // Relations
@@ -62,6 +63,16 @@ class User extends Authenticatable
     public function estCaissier()
     {
         return $this->role === 'caissier';
+    }
+
+    /**
+     * Vérifie si l'utilisateur a activé un type de notification donné.
+     * Valeur par défaut : true (tout activé).
+     */
+    public function prefereNotification(string $type): bool
+    {
+        $prefs = $this->notification_preferences ?? [];
+        return $prefs[$type] ?? true;
     }
 
     public function getNomCompletAttribute()

@@ -23,15 +23,19 @@ class FacturationService
                 return $factureExistante;
             }
 
-            // Créer la facture
+            // TVA basée sur le taux configuré dans la boutique (défaut 18%)
+            $tauxTva = (float) ($vente->boutique->taux_tva ?? 18);
+            $diviseurTva = 1 + ($tauxTva / 100);
+            $montantHt = $vente->montant_total / $diviseurTva;
+
             $facture = Facture::create([
                 'numero_facture' => 'FAC-' . date('Ymd-His') . '-' . $vente->id,
                 'vente_id' => $vente->id,
                 'client_id' => $vente->client_id,
                 'boutique_id' => $vente->boutique_id,
                 'date_facture' => now(),
-                'montant_ht' => $vente->montant_total / 1.18, // Supposant TVA 18%
-                'montant_tva' => $vente->montant_total - ($vente->montant_total / 1.18),
+                'montant_ht' => $montantHt,
+                'montant_tva' => $vente->montant_total - $montantHt,
                 'montant_ttc' => $vente->montant_total,
                 'statut' => 'paye',
                 'envoyee' => false,
@@ -67,15 +71,19 @@ class FacturationService
                 return $factureExistante;
             }
 
-            // Créer la facture
+            // TVA basée sur le taux configuré dans la boutique (défaut 18%)
+            $tauxTva = (float) ($commande->boutique->taux_tva ?? 18);
+            $diviseurTva = 1 + ($tauxTva / 100);
+            $montantHt = $commande->montant_total / $diviseurTva;
+
             $facture = Facture::create([
                 'numero_facture' => 'FAC-' . date('Ymd-His') . '-' . $commande->id,
                 'commande_client_id' => $commande->id,
                 'client_id' => $commande->client_id,
                 'boutique_id' => $commande->boutique_id,
                 'date_facture' => now(),
-                'montant_ht' => $commande->montant_total / 1.18,
-                'montant_tva' => $commande->montant_total - ($commande->montant_total / 1.18),
+                'montant_ht' => $montantHt,
+                'montant_tva' => $commande->montant_total - $montantHt,
                 'montant_ttc' => $commande->montant_total,
                 'statut' => $commande->estPayee() ? 'paye' : 'en_attente',
                 'envoyee' => false,
