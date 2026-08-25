@@ -11,11 +11,13 @@ async function tryRefreshToken(): Promise<boolean> {
 
   refreshInFlight = (async () => {
     try {
+      const token = localStorage.getItem('sgci_token');
       const res = await fetch(apiUrl('/refresh'), {
         method: 'POST',
         credentials: 'include',
         headers: {
           Accept: 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
       });
 
@@ -39,6 +41,7 @@ async function tryRefreshToken(): Promise<boolean> {
 function clearSessionAndRedirect(): void {
   if (typeof window === 'undefined') return;
   localStorage.removeItem('user_data');
+  localStorage.removeItem('sgci_token');
   window.location.href = '/login?message=session_expired';
 }
 
@@ -55,6 +58,13 @@ export async function apiFetch(
 
   if (options.body && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
+  }
+
+  if (typeof window !== 'undefined') {
+    const token = localStorage.getItem('sgci_token');
+    if (token && !headers.has('Authorization')) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
   }
 
   const response = await fetch(apiUrl(path), {

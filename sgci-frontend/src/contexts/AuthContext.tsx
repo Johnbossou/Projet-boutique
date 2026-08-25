@@ -49,6 +49,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           fetchBoutiqueSettings().catch(() => undefined);
         } catch {
           localStorage.removeItem('user_data');
+          localStorage.removeItem('sgci_token');
           setUser(null);
         }
       } else {
@@ -56,6 +57,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } catch {
       localStorage.removeItem('user_data');
+      localStorage.removeItem('sgci_token');
       setUser(null);
     } finally {
       setIsLoading(false);
@@ -81,8 +83,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error(errorData.message || 'Erreur de connexion');
       }
 
-      const { user: userData } = await response.json();
+      const loginData = await response.json();
+      const { user: userData, token } = loginData;
       localStorage.setItem('user_data', JSON.stringify(userData));
+      if (token) {
+        localStorage.setItem('sgci_token', token);
+      }
       setUser(userData);
       fetchBoutiqueSettings().catch(() => undefined);
       
@@ -94,6 +100,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (error: unknown) {
       localStorage.removeItem('user_data');
+      localStorage.removeItem('sgci_token');
       setUser(null);
       throw new Error(
         error instanceof Error ? error.message : 'Échec de la connexion'
@@ -108,9 +115,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(true);
       await apiFetch('/logout', { method: 'POST' });
     } catch {
-      // Même si le logout distant échoue, on supprime les sessions locales.
     } finally {
       localStorage.removeItem('user_data');
+      localStorage.removeItem('sgci_token');
       setUser(null);
       setIsLoading(false);
       router.push('/login');

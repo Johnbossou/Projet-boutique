@@ -1,5 +1,11 @@
 import { apiUrl } from '@/lib/config';
 
+function getAuthHeaders(): Record<string, string> {
+  if (typeof window === 'undefined') return {};
+  const token = localStorage.getItem('sgci_token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 export async function uploadProduitImage(
   produitId: number,
   file: File
@@ -12,6 +18,7 @@ export async function uploadProduitImage(
     credentials: 'include',
     headers: {
       Accept: 'application/json',
+      ...getAuthHeaders(),
     },
     body: form,
   });
@@ -30,6 +37,7 @@ export async function downloadFacturePdf(venteId: number, filename?: string): Pr
     credentials: 'include',
     headers: {
       Accept: 'application/pdf',
+      ...getAuthHeaders(),
     },
   });
 
