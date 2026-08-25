@@ -9,14 +9,15 @@ class BoutiqueSeeder extends Seeder
 {
     public function run(): void
     {
-        // À exécuter en dernier : crée la boutique par défaut et y rattache
-        // toutes les données créées par les autres seeders.
-
         $owner = DB::table('users')->where('role', 'proprietaire')->orderBy('id')->first();
 
         if (! $owner) {
-            $this->command->warn('⚠ Aucun utilisateur proprietaire : BoutiqueSeeder ignoré.');
+            $this->command->warn('Aucun utilisateur proprietaire : BoutiqueSeeder ignore.');
+            return;
+        }
 
+        $existing = DB::table('boutiques')->where('nom', 'Boutique Centrale Cotonou')->first();
+        if ($existing) {
             return;
         }
 
