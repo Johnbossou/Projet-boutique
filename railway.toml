@@ -1,4 +1,0 @@
-[build]
-builder = "dockerfile"
-dockerfilePath = "sgci-backend/Dockerfile"
-rootDirectory = "sgci-backend"
