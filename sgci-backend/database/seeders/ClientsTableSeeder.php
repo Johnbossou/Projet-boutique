@@ -107,7 +107,7 @@ class ClientsTableSeeder extends Seeder
         ];
 
         foreach ($clients as $client) {
-            Client::create($client);
+            Client::firstOrCreate(['email' => $client['email']], $client);
         }
 
         $this->command->info('✅ 8 clients réalistes créés avec historique d\'achats !');

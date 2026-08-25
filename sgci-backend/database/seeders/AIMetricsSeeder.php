@@ -11,7 +11,10 @@ class AIMetricsSeeder extends Seeder
 {
     public function run()
     {
-        // Données de démonstration pour les métriques IA
+        if (DB::table('ai_metrics')->count() > 0) {
+            return;
+        }
+
         DB::table('ai_metrics')->insert([
             [
                 'type_entrainement' => 'modele_demande',

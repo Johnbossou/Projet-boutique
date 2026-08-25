@@ -18,7 +18,7 @@ class CategoriesTableSeeder extends Seeder
         ];
 
         foreach ($categories as $categorie) {
-            Categorie::create($categorie);
+            Categorie::firstOrCreate(['nom' => $categorie['nom']], $categorie);
         }
     }
 }

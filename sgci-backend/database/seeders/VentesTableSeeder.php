@@ -14,9 +14,9 @@ class VentesTableSeeder extends Seeder
 {
     public function run()
     {
-        // Nettoyer les ventes existantes
-        DB::table('ligne_ventes')->delete();
-        DB::table('ventes')->delete();
+        if (DB::table('ventes')->count() > 0) {
+            return;
+        }
 
         // 🔥 RÉINITIALISER LES STOCKS AVANT DE COMMENCER
         $this->resetStocks();
