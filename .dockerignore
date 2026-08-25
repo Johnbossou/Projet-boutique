@@ -1,0 +1,8 @@
+sgci-frontend/
+sgci-mobile/
+.github/
+deployment/
+.railway/
+node_modules/
+*.md
+!sgci-backend/README.md
