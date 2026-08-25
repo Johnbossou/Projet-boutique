@@ -142,6 +142,10 @@ class NotificationService
      */
     public function sendStockRupture(User $user, string $productName): array
     {
+        if (!$this->shouldNotify($user, 'alerte_stock')) {
+            return ['skipped' => true, 'reason' => 'preference_desactivee'];
+        }
+
         $subject = "🚨 Rupture Stock: {$productName}";
         
         $emailContent = "Bonjour {$user->name},\n\n" .
@@ -250,6 +254,10 @@ class NotificationService
         
         if (!$user) {
             return ['email' => false, 'sms' => false];
+        }
+
+        if (!$this->shouldNotify($user, $notification->type ?? 'systeme')) {
+            return ['skipped' => true, 'reason' => 'preference_desactivee'];
         }
 
         $subject = $notification->title;

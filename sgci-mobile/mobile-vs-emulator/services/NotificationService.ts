@@ -41,7 +41,6 @@ class NotificationService {
 
       // Get push token
       this.pushToken = (await Notifications.getExpoPushTokenAsync()).data;
-      console.log('Push token:', this.pushToken);
     } else {
       console.warn('Must use physical device for push notifications');
     }

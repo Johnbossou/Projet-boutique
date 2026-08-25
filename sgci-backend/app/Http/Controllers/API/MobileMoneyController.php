@@ -151,13 +151,15 @@ class MobileMoneyController extends Controller
     {
         $secret = (string) config('services.mobile_money.callback_secret');
 
-        if ($secret !== '') {
-            $signature = $request->header('X-SGCI-Signature');
-            $expected = hash_hmac('sha256', $request->getContent(), $secret);
+        if ($secret === '') {
+            return response()->json(['message' => 'Callback non configuré — secret manquant'], 501);
+        }
 
-            if (!is_string($signature) || !hash_equals($expected, $signature)) {
-                return response()->json(['message' => 'Signature invalide'], 401);
-            }
+        $signature = $request->header('X-SGCI-Signature');
+        $expected = hash_hmac('sha256', $request->getContent(), $secret);
+
+        if (!is_string($signature) || !hash_equals($expected, $signature)) {
+            return response()->json(['message' => 'Signature invalide'], 401);
         }
 
         $transactionId = $request->input('transaction_id') ?? $request->input('payment_id');

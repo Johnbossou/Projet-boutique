@@ -13,7 +13,10 @@ class EnsureUserIsActive
         $user = $request->user();
 
         if ($user && !$user->est_actif) {
-            $user->currentAccessToken()?->delete();
+            $token = $user->currentAccessToken();
+            if ($token && method_exists($token, 'delete')) {
+                $token->delete();
+            }
 
             return response()->json([
                 'message' => 'Compte désactivé. Contactez le gérant.',

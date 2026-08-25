@@ -24,7 +24,7 @@ class FacturationService
             }
 
             // TVA basée sur le taux configuré dans la boutique (défaut 18%)
-            $tauxTva = (float) ($vente->boutique->taux_tva ?? 18);
+            $tauxTva = (float) ($vente->boutique?->taux_tva ?? 18);
             $diviseurTva = 1 + ($tauxTva / 100);
             $montantHt = $vente->montant_total / $diviseurTva;
 
@@ -72,7 +72,7 @@ class FacturationService
             }
 
             // TVA basée sur le taux configuré dans la boutique (défaut 18%)
-            $tauxTva = (float) ($commande->boutique->taux_tva ?? 18);
+            $tauxTva = (float) ($commande->boutique?->taux_tva ?? 18);
             $diviseurTva = 1 + ($tauxTva / 100);
             $montantHt = $commande->montant_total / $diviseurTva;
 

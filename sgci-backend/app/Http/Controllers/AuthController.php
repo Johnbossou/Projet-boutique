@@ -44,7 +44,7 @@ class AuthController extends Controller
             'email' => $validated['email'],
             'telephone' => $validated['telephone'] ?? null,
             'password' => Hash::make($validated['password']),
-            'role' => 'proprietaire', // Par défaut, le créateur est propriétaire
+            'role' => 'proprietaire',
             'est_actif' => true,
             'derniere_connexion' => now(),
         ]);

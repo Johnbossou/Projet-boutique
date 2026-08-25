@@ -42,7 +42,6 @@ class Controller extends BaseController
         if ($e instanceof ModelNotFoundException) {
             return response()->json([
                 'message' => 'Ressource non trouvée',
-                'error' => $e->getMessage(),
             ], 404);
         }
 
@@ -56,14 +55,12 @@ class Controller extends BaseController
         if ($e instanceof AuthenticationException) {
             return response()->json([
                 'message' => 'Non authentifié',
-                'error' => $e->getMessage(),
             ], 401);
         }
 
         if ($e instanceof AuthorizationException) {
             return response()->json([
                 'message' => 'Accès non autorisé',
-                'error' => $e->getMessage(),
             ], 403);
         }
 

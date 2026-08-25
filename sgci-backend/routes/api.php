@@ -210,7 +210,7 @@ Route::middleware(['auth:sanctum', 'user.active'])->group(function () {
         Route::get('/status/{paymentId}', [MobileMoneyController::class, 'checkStatus']);
         Route::post('/cancel/{paymentId}', [MobileMoneyController::class, 'cancelPayment'])->middleware('throttle:10,1');
         Route::post('/detect-provider', [MobileMoneyController::class, 'detectProvider']);
-        Route::post('/callback', [MobileMoneyController::class, 'callback'])->name('mobile-money.callback')->withoutMiddleware(['auth:sanctum', 'user.active']);
+        Route::post('/callback', [MobileMoneyController::class, 'callback'])->name('mobile-money.callback')->withoutMiddleware(['auth:sanctum', 'user.active'])->middleware('throttle:30,1');
     });
 
     // Facturation automatique
