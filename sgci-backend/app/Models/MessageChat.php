@@ -23,6 +23,14 @@ class MessageChat extends Model
     ];
 
     /**
+     * Indique si le message a été modifié après sa création.
+     */
+    public function estModifie(): bool
+    {
+        return $this->updated_at && $this->updated_at->gt($this->created_at);
+    }
+
+    /**
      * Relation avec la conversation
      */
     public function conversation()

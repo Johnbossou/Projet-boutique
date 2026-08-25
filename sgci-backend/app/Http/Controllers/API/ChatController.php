@@ -253,4 +253,77 @@ class ChatController extends Controller
             'message' => 'Conversation supprimée avec succès',
         ]);
     }
+
+    /**
+     * Modifie un message (auteur uniquement, dans les 15 minutes)
+     */
+    public function editMessage(Request $request, ConversationChat $conversation, MessageChat $message): JsonResponse
+    {
+        if ($conversation->boutique_id !== $request->user()->current_boutique_id) {
+            return response()->json(['message' => 'Non autorisé'], 403);
+        }
+
+        if (!$conversation->estParticipant($request->user())) {
+            return response()->json(['message' => 'Vous n\'êtes pas participant'], 403);
+        }
+
+        if ($message->user_id !== $request->user()->id) {
+            return response()->json(['message' => 'Vous ne pouvez modifier que vos propres messages'], 403);
+        }
+
+        if ($message->type === 'systeme') {
+            return response()->json(['message' => 'Impossible de modifier un message système'], 400);
+        }
+
+        // Limite de 15 minutes pour éditer
+        if ($message->created_at->diffInMinutes(now()) > 15) {
+            return response()->json(['message' => 'Délai de 15 minutes dépassé pour l\'édition'], 400);
+        }
+
+        $validated = $request->validate([
+            'message' => 'required|string|max:5000',
+        ]);
+
+        $message->update([
+            'message' => $validated['message'],
+        ]);
+
+        return response()->json([
+            'message' => 'Message modifié',
+            'data' => $message->load('user'),
+            'modifie' => true,
+        ]);
+    }
+
+    /**
+     * Supprime un message (auteur ou admin de la conversation)
+     */
+    public function deleteMessage(Request $request, ConversationChat $conversation, MessageChat $message): JsonResponse
+    {
+        if ($conversation->boutique_id !== $request->user()->current_boutique_id) {
+            return response()->json(['message' => 'Non autorisé'], 403);
+        }
+
+        if (!$conversation->estParticipant($request->user())) {
+            return response()->json(['message' => 'Vous n\'êtes pas participant'], 403);
+        }
+
+        $estAuteur = $message->user_id === $request->user()->id;
+        $estAdmin = $conversation->participants()
+            ->where('user_id', $request->user()->id)
+            ->where('role', 'admin')
+            ->exists();
+
+        if (!$estAuteur && !$estAdmin) {
+            return response()->json(['message' => 'Non autorisé à supprimer ce message'], 403);
+        }
+
+        if ($message->type === 'systeme') {
+            return response()->json(['message' => 'Impossible de supprimer un message système'], 400);
+        }
+
+        $message->delete();
+
+        return response()->json(['message' => 'Message supprimé']);
+    }
 }

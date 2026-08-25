@@ -236,6 +236,8 @@ Route::middleware(['auth:sanctum', 'user.active'])->group(function () {
         Route::post('/', [ChatController::class, 'store'])->middleware('throttle:10,1');
         Route::get('/{conversation}', [ChatController::class, 'show']);
         Route::post('/{conversation}/message', [ChatController::class, 'sendMessage'])->middleware('throttle:30,1');
+        Route::put('/{conversation}/message/{message}', [ChatController::class, 'editMessage'])->middleware('throttle:10,1');
+        Route::delete('/{conversation}/message/{message}', [ChatController::class, 'deleteMessage'])->middleware('throttle:10,1');
         Route::post('/{conversation}/participants', [ChatController::class, 'addParticipant'])->middleware('throttle:10,1');
         Route::delete('/{conversation}/participants/{userId}', [ChatController::class, 'removeParticipant'])->middleware('throttle:10,1');
         Route::delete('/{conversation}', [ChatController::class, 'destroy'])->middleware('throttle:5,1');
