@@ -30,19 +30,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   const getToken = useCallback(async (): Promise<string | null> => {
-    try {
-      return localStorage.getItem('auth_token');
-    } catch {
-      return null;
-    }
+    return null;
   }, []);
 
   const checkAuth = useCallback(async () => {
     try {
-      const token = localStorage.getItem('auth_token');
       const userData = localStorage.getItem('user_data');
 
-      if (token && userData) {
+      if (userData) {
         try {
           const response = await apiFetch('/me');
           if (!response.ok) {
@@ -50,9 +45,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
           const data = await response.json();
           setUser(data.user);
+          localStorage.setItem('user_data', JSON.stringify(data.user));
           fetchBoutiqueSettings().catch(() => undefined);
         } catch {
-          localStorage.removeItem('auth_token');
           localStorage.removeItem('user_data');
           setUser(null);
         }
@@ -60,7 +55,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(null);
       }
     } catch {
-      localStorage.removeItem('auth_token');
       localStorage.removeItem('user_data');
       setUser(null);
     } finally {
@@ -87,12 +81,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error(errorData.message || 'Erreur de connexion');
       }
 
-      const { token, user: userData, expires_at } = await response.json();
-      localStorage.setItem('auth_token', token);
+      const { user: userData } = await response.json();
       localStorage.setItem('user_data', JSON.stringify(userData));
-      if (expires_at) {
-        localStorage.setItem('token_expires_at', expires_at);
-      }
       setUser(userData);
       fetchBoutiqueSettings().catch(() => undefined);
       
@@ -103,7 +93,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         router.push('/dashboard');
       }
     } catch (error: unknown) {
-      localStorage.removeItem('auth_token');
       localStorage.removeItem('user_data');
       setUser(null);
       throw new Error(
@@ -121,7 +110,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // Même si le logout distant échoue, on supprime les sessions locales.
     } finally {
-      localStorage.removeItem('auth_token');
       localStorage.removeItem('user_data');
       setUser(null);
       setIsLoading(false);
@@ -145,7 +133,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       const data = await response.json();
-      // Update user data with new boutique info
       setUser((prevUser) => {
         if (!prevUser) return null;
         return {

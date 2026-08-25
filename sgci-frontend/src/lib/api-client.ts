@@ -1,10 +1,5 @@
 import { apiUrl } from './config';
 
-export async function getAuthToken(): Promise<string | null> {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('auth_token');
-}
-
 let refreshInFlight: Promise<boolean> | null = null;
 
 async function tryRefreshToken(): Promise<boolean> {
@@ -15,27 +10,18 @@ async function tryRefreshToken(): Promise<boolean> {
   }
 
   refreshInFlight = (async () => {
-    const token = localStorage.getItem('auth_token');
-    if (!token) return false;
-
     try {
       const res = await fetch(apiUrl('/refresh'), {
         method: 'POST',
+        credentials: 'include',
         headers: {
           Accept: 'application/json',
-          Authorization: `Bearer ${token}`,
         },
       });
 
       if (!res.ok) return false;
 
       const data = await res.json();
-      if (data.token) {
-        localStorage.setItem('auth_token', data.token);
-      }
-      if (data.expires_at) {
-        localStorage.setItem('token_expires_at', data.expires_at);
-      }
       if (data.user) {
         localStorage.setItem('user_data', JSON.stringify(data.user));
       }
@@ -52,8 +38,6 @@ async function tryRefreshToken(): Promise<boolean> {
 
 function clearSessionAndRedirect(): void {
   if (typeof window === 'undefined') return;
-  localStorage.removeItem('auth_token');
-  localStorage.removeItem('token_expires_at');
   localStorage.removeItem('user_data');
   window.location.href = '/login?message=session_expired';
 }
@@ -73,14 +57,11 @@ export async function apiFetch(
     headers.set('Content-Type', 'application/json');
   }
 
-  if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('auth_token');
-    if (token) {
-      headers.set('Authorization', `Bearer ${token}`);
-    }
-  }
-
-  const response = await fetch(apiUrl(path), { ...options, headers });
+  const response = await fetch(apiUrl(path), {
+    ...options,
+    headers,
+    credentials: 'include',
+  });
 
   if (
     response.status === 401 &&

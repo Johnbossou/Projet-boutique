@@ -14,5 +14,5 @@ return [
     /*
     | Durée de validité des tokens Sanctum (minutes).
     */
-    'token_ttl_minutes' => (int) env('SGCI_TOKEN_TTL_MINUTES', 10080),
+    'token_ttl_minutes' => (int) env('SGCI_TOKEN_TTL_MINUTES', 120),
 ];

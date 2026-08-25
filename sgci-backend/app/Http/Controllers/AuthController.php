@@ -130,7 +130,7 @@ class AuthController extends Controller
 
             $tokenData = $this->issueToken($user);
 
-            return response()->json([
+            $response = response()->json([
                 'token' => $tokenData['token'],
                 'expires_at' => $tokenData['expires_at'],
                 'user' => [
@@ -142,6 +142,12 @@ class AuthController extends Controller
                     'two_factor_enabled' => $user->two_factor_enabled,
                 ]
             ]);
+
+            $response->headers->setCookie(
+                cookie()->make('sgci_token', $tokenData['token'], $tokenData['ttl_minutes'], '/', null, true, true, false, 'lax')
+            );
+
+            return $response;
         }
 
         throw ValidationException::withMessages([
@@ -158,7 +164,12 @@ class AuthController extends Controller
         
         $user->currentAccessToken()->delete();
 
-        return response()->json(['message' => 'Déconnexion réussie']);
+        $response = response()->json(['message' => 'Déconnexion réussie']);
+        $response->headers->setCookie(
+            cookie()->forget('sgci_token', '/', null, true, true, false, 'lax')
+        );
+
+        return $response;
     }
 
     public function refresh(Request $request)
@@ -167,11 +178,17 @@ class AuthController extends Controller
         $request->user()->currentAccessToken()->delete();
         $tokenData = $this->issueToken($user);
 
-        return response()->json([
+        $response = response()->json([
             'token' => $tokenData['token'],
             'expires_at' => $tokenData['expires_at'],
             'user' => $this->formatUser($user),
         ]);
+
+        $response->headers->setCookie(
+            cookie()->make('sgci_token', $tokenData['token'], $tokenData['ttl_minutes'], '/', null, true, true, false, 'lax')
+        );
+
+        return $response;
     }
 
     public function me(Request $request)
@@ -352,7 +369,17 @@ class AuthController extends Controller
 
     public function disableTwoFactor(Request $request)
     {
+        $request->validate([
+            'password' => 'required',
+        ]);
+
         $user = $request->user();
+
+        if (!Hash::check($request->password, $user->password)) {
+            throw ValidationException::withMessages([
+                'password' => ['Mot de passe incorrect.'],
+            ]);
+        }
 
         $this->twoFactorService->disableTwoFactor($user);
 
@@ -396,6 +423,7 @@ class AuthController extends Controller
         return [
             'token' => $accessToken->plainTextToken,
             'expires_at' => $expiresAt->toIso8601String(),
+            'ttl_minutes' => $ttlMinutes,
         ];
     }
 }

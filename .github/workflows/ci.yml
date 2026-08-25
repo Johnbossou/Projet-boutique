@@ -98,3 +98,19 @@ jobs:
 
       - name: Type check
         run: npx tsc --noEmit
+
+  deploy:
+    name: Deploy
+    needs: [backend-tests, frontend-tests, mobile-typecheck]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy backend
+        run: echo "Configure your deployment here (SSH, Docker, Laravel Forge, etc.)"
+
+      - name: Deploy frontend
+        run: echo "Configure your deployment here (Vercel, Netlify, etc.)"

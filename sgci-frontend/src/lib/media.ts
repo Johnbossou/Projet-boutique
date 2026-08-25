@@ -1,19 +1,17 @@
 import { apiUrl } from '@/lib/config';
-import { getAuthToken } from '@/lib/api-client';
 
 export async function uploadProduitImage(
   produitId: number,
   file: File
 ): Promise<{ image_url: string }> {
-  const token = await getAuthToken();
   const form = new FormData();
   form.append('image', file);
 
   const response = await fetch(apiUrl(`/produits/${produitId}/image`), {
     method: 'POST',
+    credentials: 'include',
     headers: {
       Accept: 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: form,
   });
@@ -28,11 +26,10 @@ export async function uploadProduitImage(
 }
 
 export async function downloadFacturePdf(venteId: number, filename?: string): Promise<void> {
-  const token = await getAuthToken();
   const response = await fetch(apiUrl(`/ventes/${venteId}/facture/pdf`), {
+    credentials: 'include',
     headers: {
       Accept: 'application/pdf',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
   });
 

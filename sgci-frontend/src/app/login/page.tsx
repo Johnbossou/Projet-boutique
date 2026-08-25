@@ -57,12 +57,8 @@ export default function LoginPage() {
           throw new Error(data.message || 'Erreur de connexion');
         }
 
-        // Stocker le token et les données utilisateur
-        localStorage.setItem('auth_token', data.token);
+        // Stocker les données utilisateur (le token est dans un httpOnly cookie)
         localStorage.setItem('user_data', JSON.stringify(data.user));
-        if (data.expires_at) {
-          localStorage.setItem('token_expires_at', data.expires_at);
-        }
 
         toast.success('Connexion réussie');
         
