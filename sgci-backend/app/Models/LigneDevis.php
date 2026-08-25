@@ -9,6 +9,8 @@ class LigneDevis extends Model
 {
     use HasFactory;
 
+    protected $table = 'lignes_devis';
+
     protected $fillable = [
         'devis_id',
         'produit_id',

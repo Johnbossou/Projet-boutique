@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
+use App\Models\CommandeClient;
 use App\Models\Devis;
+use App\Models\LigneCommandeClient;
 use App\Models\LigneDevis;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;

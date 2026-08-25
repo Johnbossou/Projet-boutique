@@ -9,6 +9,8 @@ class MessageChat extends Model
 {
     use HasFactory;
 
+    protected $table = 'messages_chat';
+
     protected $fillable = [
         'conversation_id',
         'user_id',

@@ -24,6 +24,7 @@ import {
 } from "react-native";
 
 interface LigneInventaire {
+  id: number;
   produit_id: number;
   produit_nom?: string;
   quantite_systeme: number;
@@ -109,15 +110,15 @@ export default function InventaireScreen() {
     setSelected(inv);
   };
 
-  const setLigneQte = (produitId: number, val: string) => {
-    setLignes((prev) => ({ ...prev, [produitId]: { quantite_physique: val } }));
+  const setLigneQte = (ligneId: number, val: string) => {
+    setLignes((prev) => ({ ...prev, [ligneId]: { quantite_physique: val } }));
   };
 
   const soumettre = async () => {
     if (!selected) return;
     const lignesPayload = selected.lignes.map((l) => ({
-      produit_id: l.produit_id,
-      quantite_physique: parseInt(lignes[l.produit_id]?.quantite_physique || "0", 10),
+      inventaire_ligne_id: l.id,
+      quantite_physique: parseInt(lignes[l.id]?.quantite_physique || "0", 10),
     }));
     if (lignesPayload.some((l) => isNaN(l.quantite_physique) || l.quantite_physique < 0)) {
       Alert.alert("Erreur", "Veuillez remplir toutes les quantités physiques");
@@ -191,7 +192,7 @@ export default function InventaireScreen() {
         <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
           {selected.lignes?.map((ligne) => {
             const isEnCours = selected.statut === "en_cours";
-            const qtePhysique = lignes[ligne.produit_id]?.quantite_physique;
+            const qtePhysique = lignes[ligne.id]?.quantite_physique;
             const ecart =
               ligne.ecart ??
               (qtePhysique != null
@@ -203,7 +204,7 @@ export default function InventaireScreen() {
                 : ecart;
 
             return (
-              <View key={ligne.produit_id} style={styles.card}>
+              <View key={ligne.id} style={styles.card}>
                 <Text style={styles.cardTitle}>
                   {ligne.produit_nom ?? `Produit #${ligne.produit_id}`}
                 </Text>
@@ -217,7 +218,7 @@ export default function InventaireScreen() {
                     <TextInput
                       style={styles.input}
                       value={qtePhysique ?? ""}
-                      onChangeText={(v) => setLigneQte(ligne.produit_id, v)}
+                      onChangeText={(v) => setLigneQte(ligne.id, v)}
                       keyboardType="number-pad"
                       placeholderTextColor="#64748b"
                       placeholder="0"

@@ -24,7 +24,7 @@ return new class extends Migration
 
         Schema::create('retour_vente_lignes', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('retour_vente_id')->constrained()->onDelete('cascade');
+            $table->foreignId('retour_vente_id')->constrained('retours_vente')->onDelete('cascade');
             $table->foreignId('ligne_vente_id')->constrained()->onDelete('cascade');
             $table->foreignId('produit_id')->constrained()->onDelete('cascade');
             $table->integer('quantite_retournee');

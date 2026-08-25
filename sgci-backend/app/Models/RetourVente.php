@@ -9,6 +9,8 @@ class RetourVente extends Model
 {
     use HasFactory;
 
+    protected $table = 'retours_vente';
+
     protected $fillable = [
         'vente_id',
         'boutique_id',

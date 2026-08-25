@@ -83,10 +83,10 @@ class AuditLogController extends Controller
                 ->orderByDesc('count')
                 ->limit(10)
                 ->get(),
-            'top_users' => \App\Models\AuditLog::with('user')
+            'top_users' => (clone $query)->clone()
+                ->with('user')
                 ->select('user_id')
                 ->selectRaw('user_id, COUNT(*) as count')
-                ->with('user')
                 ->groupBy('user_id')
                 ->orderByDesc('count')
                 ->limit(10)

@@ -331,8 +331,8 @@ Route::middleware(['auth:sanctum', 'user.active'])->group(function () {
 
     Route::prefix('audit-logs')->group(function () {
         Route::get('/', [AuditLogController::class, 'index'])->middleware('role.gerant');
-        Route::get('/{id}', [AuditLogController::class, 'show'])->middleware('role.gerant');
         Route::get('/stats', [AuditLogController::class, 'stats'])->middleware('role.gerant');
         Route::get('/export', [AuditLogController::class, 'export'])->middleware('role.gerant');
+        Route::get('/{id}', [AuditLogController::class, 'show'])->middleware('role.gerant');
     });
 });
