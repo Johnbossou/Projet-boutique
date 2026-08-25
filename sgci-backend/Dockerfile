@@ -18,7 +18,7 @@ RUN chown -R www-data:www-data storage bootstrap/cache && \
 
 EXPOSE 8000
 
-COPY docker/start.sh /usr/local/bin/start.sh
+COPY docker-start.sh /usr/local/bin/start.sh
 RUN chmod +x /usr/local/bin/start.sh
 
 CMD ["/usr/local/bin/start.sh"]
