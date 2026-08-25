@@ -27,6 +27,8 @@ const MAPPING = {
   'brain.fill': 'psychology',
   'gearshape.fill': 'settings',
   'box.truck.fill': 'local-shipping',
+  'arrow.triangle.2.circlepath': 'autorenew',
+  'clipboard.list.fill': 'fact-check',
 } as IconMapping;
 
 /**

@@ -13,6 +13,10 @@ import {
   Store,
   TrendingUp,
   History,
+  RotateCcw,
+  ClipboardList,
+  ScrollText,
+  FileText,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { NotificationBell } from '@/components/NotificationBell';
@@ -28,10 +32,14 @@ const NAV = [
   { href: '/arrivage', label: 'Arrivage', icon: TrendingUp },
   { href: '/caisse', label: 'Caisse', icon: ShoppingCart },
   { href: '/clients', label: 'Clients', icon: Users },
+  { href: '/retours', label: 'Retours', icon: RotateCcw, role: 'gerant' },
+  { href: '/inventaire', label: 'Inventaire', icon: ClipboardList, role: 'gerant' },
+  { href: '/devis', label: 'Devis', icon: FileText, role: 'gerant' },
   { href: '/messages', label: 'Messages', icon: MessageCircle },
   { href: '/analytics', label: 'Analytics', icon: BarChart3 },
   { href: '/ia', label: 'Assistant stock', icon: Brain },
   { href: '/parametres', label: 'Paramètres', icon: Settings },
+  { href: '/parametres/audit-logs', label: 'Journal d\'audit', icon: ScrollText, role: 'gerant' },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -56,6 +64,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {NAV.map((item) => {
             // Masquer les items réservés aux propriétaires si l'utilisateur n'est pas propriétaire
             if (item.role === 'proprietaire' && user?.role !== 'proprietaire') {
+              return null;
+            }
+            if (item.role === 'gerant' && user?.role !== 'gerant' && user?.role !== 'proprietaire') {
               return null;
             }
 

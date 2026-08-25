@@ -88,6 +88,22 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="retours"
+        options={{
+          title: 'Retours',
+          href: peutGerer ? undefined : null,
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="arrow.triangle.2.circlepath" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="inventaire"
+        options={{
+          title: 'Inventaire',
+          href: peutGerer ? undefined : null,
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="clipboard.list.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="arrivage"
         options={{
           title: 'Arrivage',
