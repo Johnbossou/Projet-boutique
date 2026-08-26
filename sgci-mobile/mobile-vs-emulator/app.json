@@ -21,7 +21,11 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.sgci.benin"
+      "package": "com.sgci.benin",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "output": "static",
@@ -64,8 +68,10 @@
     },
     "extra": {
       "eas": {
-        "projectId": "YOUR_EAS_PROJECT_ID"
-      }
-    }
+        "projectId": "f3e76043-bd8d-4247-a7f6-aa2ce9f9ebbf"
+      },
+      "router": {}
+    },
+    "owner": "josuebossou"
   }
 }
