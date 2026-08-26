@@ -16,7 +16,10 @@ class FacturePdfService
 
         return [
             'vente' => $vente,
+            'facture' => $vente,
             'boutique' => $boutique,
+            'client' => $vente->client,
+            'lignes' => $vente->ligneVentes,
         ];
     }
 

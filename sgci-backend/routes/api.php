@@ -270,14 +270,14 @@ Route::middleware(['auth:sanctum', 'user.active', 'boutique.scope'])->group(func
     Route::prefix('fidelite')->group(function () {
         Route::get('/', [FideliteController::class, 'index']);
         Route::post('/', [FideliteController::class, 'store'])->middleware('role.gerant')->middleware('throttle:10,1');
-        Route::get('/{programme}', [FideliteController::class, 'show']);
-        Route::put('/{programme}', [FideliteController::class, 'update'])->middleware('role.gerant')->middleware('throttle:20,1');
-        Route::delete('/{programme}', [FideliteController::class, 'destroy'])->middleware('role.gerant')->middleware('throttle:5,1');
         Route::post('/inscrire-client', [FideliteController::class, 'inscrireClient'])->middleware('throttle:10,1');
         Route::get('/points-client', [FideliteController::class, 'pointsClient']);
         Route::post('/recompenses', [FideliteController::class, 'storeRecompense'])->middleware('role.gerant')->middleware('throttle:10,1');
         Route::post('/reclamer-recompense', [FideliteController::class, 'reclamerRecompense'])->middleware('throttle:10,1');
         Route::get('/statistiques', [FideliteController::class, 'statistiques']);
+        Route::get('/{programme}', [FideliteController::class, 'show']);
+        Route::put('/{programme}', [FideliteController::class, 'update'])->middleware('role.gerant')->middleware('throttle:20,1');
+        Route::delete('/{programme}', [FideliteController::class, 'destroy'])->middleware('role.gerant')->middleware('throttle:5,1');
     });
 
     Route::prefix('fcm')->group(function () {
