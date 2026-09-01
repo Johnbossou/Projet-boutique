@@ -25,4 +25,15 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->report(function (\Throwable $e) {
             fwrite(STDERR, "[EXCEPTION] " . get_class($e) . ": " . $e->getMessage() . "\n" . $e->getTraceAsString() . "\n");
         });
+        $exceptions->render(function (\Throwable $e, $request) {
+            if ($request->is('api/*')) {
+                return response()->json([
+                    'debug' => [
+                        'class' => get_class($e),
+                        'message' => $e->getMessage(),
+                        'file' => $e->getFile() . ':' . $e->getLine(),
+                    ],
+                ], 500);
+            }
+        });
     })->create();
