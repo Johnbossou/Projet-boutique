@@ -22,5 +22,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->report(function (\Throwable $e) {
+            fwrite(STDERR, "[EXCEPTION] " . get_class($e) . ": " . $e->getMessage() . "\n" . $e->getTraceAsString() . "\n");
+        });
     })->create();
