@@ -8,6 +8,8 @@ class TransfertStock extends Model
 {
     use HasFactory;
 
+    protected $table = 'transferts_stocks';
+
     protected $fillable = [
         'numero_transfert',
         'boutique_source_id',
