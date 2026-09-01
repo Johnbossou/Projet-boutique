@@ -189,14 +189,9 @@ class BoutiqueController extends Controller
             return response()->json(['message' => 'Accès non autorisé'], 403);
         }
 
-        try {
-            $membres = $boutique->users()
-                ->withPivot('role_dans_boutique')
-                ->get(['users.id', 'users.name', 'users.email', 'users.telephone', 'users.role', 'users.est_actif', 'users.derniere_connexion', 'users.created_at']);
-        } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::error('equipe error', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
-            throw $e;
-        }
+        $membres = $boutique->users()
+            ->withPivot('role_dans_boutique')
+            ->get(['users.id', 'users.name', 'users.email', 'users.telephone', 'users.role', 'users.est_actif', 'users.derniere_connexion', 'users.created_at']);
 
         $equipe = $membres->map(function ($membre) {
             return [
