@@ -20,7 +20,7 @@ class MouvementStock extends Model
         'raison', // 'arrivage', 'vente', 'ajustement', 'retour', 'casse'
         'reference_bon', // Numéro de bon de commande/arrivage
         'user_id',
-        'statut', // 'en_attente', 'accepté', 'rejeté'
+        'statut', // 'en_attente', 'accepte', 'rejete'
         'notes',
         'quantite_avant',
         'quantite_apres',
@@ -54,7 +54,7 @@ class MouvementStock extends Model
     // ==================== SCOPES ====================
     public function scopeEntrees($query)
     {
-        return $query->where('type', 'entrée');
+        return $query->where('type', 'entree');
     }
 
     public function scopeSorties($query)
@@ -74,7 +74,7 @@ class MouvementStock extends Model
 
     public function scopeAcceptes($query)
     {
-        return $query->where('statut', 'accepté');
+        return $query->where('statut', 'accepte');
     }
 
     public function scopeEnAttente($query)
@@ -84,7 +84,7 @@ class MouvementStock extends Model
 
     public function scopeRejetes($query)
     {
-        return $query->where('statut', 'rejeté');
+        return $query->where('statut', 'rejete');
     }
 
     public function scopeParPeriode($query, $dateDebut, $dateFin)
@@ -106,7 +106,7 @@ class MouvementStock extends Model
     public function getLibelleTypeAttribute()
     {
         $types = [
-            'entrée' => 'Entrée',
+            'entree' => 'Entrée',
             'sortie' => 'Sortie',
         ];
         return $types[$this->type] ?? $this->type;
@@ -128,8 +128,8 @@ class MouvementStock extends Model
     {
         $statuts = [
             'en_attente' => 'En attente',
-            'accepté' => 'Accepté',
-            'rejeté' => 'Rejeté',
+            'accepte' => 'Accepté',
+            'rejete' => 'Rejeté',
         ];
         return $statuts[$this->statut] ?? $this->statut;
     }

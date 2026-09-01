@@ -123,7 +123,7 @@ class MouvementStockController extends Controller
         DB::beginTransaction();
         try {
             // Calculer la nouvelle quantité
-            $quantiteApres = $mouvement->type === 'entrée'
+            $quantiteApres = $mouvement->type === 'entree'
                 ? $produit->quantite_stock + $mouvement->quantite
                 : $produit->quantite_stock - $mouvement->quantite;
 
@@ -142,7 +142,7 @@ class MouvementStockController extends Controller
 
             // Mettre à jour le mouvement comme accepté
             $mouvement->update([
-                'statut' => 'accepté',
+                'statut' => 'accepte',
                 'quantite_apres' => $quantiteApres,
             ]);
 
@@ -179,8 +179,8 @@ class MouvementStockController extends Controller
         ]);
 
         $mouvement->update([
-            'statut' => 'rejeté',
-            'notes' => 'REJETÉ: ' . $validated['raison_rejet'],
+            'statut' => 'rejete',
+            'notes' => 'REJETE: ' . $validated['raison_rejet'],
         ]);
 
         return response()->json([
@@ -216,7 +216,7 @@ class MouvementStockController extends Controller
         $mouvements = $query->get();
 
         return response()->json([
-            'total_entrees' => $mouvements->where('type', 'entrée')->sum('quantite'),
+            'total_entrees' => $mouvements->where('type', 'entree')->sum('quantite'),
             'total_sorties' => $mouvements->where('type', 'sortie')->sum('quantite'),
             'arrivages' => $mouvements->where('raison', 'arrivage')->count(),
             'ventes' => $mouvements->where('raison', 'vente')->count(),

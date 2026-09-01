@@ -173,7 +173,7 @@ class InventaireController extends Controller
                             'reference_bon' => (string) $inventaire->id,
                             'notes' => 'Ajustement inventaire #' . $inventaire->reference . ' — écart de ' . $ligne->ecart,
                             'user_id' => $request->user()->id,
-                            'statut' => 'accepté',
+                            'statut' => 'accepte',
                             'quantite_avant' => $quantiteAvant,
                             'quantite_apres' => $quantiteApres,
                             'boutique_id' => $inventaire->boutique_id,

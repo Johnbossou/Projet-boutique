@@ -168,7 +168,7 @@ class RetourVenteController extends Controller
                         'reference_bon' => (string) $retour->id,
                         'notes' => 'Retour vente #' . $retour->vente_id . ' — ' . $retour->motif,
                         'user_id' => $request->user()->id,
-                        'statut' => 'accepté',
+                        'statut' => 'accepte',
                         'quantite_avant' => $quantiteAvant,
                         'quantite_apres' => $quantiteApres,
                         'boutique_id' => $retour->boutique_id,
