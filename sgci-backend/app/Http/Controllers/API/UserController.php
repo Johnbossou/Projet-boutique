@@ -192,6 +192,105 @@ class UserController extends Controller
         return response()->json(['message' => 'Utilisateur retiré de la boutique']);
     }
 
+    /**
+     * Invite un utilisateur par email (créé inactif, rattaché à la boutique courante s'il y a lieu).
+     */
+    public function invite(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'email' => 'required|email',
+            'role' => 'nullable|in:gerant,caissier',
+        ]);
+
+        $role = $validated['role'] ?? 'caissier';
+
+        // Si l'utilisateur existe déjà, on le rattache simplement à une boutique éligible.
+        $existant = User::where('email', $validated['email'])->first();
+
+        if ($existant) {
+            $boutiqueId = $request->user()->current_boutique_id;
+            if ($boutiqueId && $request->user()->aAccesBoutique($boutiqueId)) {
+                $existant->boutiques()->syncWithoutDetaching([$boutiqueId => ['role_dans_boutique' => $role]]);
+            }
+            return response()->json(['message' => 'Utilisateur déjà présent, rattaché à la boutique'], 200);
+        }
+
+        $user = User::create([
+            'name' => $validated['email'],
+            'email' => $validated['email'],
+            'password' => Hash::make(\Illuminate\Support\Str::random(32)),
+            'role' => $role,
+            'est_actif' => false,
+        ]);
+
+        return response()->json([
+            'message' => 'Invitation envoyée',
+            'user' => $this->formatUser($user),
+        ], 201);
+    }
+
+    /**
+     * Export CSV des utilisateurs.
+     */
+    public function export(Request $request): \Illuminate\Http\Response
+    {
+        $users = User::orderBy('name')->get(['id', 'name', 'email', 'role', 'telephone', 'est_actif', 'created_at']);
+
+        $csv = fopen('php://temp', 'r+');
+        fputcsv($csv, ['id', 'name', 'email', 'role', 'telephone', 'est_actif', 'created_at']);
+        foreach ($users as $u) {
+            fputcsv($csv, [
+                $u->id, $u->name, $u->email, $u->role, $u->telephone,
+                $u->est_actif ? '1' : '0', $u->created_at?->toDateTimeString(),
+            ]);
+        }
+        rewind($csv);
+        $content = stream_get_contents($csv);
+        fclose($csv);
+
+        return response($content, 200, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="utilisateurs.csv"',
+        ]);
+    }
+
+    /**
+     * Import CSV des utilisateurs.
+     */
+    public function import(Request $request): JsonResponse
+    {
+        $request->validate([
+            'file' => 'required|file|mimes:csv,txt',
+        ]);
+
+        $file = $request->file('file');
+        $handle = fopen($file->getRealPath(), 'r');
+        $header = fgetcsv($handle);
+
+        $imported = 0;
+        while (($row = fgetcsv($handle)) !== false) {
+            $data = array_combine($header ?: ['name', 'email', 'role', 'password'], $row ?: []);
+            $email = $data['email'] ?? null;
+            if (!$email || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                continue;
+            }
+            if (User::where('email', $email)->exists()) {
+                continue;
+            }
+            User::create([
+                'name' => $data['name'] ?? $email,
+                'email' => $email,
+                'password' => Hash::make($data['password'] ?? \Illuminate\Support\Str::random(12)),
+                'role' => in_array($data['role'] ?? null, ['proprietaire', 'gerant', 'caissier'], true) ? $data['role'] : 'caissier',
+                'est_actif' => true,
+            ]);
+            $imported++;
+        }
+        fclose($handle);
+
+        return response()->json(['imported' => $imported]);
+    }
+
     private function formatUser(User $user): array
     {
         return [

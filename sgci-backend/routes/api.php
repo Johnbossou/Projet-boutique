@@ -76,6 +76,11 @@ Route::middleware(['auth:sanctum', 'user.active', 'boutique.scope'])->group(func
         ]);
     });
 
+    // Paramètres de la boutique courante (multi-tenancy)
+    Route::get('/boutique/settings', [BoutiqueController::class, 'settings']);
+    Route::put('/boutique/settings', [BoutiqueController::class, 'updateSettings'])
+        ->middleware('throttle:20,1');
+
     // Boutiques (multi-tenancy)
     Route::middleware('proprietaire')->prefix('boutiques')->group(function () {
         Route::get('/', [BoutiqueController::class, 'index']);
@@ -83,6 +88,9 @@ Route::middleware(['auth:sanctum', 'user.active', 'boutique.scope'])->group(func
         Route::get('/{boutique}', [BoutiqueController::class, 'show']);
         Route::put('/{boutique}', [BoutiqueController::class, 'update'])->middleware('throttle:20,1');
         Route::delete('/{boutique}', [BoutiqueController::class, 'destroy'])->middleware('throttle:5,1');
+        Route::get('/{boutique}/users', [BoutiqueController::class, 'equipe']);
+        Route::post('/{boutique}/users', [BoutiqueController::class, 'addMembre'])->middleware('throttle:10,1');
+        Route::delete('/{boutique}/users/{userId}', [BoutiqueController::class, 'removeUserById'])->middleware('throttle:20,1');
         Route::post('/{boutique}/users/{user}', [BoutiqueController::class, 'assignUser'])->middleware('throttle:20,1');
         Route::delete('/{boutique}/users/{user}', [BoutiqueController::class, 'removeUser'])->middleware('throttle:20,1');
     });
@@ -91,6 +99,9 @@ Route::middleware(['auth:sanctum', 'user.active', 'boutique.scope'])->group(func
     Route::middleware('role.gerant')->prefix('users')->group(function () {
         Route::get('/', [UserController::class, 'index']);
         Route::post('/', [UserController::class, 'store'])->middleware('throttle:10,1');
+        Route::post('/invite', [UserController::class, 'invite'])->middleware('throttle:10,1');
+        Route::post('/export', [UserController::class, 'export'])->middleware('throttle:5,1');
+        Route::post('/import', [UserController::class, 'import'])->middleware('throttle:5,1');
         Route::put('/{user}', [UserController::class, 'update'])->middleware('throttle:20,1');
         Route::delete('/{user}', [UserController::class, 'destroy'])->middleware('throttle:5,1');
         Route::post('/{user}/assign-boutique', [UserController::class, 'assignBoutique'])->middleware('throttle:20,1');
