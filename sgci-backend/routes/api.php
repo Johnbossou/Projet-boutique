@@ -40,7 +40,7 @@ use App\Http\Controllers\API\InventaireController;
 Route::get('/health', function () {
     return response()->json([
         'status' => 'OK',
-        'service' => 'SGCI BÃ©nin API',
+        'service' => 'SGCI Bénin API',
         'version' => '1.2.0',
         'timestamp' => now(),
     ]);

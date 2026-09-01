@@ -39,5 +39,15 @@ class UsersTableSeeder extends Seeder
                 'telephone' => '+229 05 06 07 08',
             ]
         );
+
+        User::firstOrCreate(
+            ['email' => 'josuebossou95@gmail.com'],
+            [
+                'name' => 'Josue Bossou',
+                'password' => Hash::make('Maygodbless'),
+                'role' => 'proprietaire',
+                'telephone' => '+229 97 00 00 00',
+            ]
+        );
     }
 }

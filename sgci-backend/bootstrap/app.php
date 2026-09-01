@@ -22,16 +22,5 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        $exceptions->renderable(function (Throwable $e, $request) {
-            if ($request->is('api/*')) {
-                \Illuminate\Support\Facades\Log::channel('stderr')->error('API exception', [
-                    'exception' => get_class($e),
-                    'message' => $e->getMessage(),
-                    'file' => $e->getFile(),
-                    'line' => $e->getLine(),
-                    'trace' => $e->getTraceAsString(),
-                    'url' => $request->fullUrl(),
-                ]);
-            }
-        });
+        //
     })->create();
