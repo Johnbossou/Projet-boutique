@@ -189,22 +189,28 @@ class BoutiqueController extends Controller
             return response()->json(['message' => 'Accès non autorisé'], 403);
         }
 
-        $equipe = $boutique->users()
-            ->orderBy('name')
-            ->get(['id', 'name', 'email', 'telephone', 'role', 'est_actif', 'derniere_connexion', 'created_at'])
-            ->map(function ($membre) {
-                return [
-                    'id' => $membre->id,
-                    'name' => $membre->name,
-                    'email' => $membre->email,
-                    'telephone' => $membre->telephone,
-                    'role' => $membre->role,
-                    'role_dans_boutique' => $membre->pivot->role_dans_boutique ?? $membre->role,
-                    'est_actif' => (bool) $membre->est_actif,
-                    'derniere_connexion' => $membre->derniere_connexion,
-                    'created_at' => $membre->created_at,
-                ];
-            });
+        try {
+            $membres = $boutique->users()
+                ->withPivot('role_dans_boutique')
+                ->get(['users.id', 'users.name', 'users.email', 'users.telephone', 'users.role', 'users.est_actif', 'users.derniere_connexion', 'users.created_at']);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('equipe error', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+            throw $e;
+        }
+
+        $equipe = $membres->map(function ($membre) {
+            return [
+                'id' => $membre->id,
+                'name' => $membre->name,
+                'email' => $membre->email,
+                'telephone' => $membre->telephone,
+                'role' => $membre->role,
+                'role_dans_boutique' => $membre->pivot->role_dans_boutique ?? $membre->role,
+                'est_actif' => (bool) $membre->est_actif,
+                'derniere_connexion' => $membre->derniere_connexion,
+                'created_at' => $membre->created_at,
+            ];
+        });
 
         return response()->json($equipe);
     }
