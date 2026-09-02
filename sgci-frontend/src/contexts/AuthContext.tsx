@@ -84,16 +84,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       const loginData = await response.json();
-      const { user: userData, token } = loginData;
-      localStorage.setItem('user_data', JSON.stringify(userData));
+      const { token } = loginData;
       if (token) {
         localStorage.setItem('sgci_token', token);
       }
-      setUser(userData);
+
+      // Recharger le profil complet (avec boutiques + role_courant) via /me,
+      // car /login ne renvoie qu'un user réduit sans la liste des boutiques.
+      const meResponse = await apiFetch('/me');
+      if (!meResponse.ok) {
+        throw new Error('Erreur lors du chargement du profil');
+      }
+      const meData = await meResponse.json();
+      const fullUser = meData.user;
+
+      localStorage.setItem('user_data', JSON.stringify(fullUser));
+      setUser(fullUser);
       fetchBoutiqueSettings().catch(() => undefined);
-      
-      // Redirection selon le rôle
-      if (userData.role === 'proprietaire') {
+
+      // Redirection selon le nombre de boutiques accessibles
+      if ((fullUser.boutiques?.length ?? 0) > 1) {
         router.push('/selection-boutique');
       } else {
         router.push('/dashboard');

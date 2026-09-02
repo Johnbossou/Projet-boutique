@@ -110,10 +110,6 @@ class BoutiqueController extends Controller
     public function assignUser(Request $request, Boutique $boutique): JsonResponse
     {
         $user = Auth::user();
-        
-        if (!$boutique->estProprietaire($user)) {
-            return response()->json(['message' => 'Accès non autorisé'], 403);
-        }
 
         $request->validate([
             'user_id' => 'required|exists:users,id',
@@ -138,10 +134,6 @@ class BoutiqueController extends Controller
     public function removeUser(Request $request, Boutique $boutique, User $user): JsonResponse
     {
         $currentUser = Auth::user();
-        
-        if (!$boutique->estProprietaire($currentUser)) {
-            return response()->json(['message' => 'Accès non autorisé'], 403);
-        }
 
         $boutique->users()->detach($user->id);
 
@@ -193,10 +185,6 @@ class BoutiqueController extends Controller
     {
         $user = Auth::user();
 
-        if (!$boutique->estProprietaire($user)) {
-            return response()->json(['message' => 'Accès non autorisé'], 403);
-        }
-
         $membres = $boutique->users()
             ->withPivot('role_dans_boutique')
             ->get(['users.id', 'users.name', 'users.email', 'users.telephone', 'users.role', 'users.est_actif', 'users.derniere_connexion', 'users.created_at']);
@@ -224,10 +212,6 @@ class BoutiqueController extends Controller
     public function addMembre(Request $request, Boutique $boutique): JsonResponse
     {
         $user = Auth::user();
-
-        if (!$boutique->estProprietaire($user)) {
-            return response()->json(['message' => 'Accès non autorisé'], 403);
-        }
 
         $request->validate([
             'name' => 'required|string|max:255',
@@ -287,10 +271,6 @@ class BoutiqueController extends Controller
     public function removeUserById(Request $request, Boutique $boutique, int $userId): JsonResponse
     {
         $user = Auth::user();
-
-        if (!$boutique->estProprietaire($user)) {
-            return response()->json(['message' => 'Accès non autorisé'], 403);
-        }
 
         if (!User::whereKey($userId)->exists()) {
             return response()->json(['message' => 'Utilisateur introuvable'], 404);

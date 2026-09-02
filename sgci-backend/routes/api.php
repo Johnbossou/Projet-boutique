@@ -81,13 +81,17 @@ Route::middleware(['auth:sanctum', 'user.active', 'boutique.scope'])->group(func
     Route::put('/boutique/settings', [BoutiqueController::class, 'updateSettings'])
         ->middleware('throttle:20,1');
 
-    // Boutiques (multi-tenancy)
+    // Boutiques (multi-tenancy) — CRUD réservé aux propriétaires
     Route::middleware('proprietaire')->prefix('boutiques')->group(function () {
         Route::get('/', [BoutiqueController::class, 'index']);
         Route::post('/', [BoutiqueController::class, 'store'])->middleware('throttle:10,1');
         Route::get('/{boutique}', [BoutiqueController::class, 'show']);
         Route::put('/{boutique}', [BoutiqueController::class, 'update'])->middleware('throttle:20,1');
         Route::delete('/{boutique}', [BoutiqueController::class, 'destroy'])->middleware('throttle:5,1');
+    });
+
+    // Gestion de l'équipe d'une boutique — propriétaire ou gérant de cette boutique
+    Route::middleware('boutique.manage')->prefix('boutiques')->group(function () {
         Route::get('/{boutique}/users', [BoutiqueController::class, 'equipe']);
         Route::post('/{boutique}/users', [BoutiqueController::class, 'addMembre'])->middleware('throttle:10,1');
         Route::delete('/{boutique}/users/{userId}', [BoutiqueController::class, 'removeUserById'])->middleware('throttle:20,1');

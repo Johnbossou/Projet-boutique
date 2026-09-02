@@ -26,6 +26,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiFetch } from '@/lib/api-client';
+import { getEffectiveRole } from '@/lib/role';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -105,12 +106,19 @@ export default function SelectionBoutiquePage() {
   const fetchBoutiques = async () => {
     try {
       setIsLoading(true);
-      const response = await apiFetch('/boutiques');
-      
-      if (!response.ok) throw new Error('Erreur lors du chargement des boutiques');
-      
-      const data = await response.json();
-      setBoutiques(data.data || data);
+      // Le endpoint /boutiques est réservé aux propriétaires (possession).
+      // Pour les membres (gérant/caissier), on utilise la liste des boutiques
+      // déjà chargée via /me (user.boutiques).
+      let data: Boutique[] = user?.boutiques as Boutique[];
+
+      if (user?.role === 'proprietaire') {
+        const response = await apiFetch('/boutiques');
+        if (!response.ok) throw new Error('Erreur lors du chargement des boutiques');
+        const res = await response.json();
+        data = res.data || res;
+      }
+
+      setBoutiques(data || []);
     } catch (error) {
       console.error('Erreur:', error);
       toast.error('Erreur lors du chargement des boutiques');
@@ -147,8 +155,9 @@ export default function SelectionBoutiquePage() {
     }
   }, [user]);
 
-  // Redirection si non connecté ou non propriétaire
-  if (!user || user.role !== 'proprietaire') {
+  // Redirection si non connecté ou moins de 2 boutiques
+  const hasMultipleBoutiques = (user?.boutiques?.length ?? 0) > 1;
+  if (!user || !hasMultipleBoutiques) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800">
         <Card className="max-w-md">
@@ -156,7 +165,7 @@ export default function SelectionBoutiquePage() {
             <Store className="w-16 h-16 mx-auto mb-4 text-slate-400" />
             <h2 className="text-xl font-bold mb-2">Accès non autorisé</h2>
             <p className="text-slate-600 dark:text-slate-400">
-              Seuls les propriétaires peuvent accéder à cette page.
+              Vous devez avoir accès à plusieurs boutiques pour utiliser cette page.
             </p>
             <Link href="/dashboard" className="mt-4 inline-block">
               <Button>Retour au dashboard</Button>
@@ -183,7 +192,7 @@ export default function SelectionBoutiquePage() {
             Sélectionnez votre boutique
           </h1>
           <p className="text-lg text-slate-600 dark:text-slate-400">
-            Choisissez la boutique que vous souhaitez administrer
+            Choisissez la boutique sur laquelle vous souhaitez travailler
           </p>
         </motion.div>
 
@@ -384,6 +393,11 @@ export default function SelectionBoutiquePage() {
                         <Badge variant={boutique.id === user.current_boutique_id ? "default" : "secondary"}>
                           {boutique.id === user.current_boutique_id ? "Actuelle" : "Autre"}
                         </Badge>
+                        {user.boutiques?.find(b => b.id === boutique.id)?.role_dans_boutique && (
+                          <Badge variant="outline" className="capitalize">
+                            {user.boutiques.find(b => b.id === boutique.id)!.role_dans_boutique}
+                          </Badge>
+                        )}
                       </div>
                     </div>
                   </CardHeader>
@@ -463,7 +477,7 @@ export default function SelectionBoutiquePage() {
             <p className="text-slate-600 dark:text-slate-400 mb-6">
               {searchTerm || filterPerformance !== 'all' ? 'Essayez de modifier vos critères de recherche' : 'Commencez par créer votre première boutique'}
             </p>
-            {(!searchTerm && filterPerformance === 'all') && (
+            {(!searchTerm && filterPerformance === 'all' && user?.role === 'proprietaire') && (
               <Link href="/boutiques">
                 <Button className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600">
                   <Plus className="w-4 h-4 mr-2" />
@@ -481,12 +495,14 @@ export default function SelectionBoutiquePage() {
           transition={{ delay: 0.8 }}
           className="mt-12 flex justify-center space-x-4"
         >
-          <Link href="/boutiques">
-            <Button variant="outline">
-              <Plus className="w-4 h-4 mr-2" />
-              Ajouter une boutique
-            </Button>
-          </Link>
+          {user?.role === 'proprietaire' && (
+            <Link href="/boutiques">
+              <Button variant="outline">
+                <Plus className="w-4 h-4 mr-2" />
+                Ajouter une boutique
+              </Button>
+            </Link>
+          )}
           <Link href="/dashboard">
             <Button variant="outline">
               Retour au dashboard
