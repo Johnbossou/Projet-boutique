@@ -13,6 +13,29 @@ use Illuminate\Validation\Rule;
 class UserController extends Controller
 {
     use Auditable;
+
+    /**
+     * L'acteur peut-il gérer ce membre (modifier / désactiver) dans sa boutique courante ?
+     * - Un propriétaire gère librement (il possède ses boutiques et leurs équipes).
+     * - Un gérant ne peut gérer que les membres rattachés à SA boutique courante,
+     *   et jamais le propriétaire d'une boutique.
+     */
+    private function peutGererMembre(User $acteur, User $cible): bool
+    {
+        if ($acteur->estProprietaire()) {
+            // Un propriétaire ne se gère pas lui-même via l'équipe.
+            return $acteur->id !== $cible->id;
+        }
+
+        // Gérant : cible rattachée à la boutique courante de l'acteur
+        $boutiqueId = $acteur->current_boutique_id;
+        if (!$boutiqueId) {
+            return false;
+        }
+
+        return $cible->boutiques()->where('boutique_id', $boutiqueId)->exists();
+    }
+
     public function index(Request $request): JsonResponse
     {
         $query = User::query()->orderBy('name');
@@ -138,6 +161,13 @@ class UserController extends Controller
 
         $acteur = $request->user();
 
+        // Portée : l'acteur ne gère que les membres accessibles dans sa boutique courante
+        if (!$this->peutGererMembre($acteur, $user)) {
+            return response()->json([
+                'message' => 'Accès non autorisé à cet utilisateur.',
+            ], 403);
+        }
+
         // Anti-escalade : seul un propriétaire peut attribuer/promouvoir vers « proprietaire »
         if (($validated['role'] ?? null) === 'proprietaire' && $acteur->role !== 'proprietaire') {
             return response()->json([
@@ -206,6 +236,13 @@ class UserController extends Controller
     {
         if ($user->id === $request->user()->id) {
             return response()->json(['message' => 'Vous ne pouvez pas supprimer votre propre compte.'], 422);
+        }
+
+        // Portée : l'acteur ne gère que les membres accessibles dans sa boutique courante
+        if (!$this->peutGererMembre($request->user(), $user)) {
+            return response()->json([
+                'message' => 'Accès non autorisé à cet utilisateur.',
+            ], 403);
         }
 
         $user->update(['est_actif' => false]);
