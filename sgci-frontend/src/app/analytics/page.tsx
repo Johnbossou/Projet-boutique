@@ -109,7 +109,7 @@ export default function AnalyticsPage() {
   const pieData = useMemo(
     () => repartitionCategories.map((item) => ({
       name: item.categorie,
-      value: item.chiffre_affaires,
+      value: Number(item.chiffre_affaires) || 0,
       id: item.categorie_id
     })),
     [repartitionCategories]

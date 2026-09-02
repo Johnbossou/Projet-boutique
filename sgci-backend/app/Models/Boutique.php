@@ -91,4 +91,104 @@ class Boutique extends Model
         
         return $this->users()->where('user_id', $user->id)->exists();
     }
+
+    /**
+     * Le gérant actif de cette boutique (via le pivot role_dans_boutique).
+     */
+    public function gerantActuel()
+    {
+        return $this->users()
+            ->wherePivot('role_dans_boutique', 'gerant')
+            ->where('users.est_actif', true)
+            ->first();
+    }
+
+    /**
+     * Applique la règle métier « un seul gérant par boutique ».
+     *
+     * @param int    $nouveauGerantId  id du user qui doit devenir gérant (0 si pas encore créé)
+     * @param string $role              gerant ou caissier (rôle visé)
+     * @param bool   $confirmer         true = l'utilisateur a les mains libres pour rétrograder
+     *
+     * @return array{ok:bool, code:string, message?:string, gerant_actuel?:array}
+     */
+    public function gererPromotionGerant(int $nouveauGerantId, string $role, bool $confirmer = false): array
+    {
+        // Le rôle visé n'est pas gérant : aucun contrôle nécessaire.
+        if ($role !== 'gerant') {
+            return ['ok' => true, 'code' => 'pas_gerant'];
+        }
+
+        $gerantActuel = $this->gerantActuel();
+
+        // Aucun gérant existant : OK.
+        if (!$gerantActuel) {
+            return ['ok' => true, 'code' => 'ok'];
+        }
+
+        // Le user ciblé (déjà créé) est lui-même le gérant actuel : rien à faire.
+        if ($nouveauGerantId > 0 && $gerantActuel->id === $nouveauGerantId) {
+            return ['ok' => true, 'code' => 'ok'];
+        }
+
+        // Un autre gérant existe : il faut la confirmation côté client.
+        if (!$confirmer) {
+            return [
+                'ok' => false,
+                'code' => 'gerant_existant',
+                'gerant_actuel' => [
+                    'id' => $gerantActuel->id,
+                    'name' => $gerantActuel->name,
+                    'email' => $gerantActuel->email,
+                ],
+                'message' => 'Cette boutique a déjà un gérant : ' . $gerantActuel->name,
+            ];
+        }
+
+        // Confirmé : rétrograder l'ancien gérant en caissier (pivot + rôle global, s'il est encore gérant ailleurs on garde).
+        $this->users()->updateExistingPivot($gerantActuel->id, ['role_dans_boutique' => 'caissier']);
+
+        $estGerantAilleurs = $gerantActuel->boutiques()
+            ->wherePivot('role_dans_boutique', 'gerant')
+            ->where('boutique_user.boutique_id', '!=', $this->id)
+            ->exists();
+
+        if (!$estGerantAilleurs) {
+            $gerantActuel->role = 'caissier';
+            $gerantActuel->save();
+        }
+
+        return ['ok' => true, 'code' => 'remplace'];
+    }
+
+    /**
+     * Rattache (ou met à jour) un user au pivot de cette boutique avec un rôle donné,
+     * et synchronise le rôle global du user.
+     */
+    public function rattacherUser(int $userId, string $role)
+    {
+        $existe = $this->users()->where('user_id', $userId)->exists();
+        if ($existe) {
+            $this->users()->updateExistingPivot($userId, ['role_dans_boutique' => $role]);
+        } else {
+            $this->users()->attach($userId, ['role_dans_boutique' => $role]);
+        }
+
+        $user = \App\Models\User::find($userId);
+        if ($user && $user->role !== 'proprietaire') {
+            if ($role === 'gerant') {
+                $user->role = 'gerant';
+            } elseif ($user->role === 'gerant') {
+                // redevient caissier sauf s'il est encore gérant d'une autre boutique
+                $encoreGerant = $user->boutiques()
+                    ->wherePivot('role_dans_boutique', 'gerant')
+                    ->where('boutique_user.boutique_id', '!=', $this->id)
+                    ->exists();
+                if (!$encoreGerant) {
+                    $user->role = 'caissier';
+                }
+            }
+            $user->save();
+        }
+    }
 }

@@ -45,14 +45,6 @@ class SendPredictionAlertsJob implements ShouldQueue
                 return;
             }
 
-            // Récupérer tous les gérants actifs
-            $gerants = User::where('role', 'gerant')->where('est_actif', true)->get();
-
-            if ($gerants->isEmpty()) {
-                Log::warning('Aucun gérant actif trouvé pour les alertes prédictions');
-                return;
-            }
-
             $alertsEnvoyees = 0;
 
             foreach ($predictionsCritiques as $prediction) {
@@ -60,7 +52,31 @@ class SendPredictionAlertsJob implements ShouldQueue
                 $besoin = $prediction->demande_predite - $produit->quantite_stock;
                 $joursRestants = $produit->quantite_stock > 0 ? floor($produit->quantite_stock / ($prediction->demande_predite / 7)) : 0;
 
-                foreach ($gerants as $gerant) {
+                // Destinataires pour LA boutique de ce produit :
+                // - les membres rattachés comme GÉRANT (via le pivot)
+                // - le propriétaire de la boutique
+                $boutiqueId = $produit->boutique_id ?? $produit->boutiqueId;
+
+                $destinataires = collect();
+
+                if ($boutiqueId) {
+                    $membreIds = \App\Models\BoutiqueUser::forBoutique($boutiqueId)
+                        ->gerants()
+                        ->pluck('user_id')
+                        ->all();
+
+                    $proprietaireId = \App\Models\Boutique::where('id', $boutiqueId)->value('proprietaire_id');
+
+                    $ids = array_unique(array_filter(array_merge($membreIds, $proprietaireId ? [$proprietaireId] : [])));
+
+                    $destinataires = User::whereIn('id', $ids)->where('est_actif', true)->get();
+                }
+
+                if ($destinataires->isEmpty()) {
+                    continue;
+                }
+
+                foreach ($destinataires as $gerant) {
                     // Envoyer notification push FCM
                     $this->fcmService->sendToUser(
                         $gerant,

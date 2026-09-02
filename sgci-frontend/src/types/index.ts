@@ -9,12 +9,13 @@ export interface Boutique {
   updated_at: string;
   proprietaire?: User;
   users?: BoutiqueUser[];
+  role_dans_boutique?: 'proprietaire' | 'gerant' | 'caissier' | null;
 }
 
 export interface BoutiqueUser {
   boutique_id: number;
   user_id: number;
-  role_dans_boutique: 'gerant' | 'caissier';
+  role_dans_boutique: 'proprietaire' | 'gerant' | 'caissier';
   created_at: string;
   updated_at: string;
   boutique?: Boutique;
@@ -26,6 +27,7 @@ export interface User {
   name: string;
   email: string;
   role: 'proprietaire' | 'gerant' | 'caissier';
+  role_courant?: 'proprietaire' | 'gerant' | 'caissier' | null;
   telephone?: string | null;
   derniere_connexion?: string;
   est_actif?: boolean;

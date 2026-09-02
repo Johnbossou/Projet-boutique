@@ -66,6 +66,35 @@ class User extends Authenticatable
     }
 
     /**
+     * Rôle effectif de l'utilisateur dans une boutique donnée.
+     * Priorité : propriétaire (possession) > rôle du pivot >
+     * sinon rôle global (dégradé) > sinon null.
+     */
+    public function roleDansBoutique($boutiqueId)
+    {
+        if (!$boutiqueId) {
+            return $this->role;
+        }
+
+        // 1. Propriétaire : il possède la boutique
+        if ($this->boutiquesPossedees()->where('id', $boutiqueId)->exists()) {
+            return 'proprietaire';
+        }
+
+        // 2. Rôle via le pivot (gerant / caissier) — source de vérité pour les membres
+        $pivot = $this->boutiques()
+            ->where('boutique_user.boutique_id', $boutiqueId)
+            ->first();
+
+        if ($pivot) {
+            return $pivot->pivot->role_dans_boutique ?: 'caissier';
+        }
+
+        // 3. Aucun rattachement : pas de rôle dans cette boutique
+        return null;
+    }
+
+    /**
      * Vérifie si l'utilisateur a activé un type de notification donné.
      * Valeur par défaut : true (tout activé).
      */
@@ -89,6 +118,34 @@ class User extends Authenticatable
         $this->current_boutique_id = $boutiqueId;
         $this->save();
         return true;
+    }
+
+    /**
+     * Recalcule le rôle global comme le rôle le plus élevé parmi ses boutiques.
+     * proprietaire > gerant > caissier. Utile pour garder User.role cohérent
+     * avec les rôles par boutique (multi-boutique).
+     */
+    public function recalculerRoleGlobal()
+    {
+        if ($this->boutiquesPossedees()->exists()) {
+            $this->role = 'proprietaire';
+            $this->save();
+            return 'proprietaire';
+        }
+
+        $estGerant = $this->boutiques()
+            ->wherePivot('role_dans_boutique', 'gerant')
+            ->exists();
+        $estRattache = $this->boutiques()->exists();
+
+        if ($estGerant) {
+            $this->role = 'gerant';
+        } elseif ($estRattache) {
+            $this->role = 'caissier';
+        }
+        $this->save();
+
+        return $this->role;
     }
 
     public function aAccesBoutique($boutiqueId)

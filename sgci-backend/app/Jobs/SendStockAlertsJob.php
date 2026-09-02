@@ -41,20 +41,37 @@ class SendStockAlertsJob implements ShouldQueue
                 return;
             }
 
-            // Récupérer tous les gérants actifs
-            $gerants = User::where('role', 'gerant')->where('est_actif', true)->get();
-
-            if ($gerants->isEmpty()) {
-                Log::warning('Aucun gérant actif trouvé pour envoyer les alertes');
-                return;
-            }
-
             $alertsSent = 0;
 
             foreach ($productsInAlert as $product) {
-                foreach ($gerants as $gerant) {
+                $boutiqueId = $product->boutique_id ?? $product->boutiqueId;
+
+                // Destinataires pour LA boutique de ce produit :
+                // - les membres rattachés comme GÉRANT (via le pivot)
+                // - le propriétaire de la boutique
+                $gerants = \App\Models\BoutiqueUser::forBoutique($boutiqueId)
+                    ->gerants()
+                    ->pluck('user_id')
+                    ->all();
+
+                if ($boutiqueId) {
+                    $proprietaire = \App\Models\Boutique::where('id', $boutiqueId)->value('proprietaire_id');
+                    if ($proprietaire) {
+                        $gerants[] = $proprietaire;
+                    }
+                }
+
+                $gerants = array_unique(array_filter($gerants));
+
+                if (empty($gerants)) {
+                    continue;
+                }
+
+                $destinataires = User::whereIn('id', $gerants)->where('est_actif', true)->get();
+
+                foreach ($destinataires as $gerant) {
                     // Envoyer email
-                    $emailResult = $this->emailService->sendStockAlert(
+                    $this->emailService->sendStockAlert(
                         $gerant,
                         $product->nom,
                         $product->quantite_stock,
@@ -62,7 +79,7 @@ class SendStockAlertsJob implements ShouldQueue
                     );
 
                     // Envoyer notification push FCM
-                    $fcmResult = $this->fcmService->sendStockAlert(
+                    $this->fcmService->sendStockAlert(
                         $gerant,
                         $product->nom,
                         $product->quantite_stock
@@ -70,13 +87,13 @@ class SendStockAlertsJob implements ShouldQueue
 
                     // Broadcast en temps réel via WebSocket
                     $niveau = $product->estEnRupture() ? 'rupture' : 'alerte';
-                    if ($product->boutique_id) {
-                        broadcast(new StockAlerte($product, $product->boutique_id, $niveau));
+                    if ($boutiqueId) {
+                        broadcast(new StockAlerte($product, $boutiqueId, $niveau));
                     }
 
                     // Envoyer SMS (si configuré)
                     if (env('SMS_ENABLED', false)) {
-                        $smsResult = $this->smsService->sendStockAlert(
+                        $this->smsService->sendStockAlert(
                             $gerant,
                             $product->nom,
                             $product->quantite_stock

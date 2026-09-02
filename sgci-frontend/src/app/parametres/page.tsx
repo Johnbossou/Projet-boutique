@@ -80,6 +80,10 @@ export default function ParametresPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // Rôle effectif = rôle dans la boutique courante (multi-boutique)
+  const effectiveRole = (user?.role_courant || user?.role) as 'proprietaire' | 'gerant' | 'caissier' | undefined;
+  const effectiveCanGerer = effectiveRole === 'proprietaire' || effectiveRole === 'gerant';
+
   // 🎯 ÉTATS DES PARAMÈTRES
   const [profile, setProfile] = useState<UserProfile>({
     name: '',
@@ -181,8 +185,8 @@ export default function ParametresPage() {
   };
 
   const sauvegarderBoutique = async () => {
-    if (user?.role !== 'gerant') {
-      toast.error('Seul le gérant peut modifier les paramètres boutique sur le serveur');
+    if (!effectiveCanGerer) {
+      toast.error('Seul le gérant ou le propriétaire peut modifier les paramètres boutique sur le serveur');
       return;
     }
     setSaving(true);
@@ -467,7 +471,7 @@ export default function ParametresPage() {
       <main className="p-6 max-w-7xl mx-auto">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           {/* Navigation Tabs */}
-          <TabsList className={`grid gap-2 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm border border-slate-200/50 dark:border-slate-700/50 p-1 ${user.role === 'proprietaire' ? 'grid-cols-7' : user.role === 'gerant' ? 'grid-cols-6' : 'grid-cols-5'}`}>
+          <TabsList className={`grid gap-2 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm border border-slate-200/50 dark:border-slate-700/50 p-1 ${effectiveRole === 'proprietaire' ? 'grid-cols-7' : effectiveRole === 'gerant' ? 'grid-cols-6' : 'grid-cols-5'}`}>
             <TabsTrigger value="profil" className="flex items-center space-x-2">
               <User className="w-4 h-4" />
               <span>Profil</span>
@@ -476,7 +480,7 @@ export default function ParametresPage() {
               <Store className="w-4 h-4" />
               <span>Boutique</span>
             </TabsTrigger>
-            {user.role === 'proprietaire' && (
+            {effectiveRole === 'proprietaire' && (
               <TabsTrigger value="mes-boutiques" className="flex items-center space-x-2">
                 <Store className="w-4 h-4" />
                 <span>Mes Boutiques</span>
@@ -494,7 +498,7 @@ export default function ParametresPage() {
               <Database className="w-4 h-4" />
               <span>Système</span>
             </TabsTrigger>
-            {user.role === 'gerant' && (
+            {(effectiveCanGerer) && (
               <TabsTrigger value="equipe" className="flex items-center space-x-2">
                 <User className="w-4 h-4" />
                 <span>Équipe</span>
@@ -518,7 +522,7 @@ export default function ParametresPage() {
                         {user.name}
                       </h3>
                       <Badge className="mt-2 capitalize bg-green-500/10 text-green-600 border-green-500/20">
-                        {user.role}
+                        {effectiveRole}
                       </Badge>
                     </div>
 
@@ -624,7 +628,7 @@ export default function ParametresPage() {
                   <span>Paramètres de la Boutique</span>
                 </CardTitle>
                 <CardDescription>
-                  {user.role === 'gerant'
+                  {effectiveCanGerer
                     ? 'Synchronisé avec le serveur (tickets, TVA, délai d\'annulation caisse)'
                     : 'Lecture seule — contactez le gérant pour modifier'}
                 </CardDescription>
@@ -639,7 +643,7 @@ export default function ParametresPage() {
                         value={boutique.nom}
                         onChange={(e) => setBoutique(prev => ({ ...prev, nom: e.target.value }))}
                         placeholder="Nom de votre boutique"
-                        disabled={user.role !== 'gerant'}
+                        disabled={!effectiveCanGerer}
                       />
                     </div>
 
@@ -650,7 +654,7 @@ export default function ParametresPage() {
                         value={boutique.adresse}
                         onChange={(e) => setBoutique(prev => ({ ...prev, adresse: e.target.value }))}
                         placeholder="Adresse complète"
-                        disabled={user.role !== 'gerant'}
+                        disabled={!effectiveCanGerer}
                       />
                     </div>
 
@@ -661,7 +665,7 @@ export default function ParametresPage() {
                         value={boutique.telephone}
                         onChange={(e) => setBoutique(prev => ({ ...prev, telephone: e.target.value }))}
                         placeholder="Téléphone de contact"
-                        disabled={user.role !== 'gerant'}
+                        disabled={!effectiveCanGerer}
                       />
                     </div>
                   </div>
@@ -675,7 +679,7 @@ export default function ParametresPage() {
                         value={boutique.email}
                         onChange={(e) => setBoutique(prev => ({ ...prev, email: e.target.value }))}
                         placeholder="contact@boutique.bj"
-                        disabled={user.role !== 'gerant'}
+                        disabled={!effectiveCanGerer}
                       />
                     </div>
 
@@ -688,7 +692,7 @@ export default function ParametresPage() {
                         onChange={(e) => setBoutique(prev => ({ ...prev, tva: Number(e.target.value) }))}
                         min="0"
                         max="100"
-                        disabled={user.role !== 'gerant'}
+                        disabled={!effectiveCanGerer}
                       />
                     </div>
 
@@ -699,11 +703,11 @@ export default function ParametresPage() {
                         value={boutique.devise}
                         onChange={(e) => setBoutique(prev => ({ ...prev, devise: e.target.value }))}
                         placeholder="Devise utilisée"
-                        disabled={user.role !== 'gerant'}
+                        disabled={!effectiveCanGerer}
                       />
                     </div>
 
-                    {user.role === 'gerant' && (
+                    {(effectiveCanGerer) && (
                       <div className="space-y-2">
                         <Label htmlFor="boutique-delai">Délai annulation caisse (minutes)</Label>
                         <Input
@@ -727,7 +731,7 @@ export default function ParametresPage() {
                 <div className="flex justify-end pt-4">
                   <Button 
                     onClick={sauvegarderBoutique}
-                    disabled={saving || user.role !== 'gerant'}
+                    disabled={saving || (!effectiveCanGerer)}
                     className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600"
                   >
                     {saving ? (
@@ -748,7 +752,7 @@ export default function ParametresPage() {
           </TabsContent>
 
           {/* Tab Mes Boutiques (Proprietaire only) */}
-          {user.role === 'proprietaire' && (
+          {effectiveRole === 'proprietaire' && (
             <TabsContent value="mes-boutiques" className="space-y-6">
               <Card className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm border-slate-200/50 dark:border-slate-700/50">
                 <CardHeader>
@@ -1259,7 +1263,7 @@ export default function ParametresPage() {
             </div>
           </TabsContent>
 
-          {user.role === 'gerant' && (
+          {(effectiveCanGerer) && (
             <TabsContent value="equipe" className="space-y-6">
               <UsersManagement />
             </TabsContent>

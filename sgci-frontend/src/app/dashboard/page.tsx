@@ -22,6 +22,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiFetch } from '@/lib/api-client';
+import { getEffectiveRole, canGerer } from '@/lib/role';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -84,6 +85,8 @@ const DEFAULT_WIDGETS: Widget[] = [
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const roleCourant = getEffectiveRole(user);
+  const userPeutGerer = canGerer(user, roleCourant);
   const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [produitsAlerte, setProduitsAlerte] = useState<Produit[]>([]);
@@ -161,7 +164,7 @@ export default function Dashboard() {
   useEffect(() => {
     if (user) {
       fetchDashboardData();
-      if (user.role === 'gerant') {
+      if (userPeutGerer) {
         apiFetch('/notifications/sync-stock-alerts', { method: 'POST' }).catch(() => undefined);
       }
       

@@ -18,16 +18,19 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { apiFetch } from '@/lib/api-client';
 import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
+import { getEffectiveRole, canGerer } from '@/lib/role';
 interface ApiUser {
   id: number;
   name: string;
   email: string;
-  role: 'gerant' | 'caissier';
+  role: 'proprietaire' | 'gerant' | 'caissier';
   telephone?: string | null;
   est_actif: boolean;
 }
 
 export function UsersManagement() {
+  const { user } = useAuth();
   const [users, setUsers] = useState<ApiUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -35,6 +38,41 @@ export function UsersManagement() {
   const [showInviteDialog, setShowInviteDialog] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'gerant' | 'caissier'>('caissier');
+  const [editTarget, setEditTarget] = useState<ApiUser | null>(null);
+  const [editForm, setEditForm] = useState({
+    name: '',
+    email: '',
+    telephone: '',
+    role: 'caissier' as 'gerant' | 'caissier' | 'proprietaire',
+    password: '',
+  });
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    message: string;
+    gerantName: string;
+    action: () => Promise<void>;
+  } | null>(null);
+
+  const canModify = canGerer(user, getEffectiveRole(user));
+  const roleCourant = getEffectiveRole(user);
+
+  const canEditUser = (u: ApiUser) => {
+    if (!canModify) return false;
+    if (roleCourant === 'gerant') return u.role !== 'proprietaire';
+    if (roleCourant === 'proprietaire') return user != null && u.id !== user.id;
+    return false;
+  };
+
+  const openEdit = (u: ApiUser) => {
+    setEditTarget(u);
+    setEditForm({
+      name: u.name,
+      email: u.email,
+      telephone: u.telephone ?? '',
+      role: u.role,
+      password: '',
+    });
+    setSaving(false);
+  };
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -49,7 +87,7 @@ export function UsersManagement() {
       const response = await apiFetch('/users?actifs_seulement=0');
       if (!response.ok) throw new Error('Chargement impossible');
       const data = await response.json();
-      setUsers(Array.isArray(data) ? data : []);
+      setUsers(Array.isArray(data) ? data : (data.data ?? []));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Erreur utilisateurs');
     } finally {
@@ -61,7 +99,7 @@ export function UsersManagement() {
     charger();
   }, [charger]);
 
-  const creerUtilisateur = async () => {
+  const creerUtilisateur = async (confirmer = false) => {
     if (!form.name || !form.email || !form.password) {
       toast.error('Nom, email et mot de passe requis');
       return;
@@ -70,8 +108,29 @@ export function UsersManagement() {
     try {
       const response = await apiFetch('/users', {
         method: 'POST',
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          ...form,
+          ...(user?.current_boutique_id
+            ? { boutique_id: user.current_boutique_id, role_dans_boutique: form.role }
+            : {}),
+          ...(confirmer ? { confirmer: true } : {}),
+        }),
       });
+      if (response.status === 409) {
+        const err = await response.json().catch(() => ({}));
+        if (err.code === 'gerant_existant') {
+          setPendingConfirm({
+            message: err.message || 'Cette boutique a déjà un gérant.',
+            gerantName: err.gerant_actuel?.name || '',
+            action: async () => {
+              setPendingConfirm(null);
+              await creerUtilisateur(true);
+            },
+          });
+          return;
+        }
+        throw new Error(err.message || 'Création échouée');
+      }
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
         throw new Error(err.message || 'Création échouée');
@@ -87,8 +146,56 @@ export function UsersManagement() {
     }
   };
 
-  const desactiver = async (u: ApiUser) => {
-    if (!confirm(`Désactiver ${u.name} ?`)) return;
+  const modifierUtilisateur = async (confirmer = false) => {
+    if (!editTarget) return;
+    if (!editForm.name || !editForm.email) {
+      toast.error('Nom et email requis');
+      return;
+    }
+    setSaving(true);
+    try {
+      const payload: Record<string, unknown> = {
+        name: editForm.name,
+        email: editForm.email,
+        telephone: editForm.telephone || null,
+        role: editForm.role,
+      };
+      if (editForm.password) payload.password = editForm.password;
+      if (confirmer) payload.confirmer = true;
+      const response = await apiFetch(`/users/${editTarget.id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+      if (response.status === 409) {
+        const err = await response.json().catch(() => ({}));
+        if (err.code === 'gerant_existant') {
+          setPendingConfirm({
+            message: err.message || 'Cette boutique a déjà un gérant.',
+            gerantName: err.gerant_actuel?.name || '',
+            action: async () => {
+              setPendingConfirm(null);
+              await modifierUtilisateur(true);
+            },
+          });
+          return;
+        }
+        throw new Error(err.message || 'Modification échouée');
+      }
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.message || 'Modification échouée');
+      }
+      toast.success('Membre modifié');
+      setEditTarget(null);
+      await charger();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Erreur');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const desactiver = async (u: ApiUser) => {    if (!confirm(`Désactiver ${u.name} ?`)) return;
     try {
       const response = await apiFetch(`/users/${u.id}`, { method: 'DELETE' });
       if (!response.ok) throw new Error('Échec désactivation');
@@ -260,7 +367,7 @@ export function UsersManagement() {
               </Select>
             </div>
             <div className="flex items-end">
-              <Button onClick={creerUtilisateur} disabled={saving} className="w-full">
+              <Button onClick={() => creerUtilisateur()} disabled={saving} className="w-full">
                 <Save className="w-4 h-4 mr-2" />
                 Créer
               </Button>
@@ -290,15 +397,23 @@ export function UsersManagement() {
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right">
-                  {u.est_actif ? (
-                    <Button variant="ghost" size="sm" onClick={() => desactiver(u)}>
-                      <Trash2 className="w-4 h-4 text-red-500" />
-                    </Button>
-                  ) : (
-                    <Button variant="outline" size="sm" onClick={() => reactiver(u)}>
-                      Réactiver
-                    </Button>
-                  )}
+                  <div className="flex items-center justify-end gap-1">
+                    {canEditUser(u) && (
+                      <Button variant="outline" size="sm" onClick={() => openEdit(u)}>
+                        <Save className="w-3.5 h-3.5 mr-1" />
+                        Modifier
+                      </Button>
+                    )}
+                    {u.est_actif ? (
+                      <Button variant="ghost" size="sm" onClick={() => desactiver(u)}>
+                        <Trash2 className="w-4 h-4 text-red-500" />
+                      </Button>
+                    ) : (
+                      <Button variant="outline" size="sm" onClick={() => reactiver(u)}>
+                        Réactiver
+                      </Button>
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
@@ -346,6 +461,81 @@ export function UsersManagement() {
           </Button>
           <Button onClick={inviteUser} disabled={saving}>
             {saving ? 'Envoi...' : 'Envoyer l\'invitation'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    {/* Edit Member Dialog */}
+    <Dialog open={!!editTarget} onOpenChange={(open) => { if (!open) setEditTarget(null); }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Modifier un membre</DialogTitle>
+          <DialogDescription>
+            Modifiez les informations de {editTarget?.name}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label>Nom</Label>
+            <Input value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} />
+          </div>
+          <div className="space-y-2">
+            <Label>Email</Label>
+            <Input type="email" value={editForm.email} onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))} />
+          </div>
+          <div className="space-y-2">
+            <Label>Téléphone</Label>
+            <Input value={editForm.telephone} onChange={(e) => setEditForm((f) => ({ ...f, telephone: e.target.value }))} />
+          </div>
+          <div className="space-y-2">
+            <Label>Rôle</Label>
+            <Select value={editForm.role} onValueChange={(v) => setEditForm((f) => ({ ...f, role: v as 'gerant' | 'caissier' }))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="caissier">Caissier</SelectItem>
+                <SelectItem value="gerant">Gérant</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Mot de passe (laisser vide pour ne pas changer)</Label>
+            <Input type="password" value={editForm.password} onChange={(e) => setEditForm((f) => ({ ...f, password: e.target.value }))} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setEditTarget(null)} disabled={saving}>
+            Annuler
+          </Button>
+          <Button onClick={() => modifierUtilisateur()} disabled={saving}>
+            <Save className="w-4 h-4 mr-2" />
+            {saving ? 'Enregistrement...' : 'Enregistrer'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    {/* Gerant confirmation dialog */}
+    <Dialog open={!!pendingConfirm} onOpenChange={(open) => { if (!open) setPendingConfirm(null); }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Un gérant existe déjà</DialogTitle>
+          <DialogDescription>
+            {pendingConfirm?.message}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="py-2 text-sm text-slate-600 dark:text-slate-400">
+          <p className="font-medium">{pendingConfirm?.gerantName}</p>
+          <p className="mt-2">
+            Si vous continuez, l'ancien gérant sera <strong>rétrogradé en caissier</strong> et le nouveau membre deviendra gérant.
+          </p>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setPendingConfirm(null)}>
+            Annuler
+          </Button>
+          <Button onClick={() => pendingConfirm?.action()} disabled={saving}>
+            Continuer (rétrograder l'ancien gérant)
           </Button>
         </DialogFooter>
       </DialogContent>

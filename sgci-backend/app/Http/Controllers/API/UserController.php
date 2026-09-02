@@ -75,7 +75,26 @@ class UserController extends Controller
             ], 403);
         }
 
-        // Un seul gérant actif recommandé — on autorise la création mais le seed garde le principal
+        // Boutique cible (rattachement multi-tenancy)
+        $boutiqueId = $validated['boutique_id']
+            ?? ($validated['role_dans_boutique'] ?? null ? $request->user()->current_boutique_id : null);
+        $roleBoutique = $validated['role_dans_boutique'] ?? null;
+
+        // Règle métier : un seul gérant par boutique
+        if ($boutiqueId) {
+            $boutique = \App\Models\Boutique::find($boutiqueId);
+            if ($boutique && $boutique->aAcces($request->user())) {
+                $verif = $boutique->gererPromotionGerant(0, (string) ($roleBoutique ?: $validated['role']), (bool) $request->boolean('confirmer'));
+                if (!$verif['ok'] && $verif['code'] === 'gerant_existant') {
+                    return response()->json([
+                        'message' => $verif['message'],
+                        'code' => 'gerant_existant',
+                        'gerant_actuel' => $verif['gerant_actuel'],
+                    ], 409);
+                }
+            }
+        }
+
         $user = User::create([
             'name' => $validated['name'],
             'email' => $validated['email'],
@@ -85,18 +104,24 @@ class UserController extends Controller
             'est_actif' => true,
         ]);
 
-        // Assignation à une boutique via pivot (multi-tenancy)
-        if (isset($validated['boutique_id']) && isset($validated['role_dans_boutique'])) {
-            $user->boutiques()->attach($validated['boutique_id'], [
-                'role_dans_boutique' => $validated['role_dans_boutique'],
-            ]);
+        // Assignation à une boutique via pivot (multi-tenancy) + règle gérant
+        if ($boutiqueId && $roleBoutique) {
+            $boutique = \App\Models\Boutique::find($boutiqueId);
+            if ($boutique && $boutique->aAcces($request->user())) {
+                if ($roleBoutique === 'gerant') {
+                    $boutique->gererPromotionGerant($user->id, 'gerant', (bool) $request->boolean('confirmer'));
+                }
+                $boutique->rattacherUser($user->id, $roleBoutique);
+            } else {
+                $user->boutiques()->attach($boutiqueId, ['role_dans_boutique' => $roleBoutique]);
+            }
         }
 
         $this->auditCreate($user);
 
         return response()->json([
             'message' => 'Utilisateur créé',
-            'user' => $this->formatUser($user),
+            'user' => $this->formatUser($user->fresh()),
         ], 201);
     }
 
@@ -127,6 +152,25 @@ class UserController extends Controller
             ], 422);
         }
 
+        // Règle métier : un seul gérant par boutique (promotion vers gérant)
+        if (isset($validated['role']) && $validated['role'] === 'gerant' && $acteur->current_boutique_id) {
+            $boutique = \App\Models\Boutique::find($acteur->current_boutique_id);
+            if ($boutique && $boutique->aAcces($acteur)) {
+                $verif = $boutique->gererPromotionGerant($user->id, 'gerant', (bool) $request->boolean('confirmer'));
+                if (!$verif['ok'] && $verif['code'] === 'gerant_existant') {
+                    return response()->json([
+                        'message' => $verif['message'],
+                        'code' => 'gerant_existant',
+                        'gerant_actuel' => $verif['gerant_actuel'],
+                    ], 409);
+                }
+                // Le user doit être rattaché à cette boutique
+                if (!$boutique->users()->where('user_id', $user->id)->exists()) {
+                    $boutique->rattacherUser($user->id, 'gerant');
+                }
+            }
+        }
+
         if (isset($validated['password'])) {
             $validated['password'] = Hash::make($validated['password']);
         }
@@ -139,6 +183,16 @@ class UserController extends Controller
         $oldValues = $user->only(array_keys($validated));
 
         $user->update($validated);
+
+        // Synchroniser le pivot de la boutique courante quand le rôle du membre change
+        if (isset($validated['role']) && $acteur->current_boutique_id) {
+            $boutique = \App\Models\Boutique::find($acteur->current_boutique_id);
+            if ($boutique && $boutique->users()->where('user_id', $user->id)->exists() && $validated['role'] !== 'proprietaire') {
+                $boutique->users()->updateExistingPivot($user->id, [
+                    'role_dans_boutique' => $validated['role'] === 'gerant' ? 'gerant' : 'caissier',
+                ]);
+            }
+        }
 
         $this->auditUpdate($user, $oldValues);
 

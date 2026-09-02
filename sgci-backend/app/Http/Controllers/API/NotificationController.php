@@ -63,7 +63,10 @@ class NotificationController extends Controller
      */
     public function syncStockAlerts(Request $request): JsonResponse
     {
-        if ($request->user()->role !== 'gerant') {
+        $user = $request->user();
+        $role = $user->roleDansBoutique($user->current_boutique_id);
+
+        if (!in_array($role, ['gerant', 'proprietaire'], true)) {
             return response()->json(['message' => 'Réservé au gérant'], 403);
         }
 

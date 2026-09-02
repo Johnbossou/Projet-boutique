@@ -31,6 +31,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/AuthContext';
+import { getEffectiveRole, canGerer } from '@/lib/role';
 import { apiFetch } from '@/lib/api-client';
 import { uploadProduitImage } from '@/lib/media';
 import { toast } from 'sonner';
@@ -117,7 +118,7 @@ const defaultImages = {
 
 export default function ProduitsPage() {
   const { user } = useAuth();
-  const isGerant = user?.role === 'gerant';
+  const isGerant = canGerer(user, getEffectiveRole(user));
   const [produits, setProduits] = useState<Produit[]>([]);
   const [categories, setCategories] = useState<Categorie[]>([]);
   const [isLoading, setIsLoading] = useState(true);

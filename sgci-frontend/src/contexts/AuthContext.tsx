@@ -142,11 +142,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await response.json();
       setUser((prevUser) => {
         if (!prevUser) return null;
-        return {
+        const next = {
           ...prevUser,
           current_boutique_id: data.current_boutique_id,
           current_boutique: data.current_boutique,
+          role_courant: data.role_courant ?? prevUser.role_courant,
         };
+        localStorage.setItem('user_data', JSON.stringify(next));
+        return next;
       });
     } catch (error: unknown) {
       throw new Error(

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { getEffectiveRole, canGerer } from '@/lib/role';
 import { apiFetch } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -47,7 +48,7 @@ export default function MessagesPage() {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
-  const peutCreer = user?.role === 'proprietaire' || user?.role === 'gerant';
+  const peutCreer = canGerer(user, getEffectiveRole(user));
   const activeConversation = conversations.find((c) => c.id === activeId) ?? null;
 
   const chargerConversations = useCallback(async () => {

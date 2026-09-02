@@ -62,7 +62,8 @@ export default function AuditLogsPage() {
   const [modelFilter, setModelFilter] = useState('all');
   
   useEffect(() => {
-    if (user?.role !== 'gerant') {
+    const roleCourant = user?.role_courant || user?.role;
+    if (roleCourant !== 'gerant' && roleCourant !== 'proprietaire') {
       toast.error('Accès refusé');
       window.location.href = '/dashboard';
       return;

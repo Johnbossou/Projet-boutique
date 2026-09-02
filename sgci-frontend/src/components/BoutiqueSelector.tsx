@@ -10,8 +10,8 @@ export function BoutiqueSelector() {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Only show for proprietaires with multiple boutiques
-  if (!user || user.role !== 'proprietaire' || !user.boutiques || user.boutiques.length <= 1) {
+  // Only show when the user has access to multiple boutiques
+  if (!user || !user.boutiques || user.boutiques.length <= 1) {
     return null;
   }
 
@@ -63,6 +63,11 @@ export function BoutiqueSelector() {
               >
                 <Store className="w-4 h-4" />
                 <span>{boutique.nom}</span>
+                {boutique.role_dans_boutique && (
+                  <span className="text-xs capitalize text-muted-foreground">
+                    {boutique.role_dans_boutique}
+                  </span>
+                )}
                 {boutique.id === currentBoutique?.id && (
                   <span className="ml-auto text-xs text-blue-600 dark:text-blue-400">
                     Actuelle

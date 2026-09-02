@@ -239,25 +239,35 @@ class AuthController extends Controller
     private function formatUser(User $user): array
     {
         $user->load('currentBoutique');
-        
+
+        if ($user->estProprietaire()) {
+            $boutiques = $user->boutiquesPossedees;
+        } else {
+            $boutiques = $user->boutiques;
+        }
+
+        // Enrichir chaque boutique avec le rôle effectif du user dans cette boutique
+        $boutiquesAvecRole = $boutiques->map(function ($b) use ($user) {
+            if ($b instanceof \App\Models\Boutique) {
+                $b->role_dans_boutique = $user->roleDansBoutique($b->id);
+            }
+            return $b;
+        })->values();
+
         $data = [
             'id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
             'role' => $user->role,
+            'role_courant' => $user->roleDansBoutique($user->current_boutique_id),
             'telephone' => $user->telephone,
             'est_actif' => $user->est_actif,
             'derniere_connexion' => $user->derniere_connexion,
             'two_factor_enabled' => $user->two_factor_enabled,
             'current_boutique_id' => $user->current_boutique_id,
             'current_boutique' => $user->currentBoutique,
+            'boutiques' => $boutiquesAvecRole,
         ];
-
-        if ($user->estProprietaire()) {
-            $data['boutiques'] = $user->boutiquesPossedees;
-        } else {
-            $data['boutiques'] = $user->boutiques;
-        }
 
         return $data;
     }
@@ -403,6 +413,7 @@ class AuthController extends Controller
                 'message' => 'Boutique changée avec succès',
                 'current_boutique_id' => $user->current_boutique_id,
                 'current_boutique' => $user->currentBoutique,
+                'role_courant' => $user->roleDansBoutique($user->current_boutique_id),
             ]);
         }
 

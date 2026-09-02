@@ -17,6 +17,7 @@ import {
   ClipboardList,
   ScrollText,
   FileText,
+  LogOut,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { NotificationBell } from '@/components/NotificationBell';
@@ -44,7 +45,12 @@ const NAV = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const roleCourant = (user?.role_courant || user?.role) as
+    | 'proprietaire'
+    | 'gerant'
+    | 'caissier'
+    | undefined;
 
   return (
     <div className="min-h-screen flex bg-background text-foreground">
@@ -56,17 +62,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
             <div>
               <p className="font-bold text-sm">SGCI Bénin</p>
-              <p className="text-xs text-muted-foreground capitalize">{user?.role}</p>
+              <p className="text-xs text-muted-foreground capitalize">
+                {roleCourant}{user?.current_boutique?.nom ? ` · ${user.current_boutique.nom}` : ''}
+              </p>
             </div>
           </div>
         </div>
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
           {NAV.map((item) => {
-            // Masquer les items réservés aux propriétaires si l'utilisateur n'est pas propriétaire
-            if (item.role === 'proprietaire' && user?.role !== 'proprietaire') {
+            // Masquer les items réservés aux propriétaires si le rôle courant n'est pas propriétaire
+            if (item.role === 'proprietaire' && roleCourant !== 'proprietaire') {
               return null;
             }
-            if (item.role === 'gerant' && user?.role !== 'gerant' && user?.role !== 'proprietaire') {
+            if (item.role === 'gerant' && roleCourant !== 'gerant' && roleCourant !== 'proprietaire') {
               return null;
             }
 
@@ -99,6 +107,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <ThemeToggle />
             <NotificationBell />
             <span className="text-sm text-muted-foreground hidden sm:inline">{user?.name}</span>
+            <button
+              onClick={() => logout()}
+              title="Se déconnecter"
+              className="ml-1 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="hidden md:inline">Déconnexion</span>
+            </button>
           </div>
         </header>
         <main className="flex-1 overflow-auto">{children}</main>

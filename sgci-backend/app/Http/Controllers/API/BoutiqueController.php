@@ -120,11 +120,19 @@ class BoutiqueController extends Controller
             'role_dans_boutique' => 'required|in:gerant,caissier',
         ]);
 
-        $boutique->users()->attach($request->user_id, [
-            'role_dans_boutique' => $request->role_dans_boutique,
-        ]);
+        // Règle métier : un seul gérant par boutique
+        $verif = $boutique->gererPromotionGerant((int) $request->user_id, (string) $request->role_dans_boutique, (bool) $request->boolean('confirmer'));
+        if (!$verif['ok'] && $verif['code'] === 'gerant_existant') {
+            return response()->json([
+                'message' => $verif['message'],
+                'code' => 'gerant_existant',
+                'gerant_actuel' => $verif['gerant_actuel'],
+            ], 409);
+        }
 
-        return response()->json(['message' => 'Utilisateur assigné à la boutique']);
+        $boutique->rattacherUser((int) $request->user_id, (string) $request->role_dans_boutique);
+
+        return response()->json(['message' => 'Utilisateur affecté à la boutique']);
     }
 
     public function removeUser(Request $request, Boutique $boutique, User $user): JsonResponse
@@ -232,6 +240,16 @@ class BoutiqueController extends Controller
 
         $role = $request->role ?? $request->role_dans_boutique ?? 'caissier';
 
+        // Règle métier : un seul gérant par boutique
+        $verif = $boutique->gererPromotionGerant(0, $role, (bool) $request->boolean('confirmer'));
+        if (!$verif['ok'] && $verif['code'] === 'gerant_existant') {
+            return response()->json([
+                'message' => $verif['message'],
+                'code' => 'gerant_existant',
+                'gerant_actuel' => $verif['gerant_actuel'],
+            ], 409);
+        }
+
         $membre = User::create([
             'name' => $request->name,
             'email' => $request->email,
@@ -241,9 +259,13 @@ class BoutiqueController extends Controller
             'est_actif' => true,
         ]);
 
-        $boutique->users()->attach($membre->id, [
-            'role_dans_boutique' => $role,
-        ]);
+        // Rétrograder l'ancien gérant si le rôle gérant est confirmé
+        if ($role === 'gerant') {
+            $boutique->gererPromotionGerant($membre->id, $role, (bool) $request->boolean('confirmer'));
+        }
+
+        // Lier le nouveau membre et synchroniser son rôle global
+        $boutique->rattacherUser($membre->id, $role);
 
         return response()->json([
             'message' => 'Membre ajouté à l\'équipe',
@@ -252,7 +274,7 @@ class BoutiqueController extends Controller
                 'name' => $membre->name,
                 'email' => $membre->email,
                 'telephone' => $membre->telephone,
-                'role' => $membre->role,
+                'role' => $membre->fresh()->role,
                 'role_dans_boutique' => $role,
                 'est_actif' => (bool) $membre->est_actif,
             ],

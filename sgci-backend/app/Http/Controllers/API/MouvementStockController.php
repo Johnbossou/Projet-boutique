@@ -13,7 +13,14 @@ class MouvementStockController extends Controller
 {
     private function userEstGerant(): bool
     {
-        return auth()->check() && auth()->user()->role === 'gerant';
+        $user = auth()->user();
+        if (!$user) {
+            return false;
+        }
+
+        $role = $user->roleDansBoutique($user->current_boutique_id);
+
+        return in_array($role, ['gerant', 'proprietaire'], true);
     }
 
     /**

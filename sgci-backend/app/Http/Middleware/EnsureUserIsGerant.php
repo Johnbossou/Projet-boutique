@@ -12,8 +12,17 @@ class EnsureUserIsGerant
     {
         $user = $request->user();
 
-        // Le propriétaire a tous les droits du gérant (et plus)
-        if (!$user || !in_array($user->role, ['gerant', 'proprietaire'], true)) {
+        if (!$user) {
+            return response()->json(['message' => 'Accès réservé au gérant.'], 403);
+        }
+
+        // Le rôle est évalué dans la boutique courante (multi-rôles) :
+        // un compte gérant de la boutique A n'est pas gérant de la boutique B
+        // où il serait caissier. Le propriétaire a tous les droits du gérant.
+        $boutiqueId = $user->current_boutique_id;
+        $roleDansBoutique = $user->roleDansBoutique($boutiqueId);
+
+        if (!in_array($roleDansBoutique, ['gerant', 'proprietaire'], true)) {
             return response()->json([
                 'message' => 'Accès réservé au gérant.',
             ], 403);

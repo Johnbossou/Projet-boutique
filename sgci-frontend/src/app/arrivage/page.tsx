@@ -15,6 +15,7 @@ import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { apiFetch } from '@/lib/api-client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { getEffectiveRole, canGerer } from '@/lib/role';
 import type { Produit, MouvementStock } from '@/types';
 
 const initialForm = {
@@ -26,6 +27,8 @@ const initialForm = {
 
 export default function ArrivagePage() {
   const { user } = useAuth();
+  const roleCourant = getEffectiveRole(user);
+  const userPeutGerer = canGerer(user, roleCourant);
   const searchParams = useSearchParams();
   const [produits, setProduits] = useState<Produit[]>([]);
   const [mouvements, setMouvements] = useState<MouvementStock[]>([]);
@@ -217,7 +220,7 @@ export default function ArrivagePage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Badge variant="secondary">{user?.role === 'gerant' ? 'Gérant' : 'Caissier'}</Badge>
+          <Badge variant="secondary">{userPeutGerer ? 'Gérant' : 'Caissier'}</Badge>
           <Badge variant="outline">{pendingOnly ? 'En attente' : 'Tous les mouvements'}</Badge>
         </div>
       </div>
@@ -358,7 +361,7 @@ export default function ArrivagePage() {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="default">{mouvements.length} mouvements</Badge>
-              {!user?.role || user.role !== 'gerant' ? (
+              {!roleCourant || !userPeutGerer ? (
                 <Badge variant="secondary">En attente de validation</Badge>
               ) : (
                 <Badge variant="outline">Gérant peut valider</Badge>
@@ -402,7 +405,7 @@ export default function ArrivagePage() {
                       <TableCell>{mouvement.reference_bon || '—'}</TableCell>
                       <TableCell>{mouvement.user?.name || '—'}</TableCell>
                       <TableCell className="space-x-2">
-                        {mouvement.statut === 'en_attente' && user?.role === 'gerant' ? (
+                        {mouvement.statut === 'en_attente' && userPeutGerer ? (
                           <>
                             <Button size="sm" variant="outline" onClick={() => validerMouvement(mouvement.id)}>
                               <CheckCircle2 className="mr-2 h-4 w-4" />Valider

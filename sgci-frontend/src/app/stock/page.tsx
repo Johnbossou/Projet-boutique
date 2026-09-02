@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { apiFetch } from '@/lib/api-client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { getEffectiveRole, canGerer } from '@/lib/role';
 import type { Produit, MouvementStock } from '@/types';
 
 // ✅ CORRIGÉ : value="all" au lieu de value="" (évite l'erreur Select.Item)
@@ -34,6 +35,7 @@ const RAISONS = [
 
 export default function StockHistoryPage() {
   const { user } = useAuth();
+  const userPeutGerer = canGerer(user, getEffectiveRole(user));
   const [produits, setProduits] = useState<Produit[]>([]);
   const [mouvements, setMouvements] = useState<MouvementStock[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -307,7 +309,7 @@ export default function StockHistoryPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="space-x-2">
-                      {mouvement.statut === 'en_attente' && user?.role === 'gerant' ? (
+                      {mouvement.statut === 'en_attente' && userPeutGerer ? (
                         <>
                           <Button size="sm" variant="outline" onClick={() => validerMouvement(mouvement.id)}>
                             <CheckCircle2 className="mr-2 h-4 w-4" /> Valider
