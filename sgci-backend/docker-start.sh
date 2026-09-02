@@ -21,6 +21,11 @@ php artisan route:cache
 php artisan view:cache 2>/dev/null || true
 php artisan migrate --force
 
-php artisan db:seed --force 2>/dev/null || true
+# Seed uniquement sur une base de données fraîche (aucune table remplie),
+# pour ne jamais écraser les données existantes à chaque redémarrage.
+SEEDED=$(php artisan tinker --execute="echo \\App\\Models\\User::count();" 2>/dev/null || echo "-1")
+if [ "$SEEDED" = "0" ] || [ "$SEEDED" = "-1" ]; then
+    php artisan db:seed --force 2>/dev/null || true
+fi
 
 php artisan serve --host=0.0.0.0 --port=${PORT:-8000}
