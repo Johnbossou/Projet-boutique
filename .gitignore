@@ -1,0 +1,17 @@
+# APK / artefacts de build
+*.apk
+*.aab
+
+# Secrets / config locale (protégé aussi côté sous-dossiers)
+.env
+.env.*
+!.env.example
+
+# Logs / OS
+*.log
+.DS_Store
+Thumbs.db
+
+# Yarn / npm misc
+*.tsbuildinfo
+npm-debug.log*
