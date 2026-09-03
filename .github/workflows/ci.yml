@@ -109,8 +109,8 @@ jobs:
 
       # --- Backend : Railway (service sgci-backend, déploiement via Dockerfile) ---
       # Secret requis : RAILWAY_TOKEN (Service token Railway lié au projet sgci-backend).
-      # Les IDs (projet/environnement/service) sont publics (non sensibles) et
-      # évitent toute interaction ; la CLI redéploie depuis la source (Dockerfile).
+      # Projet/environnement/service passés directement en arguments (IDs non sensibles),
+      # sans 'railway link' (non fiable en CI) : la CLI déploie depuis le checkout.
       - name: Deploy backend to Railway
         working-directory: sgci-backend
         env:
@@ -120,8 +120,7 @@ jobs:
           RAILWAY_SERVICE_ID: 676a764d-630e-446a-84d5-8114c326825f
         run: |
           npm install -g @railway/cli
-          railway link --yes --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT_ID" --service "$RAILWAY_SERVICE_ID"
-          railway up --ci --detach
+          railway up --ci --detach --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT_ID" --service "$RAILWAY_SERVICE_ID"
 
       # --- Frontend : Vercel (projet sgci-frontend) ---
       # Secrets requis : VERCEL_TOKEN (token d'accès Vercel).
