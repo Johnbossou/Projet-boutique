@@ -67,6 +67,9 @@ Route::middleware(['auth:sanctum', 'user.active', 'boutique.scope'])->group(func
     // Switch boutique
     Route::post('/switch-boutique', [AuthController::class, 'switchBoutique'])->middleware('throttle:10,1');
 
+    // Boutiques rattachées au compte courant (pour transferts, multi-boutiques)
+    Route::get('/mes-boutiques', [BoutiqueController::class, 'mesBoutiques']);
+
     Route::get('/test', function () {
         return response()->json([
             'message' => 'API SGCI-BÃ©nin est opÃ©rationnelle!',

@@ -26,6 +26,22 @@ class BoutiqueController extends Controller
         return response()->json($boutiques);
     }
 
+    /**
+     * Liste les boutiques rattachées au compte courant (propriétaire + rattachées).
+     * Accessible à tout utilisateur authentifié, utile pour choisir une destination
+     * lors d'un transfert de stock entre boutiques.
+     */
+    public function mesBoutiques(Request $request): JsonResponse
+    {
+        $user = Auth::user();
+
+        $boutiques = $user->estProprietaire()
+            ? Boutique::forProprietaire($user->id)
+            : $user->boutiques();
+
+        return response()->json($boutiques->with(['proprietaire'])->get());
+    }
+
     public function store(Request $request): JsonResponse
     {
         $request->validate([

@@ -20,6 +20,7 @@ import {
   Truck,
   CalendarClock,
   LogOut,
+  ArrowLeftRight,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { NotificationBell } from '@/components/NotificationBell';
@@ -35,6 +36,7 @@ const NAV = [
   { href: '/arrivage', label: 'Arrivage', icon: TrendingUp },
   { href: '/approvisionnement', label: 'Approvisionnement', icon: Truck, role: 'gerant' },
   { href: '/peremption', label: 'Péremption', icon: CalendarClock, role: 'gerant' },
+  { href: '/transferts', label: 'Transferts de stock', icon: ArrowLeftRight, role: 'gerant' },
   { href: '/caisse', label: 'Caisse', icon: ShoppingCart },
   { href: '/clients', label: 'Clients', icon: Users },
   { href: '/retours', label: 'Retours', icon: RotateCcw, role: 'gerant' },

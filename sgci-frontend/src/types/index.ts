@@ -214,6 +214,36 @@ export interface PeremptionResult {
   perimes: Produit[];
 }
 
+export interface TransfertStock {
+  id: number;
+  numero_transfert: string;
+  boutique_source_id: number;
+  boutique_destination_id: number;
+  produit_id: number;
+  quantite: number;
+  statut: 'en_attente' | 'en_cours' | 'termine' | 'annule';
+  date_transfert: string;
+  date_reception?: string | null;
+  motif?: string | null;
+  notes?: string | null;
+  user_source_id?: number | null;
+  user_destination_id?: number | null;
+  created_at: string;
+  updated_at: string;
+  boutiqueSource?: Boutique;
+  boutiqueDestination?: Boutique;
+  produit?: Produit;
+  userSource?: User;
+  userDestination?: User;
+}
+
+export interface StatistiquesTransferts {
+  total_transferts: number;
+  transferts_en_attente: number;
+  transferts_en_cours: number;
+  transferts_termines: number;
+}
+
 export interface LoginResponse {
   token: string;
   user: User;
