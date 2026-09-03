@@ -20,8 +20,7 @@ class BoutiqueController extends Controller
             ? Boutique::forProprietaire($user->id)
             : $user->boutiques();
 
-        $perPage = min((int) ($request->per_page ?? 20), 100);
-        $boutiques = $query->paginate($perPage);
+        $boutiques = $query->withCount(['users', 'produits', 'ventes'])->get();
 
         return response()->json($boutiques);
     }
