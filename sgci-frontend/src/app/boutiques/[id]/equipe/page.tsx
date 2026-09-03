@@ -44,6 +44,12 @@ interface Boutique {
   nom: string;
 }
 
+const ROLE_LABELS: Record<string, string> = {
+  proprietaire: 'Propriétaire',
+  gerant: 'Gérant',
+  caissier: 'Caissier',
+};
+
 export default function BoutiqueEquipePage() {
   const { user } = useAuth();
   const params = useParams();
@@ -300,7 +306,7 @@ export default function BoutiqueEquipePage() {
                     <div className="space-y-2">
                       <div className="flex items-center space-x-2 text-sm text-slate-600 dark:text-slate-400">
                         <Shield className="w-4 h-4" />
-                        <span className="capitalize">{membre.role}</span>
+                        <span className="capitalize">{ROLE_LABELS[membre.role] ?? membre.role}</span>
                       </div>
                       {membre.telephone && (
                         <div className="flex items-center space-x-2 text-sm text-slate-600 dark:text-slate-400">
@@ -366,7 +372,7 @@ export default function BoutiqueEquipePage() {
           <DialogHeader>
             <DialogTitle>Ajouter un membre</DialogTitle>
             <DialogDescription>
-              Ajoutez un nouveau membre à l'équipe de {boutique?.nom}
+              Ajoutez un nouveau membre à l&apos;équipe de {boutique?.nom}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleAddMember}>

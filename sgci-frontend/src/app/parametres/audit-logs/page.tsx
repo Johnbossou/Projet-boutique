@@ -12,6 +12,7 @@ import {
   Activity,
   FileText,
   ChevronDown,
+  SearchX,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -158,9 +159,10 @@ export default function AuditLogsPage() {
   
   if (isLoading) {
     return (
-      <div className="container mx-auto p-6">
-        <div className="text-center py-8 text-muted-foreground">
-          Chargement des logs d'audit...
+      <div className="container mx-auto p-6 flex items-center justify-center min-h-[50vh]">
+        <div className="text-center text-muted-foreground">
+          <div className="w-10 h-10 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+          <p>Chargement des logs d&apos;audit...</p>
         </div>
       </div>
     );
@@ -173,7 +175,7 @@ export default function AuditLogsPage() {
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-2">
             <Shield className="w-8 h-8" />
-            Logs d'Audit
+            Logs d&apos;Audit
           </h1>
           <p className="text-muted-foreground mt-1">
             Traçabilité complète des actions du système
@@ -199,7 +201,7 @@ export default function AuditLogsPage() {
           
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Aujourd'hui</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Aujourd&apos;hui</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.logs_today}</div>
@@ -295,8 +297,11 @@ export default function AuditLogsPage() {
             <TableBody>
               {filteredLogs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                    Aucun log trouvé
+                  <TableCell colSpan={6} className="py-8">
+                    <div className="flex flex-col items-center justify-center text-muted-foreground">
+                      <SearchX className="h-8 w-8 mb-2 opacity-50" />
+                      <p className="text-sm">Aucun log d&apos;audit trouvé</p>
+                    </div>
                   </TableCell>
                 </TableRow>
               ) : (

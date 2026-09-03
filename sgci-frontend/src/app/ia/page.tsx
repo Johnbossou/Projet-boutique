@@ -451,7 +451,14 @@ export default function IAPage() {
   };
 
   if (!user) {
-    return <div>Chargement...</div>;
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-purple-50 dark:from-slate-900 dark:to-purple-900/20 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto"></div>
+          <p className="mt-4 text-slate-600 dark:text-slate-400">Chargement...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -638,7 +645,7 @@ export default function IAPage() {
               <div className="flex items-center space-x-3">
                 <Badge variant="outline" className="bg-blue-50 text-blue-600 border-blue-200">
                   <Clock className="w-3 h-3 mr-1" />
-                  Mis à jour à l'instant
+                  Mis à jour à l&apos;instant
                 </Badge>
                 {predictions[0]?.mode_calcul && (
                   <Badge variant="outline" className="bg-purple-50 text-purple-600 border-purple-200">
@@ -685,7 +692,7 @@ export default function IAPage() {
                     Aucune donnée de prédiction
                   </h3>
                   <p className="text-slate-600 dark:text-slate-400 mb-4">
-                    L'IA a besoin de données pour générer des prédictions
+                    L&apos;IA a besoin de données pour générer des prédictions
                   </p>
                   <Button onClick={chargerDonneesIA}>
                     <RefreshCw className="w-4 h-4 mr-2" />
@@ -753,7 +760,7 @@ export default function IAPage() {
                     Aucune recommandation de promotion
                   </h3>
                   <p className="text-slate-600 dark:text-slate-400">
-                    L'IA analysera les opportunités lorsque plus de données seront disponibles
+                    L&apos;IA analysera les opportunités lorsque plus de données seront disponibles
                   </p>
                 </div>
               )}

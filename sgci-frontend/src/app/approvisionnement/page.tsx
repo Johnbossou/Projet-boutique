@@ -10,6 +10,9 @@ import {
   Eye,
   Filter,
   Boxes,
+  Loader2,
+  PackageSearch,
+  Users,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -321,8 +324,13 @@ export default function ApprovisionnementPage() {
     <div className="p-4 lg:p-6 space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <Truck className="w-6 h-6 text-orange-500" />
-          <h1 className="text-2xl font-bold">Approvisionnement</h1>
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 flex items-center justify-center">
+            <Truck className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold">Approvisionnement</h1>
+            <p className="text-sm text-muted-foreground">Commandes fournisseurs et réceptions de stock</p>
+          </div>
         </div>
         {userPeutGerer && (
           <div className="flex gap-2">
@@ -379,9 +387,20 @@ export default function ApprovisionnementPage() {
           <Card>
             <CardContent className="p-0">
               {isLoading ? (
-                <p className="p-6 text-center text-muted-foreground">Chargement…</p>
+                <div className="flex items-center justify-center gap-2 py-12 text-muted-foreground">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Chargement des commandes…</span>
+                </div>
               ) : commandes.length === 0 ? (
-                <p className="p-6 text-center text-muted-foreground">Aucune commande trouvée</p>
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-muted text-muted-foreground/60">
+                    <PackageSearch className="h-6 w-6" />
+                  </div>
+                  <p className="text-sm font-medium">
+                    {filtreStatut === 'all' ? 'Aucune commande' : `Aucune commande « ${STATUT_LABELS[filtreStatut] ?? filtreStatut} »`}
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">Passez une commande fournisseur pour suivre les livraisons ici.</p>
+                </div>
               ) : (
                 <Table>
                   <TableHeader>
@@ -428,7 +447,13 @@ export default function ApprovisionnementPage() {
           <Card>
             <CardContent className="p-0">
               {fournisseurs.length === 0 ? (
-                <p className="p-6 text-center text-muted-foreground">Aucun fournisseur</p>
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-muted text-muted-foreground/60">
+                    <Users className="h-6 w-6" />
+                  </div>
+                  <p className="text-sm font-medium">Aucun fournisseur</p>
+                  <p className="mt-1 text-sm text-muted-foreground">Ajoutez des fournisseurs pour passer des commandes d&apos;approvisionnement.</p>
+                </div>
               ) : (
                 <Table>
                   <TableHeader>
@@ -481,7 +506,7 @@ export default function ApprovisionnementPage() {
                 <SelectTrigger><SelectValue placeholder="Sélectionner un fournisseur" /></SelectTrigger>
                 <SelectContent>
                   {fournisseurs.length === 0 ? (
-                    <p className="p-2 text-sm text-muted-foreground">Aucun fournisseur. Créez-en un d'abord.</p>
+                    <p className="p-2 text-sm text-muted-foreground">Aucun fournisseur. Créez-en un d&apos;abord.</p>
                   ) : (
                     fournisseurs.map((f) => (
                       <SelectItem key={f.id} value={String(f.id)}>{f.nom}</SelectItem>

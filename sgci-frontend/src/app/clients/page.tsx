@@ -23,7 +23,9 @@ import {
   AlertTriangle,
   Download,
   ArrowDown,
-  ArrowUp
+  ArrowUp,
+  Loader2,
+  UserX
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -93,6 +95,21 @@ interface ClientFormData {
 }
 
 // Hook personnalisé pour le debouncing
+const COMMANDE_STATUT_LABELS: Record<string, string> = {
+  en_attente: 'En attente',
+  confirmee: 'Confirmée',
+  expediee: 'Expédiée',
+  livree: 'Livrée',
+  annulee: 'Annulée',
+  remboursee: 'Remboursée',
+};
+
+const CLIENT_STATUT_LABELS: Record<string, string> = {
+  actif: 'Actif',
+  inactif: 'Inactif',
+  vip: 'VIP',
+};
+
 const useDebounce = (value: string, delay: number) => {
   const [debouncedValue, setDebouncedValue] = useState(value);
 
@@ -619,7 +636,7 @@ export default function ClientsPage() {
               client.statut === 'actif' ? 'bg-green-500/10 text-green-600 border-green-500/20' :
               'bg-slate-500/10 text-slate-600 border-slate-500/20'
             }>
-              {client.statut === 'vip' ? 'VIP' : client.statut}
+              {CLIENT_STATUT_LABELS[client.statut] ?? client.statut}
             </Badge>
           </div>
 
@@ -694,7 +711,7 @@ export default function ClientsPage() {
           commande.statut === 'confirmee' ? 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20' :
           'bg-slate-500/10 text-slate-600 border-slate-500/20'
         }>
-          {commande.statut}
+          {COMMANDE_STATUT_LABELS[commande.statut] ?? commande.statut}
         </Badge>
       </div>
     </div>
@@ -1031,14 +1048,20 @@ export default function ClientsPage() {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-12 text-slate-500">
-                      Chargement des clients...
+                    <TableCell colSpan={8} className="py-12">
+                      <div className="flex items-center justify-center gap-2 text-slate-500">
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        <span>Chargement des clients...</span>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ) : clients.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-12 text-slate-500">
-                      Aucun client ne correspond à vos critères de recherche.
+                    <TableCell colSpan={8} className="py-12">
+                      <div className="flex flex-col items-center justify-center text-slate-500">
+                        <UserX className="h-8 w-8 mb-2 opacity-50" />
+                        <p className="text-sm">Aucun client ne correspond à vos critères de recherche.</p>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -1068,7 +1091,7 @@ export default function ClientsPage() {
                             ? 'bg-green-500/10 text-green-600 border-green-500/20'
                             : 'bg-slate-500/10 text-slate-600 border-slate-500/20'
                         }>
-                          {client.statut === 'vip' ? 'VIP' : client.statut}
+{CLIENT_STATUT_LABELS[client.statut] ?? client.statut}
                         </Badge>
                       </TableCell>
                       <TableCell>{client.nombre_commandes}</TableCell>
@@ -1188,7 +1211,7 @@ export default function ClientsPage() {
                     </h2>
                     <p className="text-slate-600 dark:text-slate-400">
                       {clientSelectionne 
-                        ? `Client ${clientSelectionne.statut === 'vip' ? 'VIP' : clientSelectionne.statut}`
+                        ? `Client ${CLIENT_STATUT_LABELS[clientSelectionne.statut] ?? clientSelectionne.statut}`
                         : 'Création d\'un nouveau client'
                       }
                     </p>
@@ -1425,7 +1448,7 @@ export default function ClientsPage() {
                             <div className="flex items-center space-x-3">
                               <Calendar className="w-5 h-5 text-slate-400" />
                               <div>
-                                <p className="font-medium">Date d'inscription</p>
+                                <p className="font-medium">Date d&apos;inscription</p>
                                 <p className="text-slate-600 dark:text-slate-400">
                                   {new Date(clientSelectionne.created_at).toLocaleDateString('fr-FR')}
                                 </p>
@@ -1510,7 +1533,7 @@ export default function ClientsPage() {
                                 : clientSelectionne.total_achats.toLocaleString()
                               }
                             </p>
-                            <p className="text-slate-600 dark:text-slate-400">Chiffre d'Affaires</p>
+                            <p className="text-slate-600 dark:text-slate-400">Chiffre d&apos;Affaires</p>
                           </CardContent>
                         </Card>
                         
