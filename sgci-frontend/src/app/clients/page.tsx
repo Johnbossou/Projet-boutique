@@ -1,7 +1,7 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Users,
   UserPlus,
@@ -68,6 +68,22 @@ interface Client {
   statut: 'actif' | 'inactif' | 'vip';
   notes?: string;
   ventes?: Vente[];
+}
+
+// Forme brute renvoyée par l'API Laravel
+interface ClientApiRow {
+  id: number;
+  nom: string;
+  email: string;
+  telephone: string | null;
+  adresse?: string | null;
+  ville?: string | null;
+  created_at: string;
+  total_achats: number | string;
+  nombre_commandes: number;
+  derniere_commande?: Client['derniere_commande'];
+  statut: Client['statut'];
+  notes?: string | null;
 }
 
 interface StatistiquesClients {
@@ -178,11 +194,13 @@ export default function ClientsPage() {
   useEffect(() => {
     chargerClients();
     chargerStatistiques();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Chargement avec filtres et tri
   useEffect(() => {
     chargerClientsAvecFiltres();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rechercheDebouncee, filtreStatut, sortField, sortDirection]);
 
   const changerTri = (field: typeof sortField) => {
@@ -218,7 +236,7 @@ export default function ClientsPage() {
       // ✅ CORRECTION : Laravel paginate renvoie { data: [], meta: {} }
       const clientsData = data.data || [];
       
-      const clientsTransformes: Client[] = clientsData.map((client: any) => ({
+      const clientsTransformes: Client[] = clientsData.map((client: ClientApiRow) => ({
         id: client.id,
         nom: client.nom,
         email: client.email,
@@ -226,7 +244,7 @@ export default function ClientsPage() {
         adresse: client.adresse || '',
         ville: client.ville || '',
         created_at: client.created_at,
-        total_achats: parseFloat(client.total_achats) || 0,
+        total_achats: typeof client.total_achats === 'number' ? client.total_achats : parseFloat(client.total_achats || '0') || 0,
         nombre_commandes: client.nombre_commandes || 0,
         derniere_commande: client.derniere_commande,
         statut: client.statut,
@@ -267,15 +285,6 @@ export default function ClientsPage() {
       }
     } catch (error) {
       console.error('Erreur chargement statistiques:', error);
-    }
-  };
-
-  const handleSort = (field: typeof sortField) => {
-    if (sortField === field) {
-      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setSortField(field);
-      setSortDirection('desc');
     }
   };
 
@@ -395,9 +404,9 @@ export default function ClientsPage() {
       
       toast.success('Client créé avec succès');
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur création client:', error);
-      toast.error(error.message || 'Erreur lors de la création du client');
+      toast.error(error instanceof Error ? error.message : 'Erreur lors de la création du client');
     } finally {
       setActionEnCours(null);
     }
@@ -437,15 +446,15 @@ export default function ClientsPage() {
       
       toast.success('Client modifié avec succès');
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur modification client:', error);
-      toast.error(error.message || 'Erreur lors de la modification du client');
-    } finally {
+      toast.error(error instanceof Error ? error.message : 'Erreur lors de la modification du client');
+} finally {
       setActionEnCours(null);
     }
   };
 
-  // 🎯 SUPPRESSION D'UN CLIENT
+    // 🎯 SUPPRESSION D'UN CLIENT
   const supprimerClient = async () => {
     if (!clientSelectionne) return;
     
@@ -474,9 +483,9 @@ export default function ClientsPage() {
       
       toast.success('Client supprimé avec succès');
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur suppression client:', error);
-      toast.error(error.message || 'Erreur lors de la suppression du client');
+      toast.error(error instanceof Error ? error.message : 'Erreur lors de la suppression du client');
     } finally {
       setActionEnCours(null);
     }
@@ -496,9 +505,6 @@ export default function ClientsPage() {
         throw new Error(errorData.message || 'Erreur promotion VIP');
       }
       
-      const result = await response.json();
-      const clientPromu = result.client || client;
-      
       // Met à jour la liste
       setClients(prev => prev.map(c => 
         c.id === client.id ? { ...c, statut: 'vip' } : c
@@ -511,9 +517,9 @@ export default function ClientsPage() {
       
       toast.success('Client promu VIP avec succès');
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur promotion VIP:', error);
-      toast.error(error.message || 'Erreur lors de la promotion du client');
+      toast.error(error instanceof Error ? error.message : 'Erreur lors de la promotion du client');
     } finally {
       setActionEnCours(null);
     }
@@ -533,9 +539,6 @@ export default function ClientsPage() {
         throw new Error(errorData.message || 'Erreur rétrogradation VIP');
       }
       
-      const result = await response.json();
-      const clientRetrograde = result.client || client;
-      
       // Met à jour la liste
       setClients(prev => prev.map(c => 
         c.id === client.id ? { ...c, statut: 'actif' } : c
@@ -548,9 +551,9 @@ export default function ClientsPage() {
       
       toast.success('Client rétrogradé avec succès');
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur rétrogradation VIP:', error);
-      toast.error(error.message || 'Erreur lors de la rétrogradation du client');
+      toast.error(error instanceof Error ? error.message : 'Erreur lors de la rétrogradation du client');
     } finally {
       setActionEnCours(null);
     }
@@ -586,101 +589,13 @@ export default function ClientsPage() {
       
       toast.success(`Export réalisé avec succès (${data.count || data.data?.length || 0} clients)`);
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur export clients:', error);
       toast.error('Erreur lors de l\'export des clients');
     } finally {
       setActionEnCours(null);
     }
   };
-
-  // 🎯 COMPOSANT CARD CLIENT
-  const ClientCard = ({ client, index }: { client: Client; index: number }) => (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.1 }}
-      whileHover={{ scale: 1.02 }}
-      className="cursor-pointer"
-      onClick={() => ouvrirModalVisualisation(client)}
-    >
-      <Card className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm border-slate-200/50 dark:border-slate-700/50 hover:shadow-xl transition-all duration-300 group">
-        <CardContent className="p-6">
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex items-center space-x-3">
-              <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                client.statut === 'vip' 
-                  ? 'bg-gradient-to-r from-yellow-500 to-orange-500' 
-                  : client.statut === 'actif'
-                  ? 'bg-gradient-to-r from-green-500 to-emerald-500'
-                  : 'bg-gradient-to-r from-slate-500 to-gray-500'
-              }`}>
-                <Users className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <div className="flex items-center space-x-2">
-                  <h3 className="font-bold text-slate-900 dark:text-white group-hover:text-blue-600 transition-colors">
-                    {client.nom}
-                  </h3>
-                  {client.statut === 'vip' && <Crown className="w-4 h-4 text-yellow-500" />}
-                </div>
-                <p className="text-sm text-slate-600 dark:text-slate-400">{client.email}</p>
-              </div>
-            </div>
-            
-            <Badge variant={
-              client.statut === 'vip' ? 'default' :
-              client.statut === 'actif' ? 'secondary' : 'outline'
-            } className={
-              client.statut === 'vip' ? 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20' :
-              client.statut === 'actif' ? 'bg-green-500/10 text-green-600 border-green-500/20' :
-              'bg-slate-500/10 text-slate-600 border-slate-500/20'
-            }>
-              {CLIENT_STATUT_LABELS[client.statut] ?? client.statut}
-            </Badge>
-          </div>
-
-          <div className="space-y-2 mb-4">
-            <div className="flex items-center space-x-2 text-sm text-slate-600 dark:text-slate-400">
-              <Phone className="w-4 h-4" />
-              <span>{client.telephone}</span>
-            </div>
-            {client.ville && (
-              <div className="flex items-center space-x-2 text-sm text-slate-600 dark:text-slate-400">
-                <MapPin className="w-4 h-4" />
-                <span>{client.ville}</span>
-              </div>
-            )}
-          </div>
-
-          <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-200/50 dark:border-slate-700/50">
-            <div className="text-center">
-              <p className="text-2xl font-bold text-slate-900 dark:text-white">
-                {client.nombre_commandes}
-              </p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Commandes</p>
-            </div>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-green-600">
-                {client.total_achats >= 1000 
-                  ? `${(client.total_achats / 1000).toFixed(0)}K` 
-                  : client.total_achats.toLocaleString()
-                }
-              </p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">FCFA</p>
-            </div>
-          </div>
-
-          {client.derniere_commande && (
-            <div className="flex items-center space-x-2 text-xs text-slate-500 dark:text-slate-400 mt-3">
-              <Calendar className="w-3 h-3" />
-              <span>Dernière commande: {new Date(client.derniere_commande.date).toLocaleDateString('fr-FR')}</span>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </motion.div>
-  );
 
   // 🎯 COMPOSANT CARD COMMANDE
   const CommandeCard = ({ commande }: { commande: Vente }) => (
@@ -901,7 +816,7 @@ export default function ClientsPage() {
                   <Filter className="w-4 h-4 text-slate-400" />
                   <select 
                     value={filtreStatut}
-                    onChange={(e) => setFiltreStatut(e.target.value as any)}
+                    onChange={(e) => setFiltreStatut(e.target.value as 'tous' | 'actif' | 'inactif' | 'vip')}
                     className="bg-white/50 dark:bg-slate-700/50 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm"
                   >
                     <option value="tous">Tous les statuts</option>
@@ -1350,7 +1265,7 @@ export default function ClientsPage() {
                             <label className="text-sm font-medium">Statut</label>
                             <select 
                               value={formData.statut}
-                              onChange={(e) => handleInputChange('statut', e.target.value as any)}
+                              onChange={(e) => handleInputChange('statut', e.target.value as ClientFormData['statut'])}
                               className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white/50 dark:bg-slate-700/50"
                               disabled={actionEnCours !== null}
                             >

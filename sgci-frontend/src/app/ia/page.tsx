@@ -13,7 +13,6 @@ import {
   RefreshCw,
   Sparkles,
   Clock,
-  Calculator,
   PieChart,
   ShieldAlert,
   TrendingDown,
@@ -94,12 +93,12 @@ interface ImpactBusiness {
 interface PerformanceData {
   precision: Metrics;
   impact_business: ImpactBusiness;
-  historique: any[];
+  historique: unknown[];
   statut_modele: {
     statut: string;
     libelle?: string;
-    dernier_entrainement: any;
-    dernier_recalcul?: any;
+    dernier_entrainement: { date?: string } | null;
+    dernier_recalcul?: { date?: string } | null;
     prochaine_mise_a_jour: string | null;
   };
   donnees_temps_reel: {
@@ -119,7 +118,7 @@ export default function IAPage() {
   const [performanceData, setPerformanceData] = useState<PerformanceData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isTraining, setIsTraining] = useState(false);
-  const [activeTab, setActiveTab] = useState('predictions');
+  const [, setActiveTab] = useState('predictions');
 
   // 🧠 CHARGEMENT DES DONNÉES IA
   useEffect(() => {
