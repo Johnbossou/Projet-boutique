@@ -51,6 +51,10 @@ interface Produit {
   seuil_alerte: number;
   categorie_id: number;
   est_perissable: boolean;
+  date_peremption?: string | null;
+  date_fabrication?: string | null;
+  lot_numero?: string | null;
+  duree_conservation_jours?: number | null;
   unite_mesure: string;
   created_at: string;
   image_url?: string;
@@ -153,6 +157,10 @@ export default function ProduitsPage() {
     seuil_alerte: '',
     categorie_id: '',
     est_perissable: false,
+    date_peremption: '',
+    date_fabrication: '',
+    lot_numero: '',
+    duree_conservation_jours: '',
     unite_mesure: 'unité',
     image_url: '',
     images: [] as string[]
@@ -277,6 +285,10 @@ export default function ProduitsPage() {
           seuil_alerte: parseInt(formData.seuil_alerte),
           categorie_id: parseInt(formData.categorie_id),
           image_url: formData.image_url || null,
+          date_peremption: formData.date_peremption || null,
+          date_fabrication: formData.date_fabrication || null,
+          lot_numero: formData.lot_numero || null,
+          duree_conservation_jours: formData.duree_conservation_jours ? parseInt(formData.duree_conservation_jours) : null,
           images: formData.images
         }),
       });
@@ -316,6 +328,10 @@ export default function ProduitsPage() {
         seuil_alerte: parseInt(formData.seuil_alerte),
         categorie_id: parseInt(formData.categorie_id),
         est_perissable: formData.est_perissable,
+        date_peremption: formData.date_peremption || null,
+        date_fabrication: formData.date_fabrication || null,
+        lot_numero: formData.lot_numero || null,
+        duree_conservation_jours: formData.duree_conservation_jours ? parseInt(formData.duree_conservation_jours) : null,
         unite_mesure: formData.unite_mesure,
         image_url: formData.image_url || null,
         images: formData.images,
@@ -387,6 +403,10 @@ export default function ProduitsPage() {
       seuil_alerte: '',
       categorie_id: '',
       est_perissable: false,
+      date_peremption: '',
+      date_fabrication: '',
+      lot_numero: '',
+      duree_conservation_jours: '',
       unite_mesure: 'unité',
       image_url: '',
       images: []
@@ -405,6 +425,10 @@ export default function ProduitsPage() {
       seuil_alerte: produit.seuil_alerte.toString(),
       categorie_id: produit.categorie_id.toString(),
       est_perissable: produit.est_perissable,
+      date_peremption: produit.date_peremption || '',
+      date_fabrication: produit.date_fabrication || '',
+      lot_numero: produit.lot_numero || '',
+      duree_conservation_jours: produit.duree_conservation_jours != null ? produit.duree_conservation_jours.toString() : '',
       unite_mesure: produit.unite_mesure,
       image_url: produit.image_url || '',
       images: produit.images || []
@@ -1108,6 +1132,50 @@ export default function ProduitsPage() {
               <Label htmlFor="est_perissable">Produit périssable</Label>
             </div>
           </div>
+          {formData.est_perissable && (
+            <div className="space-y-3 rounded-lg border p-3">
+              <div className="space-y-2">
+                <Label htmlFor="date_peremption">Date de péremption</Label>
+                <Input
+                  id="date_peremption"
+                  type="date"
+                  value={formData.date_peremption}
+                  onChange={(e) => setFormData(prev => ({ ...prev, date_peremption: e.target.value }))}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="date_fabrication">Date de fabrication</Label>
+                  <Input
+                    id="date_fabrication"
+                    type="date"
+                    value={formData.date_fabrication}
+                    onChange={(e) => setFormData(prev => ({ ...prev, date_fabrication: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="duree_conservation_jours">Durée de conservation (jours)</Label>
+                  <Input
+                    id="duree_conservation_jours"
+                    type="number"
+                    min={0}
+                    placeholder="ex. 30"
+                    value={formData.duree_conservation_jours}
+                    onChange={(e) => setFormData(prev => ({ ...prev, duree_conservation_jours: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="lot_numero">N° de lot</Label>
+                <Input
+                  id="lot_numero"
+                  placeholder="ex. LOT-2026-001"
+                  value={formData.lot_numero}
+                  onChange={(e) => setFormData(prev => ({ ...prev, lot_numero: e.target.value }))}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
