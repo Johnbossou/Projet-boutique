@@ -25,6 +25,11 @@ const initialForm = {
   notes: '',
 };
 
+const TYPE_LABEL: Record<string, string> = {
+  entree: 'Entrée',
+  sortie: 'Sortie',
+};
+
 export default function ArrivagePage() {
   const { user } = useAuth();
   const roleCourant = getEffectiveRole(user);
@@ -133,7 +138,7 @@ export default function ArrivagePage() {
           produit_id: parseInt(formData.produit_id, 10),
           quantite,
           raison: 'arrivage',
-          type: 'entrée',
+          type: 'entree',
           reference_bon: formData.reference_bon || null,
           notes: formData.notes || null,
         }),
@@ -395,11 +400,11 @@ export default function ArrivagePage() {
                     <TableRow key={mouvement.id}>
                       <TableCell>{new Date(mouvement.created_at).toLocaleString('fr-FR')}</TableCell>
                       <TableCell>{mouvement.produit?.nom ?? 'Produit inconnu'}</TableCell>
-                      <TableCell>{mouvement.type}</TableCell>
+                      <TableCell>{TYPE_LABEL[mouvement.type] ?? mouvement.type}</TableCell>
                       <TableCell>{mouvement.quantite}</TableCell>
                       <TableCell>
-                        <Badge variant={mouvement.statut === 'accepté' ? 'default' : mouvement.statut === 'rejeté' ? 'destructive' : 'secondary'}>
-                          {mouvement.statut}
+                        <Badge variant={mouvement.statut === 'accepte' ? 'default' : mouvement.statut === 'rejete' ? 'destructive' : 'secondary'}>
+                          {mouvement.statut === 'accepte' ? 'Accepté' : mouvement.statut === 'rejete' ? 'Rejeté' : mouvement.statut === 'en_attente' ? 'En attente' : mouvement.statut}
                         </Badge>
                       </TableCell>
                       <TableCell>{mouvement.reference_bon || '—'}</TableCell>

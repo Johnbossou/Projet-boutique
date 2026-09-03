@@ -19,9 +19,15 @@ import type { Produit, MouvementStock } from '@/types';
 const STATUTS = [
   { value: 'all', label: 'Tous les statuts' },
   { value: 'en_attente', label: 'En attente' },
-  { value: 'accepté', label: 'Accepté' },
-  { value: 'rejeté', label: 'Rejeté' },
+  { value: 'accepte', label: 'Accepté' },
+  { value: 'rejete', label: 'Rejeté' },
 ];
+
+const STATUT_LABEL: Record<string, string> = {
+  en_attente: 'En attente',
+  accepte: 'Accepté',
+  rejete: 'Rejeté',
+};
 
 // ✅ CORRIGÉ : value="all" au lieu de value=""
 const RAISONS = [
@@ -137,8 +143,8 @@ export default function StockHistoryPage() {
     return {
       total: mouvements.length,
       enAttente: mouvements.filter((m) => m.statut === 'en_attente').length,
-      acceptes: mouvements.filter((m) => m.statut === 'accepté').length,
-      rejetes: mouvements.filter((m) => m.statut === 'rejeté').length,
+      acceptes: mouvements.filter((m) => m.statut === 'accepte').length,
+      rejetes: mouvements.filter((m) => m.statut === 'rejete').length,
     };
   }, [mouvements]);
 
@@ -304,8 +310,8 @@ export default function StockHistoryPage() {
                     <TableCell>{mouvement.quantite_avant ?? '—'}</TableCell>
                     <TableCell>{mouvement.quantite_apres ?? '—'}</TableCell>
                     <TableCell>
-                      <Badge variant={mouvement.statut === 'accepté' ? 'default' : mouvement.statut === 'rejeté' ? 'destructive' : 'secondary'}>
-                        {mouvement.statut}
+                      <Badge variant={mouvement.statut === 'accepte' ? 'default' : mouvement.statut === 'rejete' ? 'destructive' : 'secondary'}>
+                        {STATUT_LABEL[mouvement.statut] ?? mouvement.statut}
                       </Badge>
                     </TableCell>
                     <TableCell className="space-x-2">

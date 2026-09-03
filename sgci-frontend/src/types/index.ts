@@ -123,10 +123,10 @@ export interface MouvementStock {
   produit_id: number;
   quantite: number;
   raison: 'arrivage' | 'vente' | 'ajustement' | 'retour' | 'casse';
-  type: 'entrée' | 'sortie';
+  type: 'entree' | 'sortie';
   reference_bon?: string | null;
   user_id: number;
-  statut: 'en_attente' | 'accepté' | 'rejeté';
+  statut: 'en_attente' | 'accepte' | 'rejete';
   notes?: string | null;
   quantite_avant?: number;
   quantite_apres?: number;
