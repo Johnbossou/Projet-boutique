@@ -57,6 +57,10 @@ export interface Produit {
   seuil_alerte: number;
   categorie_id: number;
   est_perissable: boolean;
+  date_peremption?: string | null;
+  date_fabrication?: string | null;
+  lot_numero?: string | null;
+  duree_conservation_jours?: number | null;
   code_qr?: string;
   unite_mesure: string;
   image_url?: string | null;
@@ -65,6 +69,7 @@ export interface Produit {
   deleted_at?: string;
   categorie?: Categorie;
   statut_stock?: 'normal' | 'alerte' | 'rupture';
+  jours_restants?: number | null;
 }
 
 export interface LigneVente {
@@ -202,6 +207,11 @@ export interface AnalyticsData {
     produits_en_alerte: number;
     produits_en_rupture: number;
   };
+}
+
+export interface PeremptionResult {
+  proches_peremption: Produit[];
+  perimes: Produit[];
 }
 
 export interface LoginResponse {
