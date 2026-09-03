@@ -79,6 +79,7 @@ class CommandeFournisseurController extends Controller
                 'notes' => $validated['notes'] ?? null,
                 'user_id' => $request->user()->id,
                 'montant_total' => 0,
+                'montant_paye' => 0,
             ]);
 
             $montantTotal = 0;

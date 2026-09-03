@@ -402,7 +402,7 @@ export default function ApprovisionnementPage() {
                         <TableCell>{c.fournisseur?.nom ?? '—'}</TableCell>
                         <TableCell className="text-right font-mono">{c.montant_total.toLocaleString('fr-FR')} XOF</TableCell>
                         <TableCell className="text-right font-mono">
-                          {Math.max(0, c.montant_total - c.montant_paye).toLocaleString('fr-FR')} XOF
+                          {Math.max(0, c.montant_total - (c.montant_paye ?? 0)).toLocaleString('fr-FR')} XOF
                         </TableCell>
                         <TableCell>
                           <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${STATUT_COLORS[c.statut] ?? ''}`}>
@@ -591,11 +591,11 @@ export default function ApprovisionnementPage() {
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div><span className="text-muted-foreground">Date :</span> {new Date(detailOuvert.date_commande).toLocaleDateString('fr-FR')}</div>
                 <div><span className="text-muted-foreground">Montant :</span> <span className="font-bold">{detailOuvert.montant_total.toLocaleString('fr-FR')} XOF</span></div>
-                <div><span className="text-muted-foreground">Payé :</span> {detailOuvert.montant_paye.toLocaleString('fr-FR')} XOF</div>
+                <div><span className="text-muted-foreground">Payé :</span> {(detailOuvert.montant_paye ?? 0).toLocaleString('fr-FR')} XOF</div>
                 <div>
                   <span className="text-muted-foreground">Reste à payer :</span>{' '}
-                  <span className={detailOuvert.montant_total - detailOuvert.montant_paye > 0 ? 'text-amber-600 font-semibold' : 'text-green-600 font-semibold'}>
-                    {(detailOuvert.montant_total - detailOuvert.montant_paye).toLocaleString('fr-FR')} XOF
+                  <span className={detailOuvert.montant_total - (detailOuvert.montant_paye ?? 0) > 0 ? 'text-amber-600 font-semibold' : 'text-green-600 font-semibold'}>
+                    {(detailOuvert.montant_total - (detailOuvert.montant_paye ?? 0)).toLocaleString('fr-FR')} XOF
                   </span>
                 </div>
                 {detailOuvert.date_livraison_reelle && (
@@ -660,21 +660,21 @@ export default function ApprovisionnementPage() {
                 </div>
               )}
 
-              {detailOuvert.statut !== 'annule' && detailOuvert.montant_paye < detailOuvert.montant_total && userPeutGerer && (
+              {detailOuvert.statut !== 'annule' && (detailOuvert.montant_paye ?? 0) < detailOuvert.montant_total && userPeutGerer && (
                 <div className="space-y-3 border rounded-lg p-3">
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-green-600" />
                     <p className="text-sm font-medium">Règlement</p>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div className="text-muted-foreground">Payé : <span className="font-semibold text-green-600">{detailOuvert.montant_paye.toLocaleString('fr-FR')} XOF</span></div>
-                    <div className="text-muted-foreground">Reste : <span className="font-semibold text-amber-600">{(detailOuvert.montant_total - detailOuvert.montant_paye).toLocaleString('fr-FR')} XOF</span></div>
+                    <div className="text-muted-foreground">Payé : <span className="font-semibold text-green-600">{(detailOuvert.montant_paye ?? 0).toLocaleString('fr-FR')} XOF</span></div>
+                    <div className="text-muted-foreground">Reste : <span className="font-semibold text-amber-600">{(detailOuvert.montant_total - (detailOuvert.montant_paye ?? 0)).toLocaleString('fr-FR')} XOF</span></div>
                   </div>
                   <div className="flex gap-2">
                     <Input
                       type="number"
                       min={1}
-                      max={detailOuvert.montant_total - detailOuvert.montant_paye}
+                      max={detailOuvert.montant_total - (detailOuvert.montant_paye ?? 0)}
                       placeholder="Montant à régler"
                       value={montantPaiement}
                       onChange={(e) => setMontantPaiement(e.target.value)}
