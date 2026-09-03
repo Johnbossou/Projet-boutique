@@ -44,6 +44,8 @@ class PrivilegeTest extends TestCase
             'est_actif' => true,
         ]);
         $this->gerant->forceFill(['current_boutique_id' => $this->boutique->id])->save();
+        // Rattachement pivot requis pour que le gérant soit reconnu membre de la boutique
+        $this->boutique->rattacherUser($this->gerant->id, 'gerant');
     }
 
     public function test_gerant_ne_peut_pas_creer_un_proprietaire(): void

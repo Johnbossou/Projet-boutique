@@ -15,7 +15,7 @@ class MouvementStock extends Model
 
     protected $fillable = [
         'produit_id',
-        'type', // 'entrée' ou 'sortie'
+        'type', // 'entree' ou 'sortie'
         'quantite',
         'raison', // 'arrivage', 'vente', 'ajustement', 'retour', 'casse'
         'reference_bon', // Numéro de bon de commande/arrivage

@@ -282,7 +282,7 @@ class CommandeFournisseurController extends Controller
                 // Mouvement de stock tracé et directement validé (arrivage)
                 $mouvement = MouvementStock::create([
                     'produit_id' => $produit->id,
-                    'type' => 'entrée',
+                    'type' => 'entree',
                     'quantite' => $quantiteRecue,
                     'raison' => 'arrivage',
                     'reference_bon' => $commande->numero_commande,

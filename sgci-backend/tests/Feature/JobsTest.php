@@ -109,7 +109,7 @@ class JobsTest extends TestCase
             'produit_id' => $produit->id,
             'quantite' => 20,
             'raison' => 'arrivage',
-            'type' => 'entrée',
+            'type' => 'entree',
             'user_id' => $user->id,
             'statut' => 'en_attente',
         ]);
@@ -117,7 +117,7 @@ class JobsTest extends TestCase
         $initialStock = $produit->quantite_stock;
 
         // Simuler la validation du mouvement d'entrée
-        $mouvement->update(['statut' => 'accepté']);
+        $mouvement->update(['statut' => 'accepte']);
         $produit->increment('quantite_stock', $mouvement->quantite);
 
         $this->assertEquals($initialStock + 20, $produit->fresh()->quantite_stock);

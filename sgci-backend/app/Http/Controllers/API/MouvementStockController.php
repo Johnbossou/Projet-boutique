@@ -74,7 +74,7 @@ class MouvementStockController extends Controller
             'produit_id' => 'required|exists:produits,id',
             'quantite' => 'required|integer|min:1',
             'raison' => 'required|in:arrivage,vente,ajustement,retour,casse',
-            'type' => 'required|in:entrée,sortie',
+            'type' => 'required|in:entree,sortie',
             'reference_bon' => 'nullable|string|max:100',
             'notes' => 'nullable|string',
         ]);

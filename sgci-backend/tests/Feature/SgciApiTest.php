@@ -161,7 +161,7 @@ class SgciApiTest extends TestCase
             'produit_id' => $produit->id,
             'quantite' => 10,
             'raison' => 'arrivage',
-            'type' => 'entrée',
+            'type' => 'entree',
         ])->assertCreated();
 
         $id = $mouvement->json('mouvement.id');
