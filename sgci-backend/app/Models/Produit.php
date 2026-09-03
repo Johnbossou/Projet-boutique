@@ -9,6 +9,8 @@ class Produit extends Model
 {
     use HasFactory, SoftDeletes;
 
+    protected $appends = ['jours_restants'];
+
     protected $fillable = [
         'nom',
         'description',
