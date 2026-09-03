@@ -28,8 +28,8 @@ const MAPPING = {
   'gearshape.fill': 'settings',
   'box.truck.fill': 'local-shipping',
   'arrow.triangle.2.circlepath': 'autorenew',
-  'clipboard.list.fill': 'fact-check',
-  'document.text.fill': 'description',
+  'clipboard.fill': 'content-paste',
+  'doc.text.fill': 'description',
 } as IconMapping;
 
 /**

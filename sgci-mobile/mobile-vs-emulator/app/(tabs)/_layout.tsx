@@ -100,7 +100,7 @@ export default function TabLayout() {
         options={{
           title: 'Inventaire',
           href: peutGerer ? undefined : null,
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="clipboard.list.fill" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="clipboard.fill" color={color} />,
         }}
       />
       <Tabs.Screen
@@ -108,7 +108,7 @@ export default function TabLayout() {
         options={{
           title: 'Devis',
           href: peutGerer ? undefined : null,
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="document.text.fill" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="doc.text.fill" color={color} />,
         }}
       />
       <Tabs.Screen
