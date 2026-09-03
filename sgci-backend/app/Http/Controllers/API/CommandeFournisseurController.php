@@ -5,6 +5,8 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Models\CommandeFournisseur;
 use App\Models\LigneCommandeFournisseur;
+use App\Models\MouvementStock;
+use App\Models\Produit;
 use App\Traits\Auditable;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -177,6 +179,117 @@ class CommandeFournisseurController extends Controller
             'message' => 'Commande validée avec succès',
             'data' => $commande,
         ]);
+    }
+
+    /**
+     * Réceptionne tout ou partie des lignes d'une commande fournisseur validée.
+     * Chaque quantité reçue est tracée via un mouvement de stock « arrivage » validé
+     * (le stock de la boutique est incrémenté) et reportée sur quantite_recue.
+     * La commande passe en « livre » lorsque toutes les lignes sont entièrement reçues.
+     */
+    public function receptionner(Request $request, CommandeFournisseur $commande): JsonResponse
+    {
+        if ($commande->boutique_id !== $request->user()->current_boutique_id) {
+            return response()->json(['message' => 'Non autorisé'], 403);
+        }
+
+        if ($commande->statut !== 'en_cours') {
+            return response()->json([
+                'message' => 'Seules les commandes en cours peuvent être réceptionnées',
+            ], 400);
+        }
+
+        $validated = $request->validate([
+            'lignes' => 'required|array|min:1',
+            'lignes.*.ligne_id' => 'required|exists:ligne_commande_fournisseurs,id',
+            'lignes.*.quantite_recue' => 'required|integer|min:1',
+        ]);
+
+        $lignes = $commande->lignes->keyBy('id');
+
+        DB::beginTransaction();
+        try {
+            $reccu = [];
+
+            foreach ($validated['lignes'] as $receptionLigne) {
+                $ligne = $lignes->get($receptionLigne['ligne_id']);
+
+                if (!$ligne || $ligne->commande_fournisseur_id !== $commande->id) {
+                    throw new \InvalidArgumentException("Ligne invalide pour cette commande : {$receptionLigne['ligne_id']}");
+                }
+
+                $quantiteRecue = (int) $receptionLigne['quantite_recue'];
+                $restant = $ligne->quantite_restante;
+
+                if ($quantiteRecue > $restant) {
+                    throw new \InvalidArgumentException(
+                        "La quantité reçue dépasse le restant attendu (produit {$ligne->produit_id})"
+                    );
+                }
+
+                $produit = Produit::findOrFail($ligne->produit_id);
+                $quantiteAvant = $produit->quantite_stock;
+
+                // Mouvement de stock tracé et directement validé (arrivage)
+                $mouvement = MouvementStock::create([
+                    'produit_id' => $produit->id,
+                    'type' => 'entrée',
+                    'quantite' => $quantiteRecue,
+                    'raison' => 'arrivage',
+                    'reference_bon' => $commande->numero_commande,
+                    'user_id' => $request->user()->id,
+                    'statut' => 'accepte',
+                    'notes' => "Réception commande fournisseur #{$commande->numero_commande}",
+                    'quantite_avant' => $quantiteAvant,
+                    'quantite_apres' => $quantiteAvant + $quantiteRecue,
+                    'boutique_id' => $commande->boutique_id,
+                ]);
+
+                $produit->update(['quantite_stock' => $quantiteAvant + $quantiteRecue]);
+
+                $ligne->quantite_recue += $quantiteRecue;
+                $ligne->statut = $ligne->estEntierementRecue() ? 'recu' : 'partiel';
+                $ligne->save();
+
+                $reccu[] = [
+                    'ligne_id' => $ligne->id,
+                    'produit_id' => $produit->id,
+                    'quantite_recue' => $quantiteRecue,
+                    'quantite_restante' => $ligne->quantite_restante,
+                    'mouvement_id' => $mouvement->id,
+                    'stock_apres' => $produit->quantite_stock,
+                ];
+
+                $this->auditCreate($mouvement);
+            }
+
+            // Toutes les lignes reçues en intégralité => commande livrée
+            $toutesRecues = $commande->lignes->every->estEntierementRecue();
+            if ($toutesRecues) {
+                $commande->update([
+                    'statut' => 'livre',
+                    'date_livraison_reelle' => now(),
+                ]);
+            }
+
+            $commande->refresh();
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Réception enregistrée, stock mis à jour',
+                'data' => [
+                    'commande' => $commande->load('lignes.produit', 'fournisseur'),
+                    'receptions' => $reccu,
+                ],
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            DB::rollBack();
+            return response()->json(['message' => $e->getMessage()], 422);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Erreur lors de la réception'], 500);
+        }
     }
 
     /**

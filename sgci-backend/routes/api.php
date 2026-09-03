@@ -177,6 +177,7 @@ Route::middleware(['auth:sanctum', 'user.active', 'boutique.scope'])->group(func
         Route::get('/{commande}', [CommandeFournisseurController::class, 'show']);
         Route::put('/{commande}', [CommandeFournisseurController::class, 'update'])->middleware('role.gerant')->middleware('throttle:20,1');
         Route::post('/{commande}/valider', [CommandeFournisseurController::class, 'valider'])->middleware('role.gerant')->middleware('throttle:20,1');
+        Route::post('/{commande}/receptionner', [CommandeFournisseurController::class, 'receptionner'])->middleware('role.gerant')->middleware('throttle:20,1');
         Route::post('/{commande}/annuler', [CommandeFournisseurController::class, 'annuler'])->middleware('role.gerant')->middleware('throttle:10,1');
         Route::delete('/{commande}', [CommandeFournisseurController::class, 'destroy'])->middleware('role.gerant')->middleware('throttle:5,1');
     });
