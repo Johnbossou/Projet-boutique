@@ -98,7 +98,7 @@ jobs:
         run: npx tsc --noEmit
 
   deploy:
-    name: Deploy
+    name: Deploy (Railway + Vercel)
     needs: [backend-tests, frontend-tests, mobile-typecheck]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
@@ -107,8 +107,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Deploy backend
-        run: echo "Configure your deployment here (SSH, Docker, Laravel Forge, etc.)"
+      # --- Backend : Railway (service sgci-backend, déploiement via Dockerfile) ---
+      # Secret requis : RAILWAY_TOKEN (Service token Railway lié au projet sgci-backend).
+      # Les IDs (projet/environnement/service) sont publics (non sensibles) et
+      # évitent toute interaction ; la CLI redéploie depuis la source (Dockerfile).
+      - name: Deploy backend to Railway
+        working-directory: sgci-backend
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: eb16de27-bf75-4e60-9461-1b8f42bf4d8e
+          RAILWAY_ENVIRONMENT_ID: 243e1ee2-dfed-462d-b9fe-0b5a82c78e0b
+          RAILWAY_SERVICE_ID: 676a764d-630e-446a-84d5-8114c326825f
+        run: |
+          npm install -g @railway/cli
+          railway link --yes --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT_ID" --service "$RAILWAY_SERVICE_ID"
+          railway up --ci --detach
 
-      - name: Deploy frontend
-        run: echo "Configure your deployment here (Vercel, Netlify, etc.)"
+      # --- Frontend : Vercel (projet sgci-frontend) ---
+      # Secrets requis : VERCEL_TOKEN (token d'accès Vercel).
+      # orgId / projectId proviennent de .vercel/project.json (non sensibles).
+      - name: Deploy frontend to Vercel
+        uses: amondnet/vercel-action@v42
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: team_IzRvIr1v8ia6AOS0AYmy7hgM
+          vercel-project-id: prj_REE1OCr3uCbODSQxKDShJtGZiKD2
+          working-directory: sgci-frontend
+          vercel-args: --prod --yes
