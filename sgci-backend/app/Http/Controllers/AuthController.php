@@ -380,12 +380,16 @@ class AuthController extends Controller
     public function disableTwoFactor(Request $request)
     {
         $request->validate([
-            'password' => 'required',
+            'password' => 'nullable|string',
         ]);
 
         $user = $request->user();
 
-        if (!Hash::check($request->password, $user->password)) {
+        // La session authentifiée suffit comme preuve d'identité.
+        // Si un mot de passe est fourni (optionnel), on le vérifie.
+        $password = $request->input('password');
+
+        if ($password !== null && $password !== '' && !Hash::check($password, $user->password)) {
             throw ValidationException::withMessages([
                 'password' => ['Mot de passe incorrect.'],
             ]);
