@@ -1,245 +1,166 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Bell, X, Check, AlertTriangle, Package, ShoppingCart, Users, DollarSign } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Badge } from '@/components/ui/badge';
+import { useEffect, useRef, useState } from 'react';
+import {
+  Bell,
+  BellRing,
+  Check,
+  CheckCheck,
+  Package,
+  PackageX,
+  ShoppingCart,
+  Users,
+  DollarSign,
+  Inbox,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { apiFetch } from '@/lib/api-client';
 import { toast } from 'sonner';
 
-interface Notification {
+interface AppNotification {
   id: number;
-  type: string;
-  titre: string;
+  title: string;
   message: string;
-  donnees?: any;
-  lu: boolean;
+  type: string;
+  data: Record<string, unknown> | null;
+  read_at: string | null;
   created_at: string;
 }
 
+const TYPE_META: Record<string, { icon: typeof Bell; text: string; tint: string }> = {
+  stock_alerte: { icon: Package, text: 'text-amber-500', tint: 'bg-amber-50 dark:bg-amber-500/10' },
+  stock_rupture: { icon: PackageX, text: 'text-red-500', tint: 'bg-red-50 dark:bg-red-500/10' },
+  vente: { icon: ShoppingCart, text: 'text-green-500', tint: 'bg-green-50 dark:bg-green-500/10' },
+  user: { icon: Users, text: 'text-blue-500', tint: 'bg-blue-50 dark:bg-blue-500/10' },
+  paiement: { icon: DollarSign, text: 'text-purple-500', tint: 'bg-purple-50 dark:bg-purple-500/10' },
+};
+
+const DEFAULT_META = { icon: Bell, text: 'text-slate-400', tint: 'bg-slate-50 dark:bg-slate-500/10' };
+
 export function RealTimeNotifications() {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
 
-  const fetchNotifications = async () => {
+  const fetchAll = async () => {
     try {
-      setIsLoading(true);
-      const response = await apiFetch('/notifications');
-      
-      if (response.ok) {
-        const data = await response.json();
-        setNotifications(data.data || data);
+      const [listRes, countRes] = await Promise.all([
+        apiFetch('/notifications?unread_only=1&per_page=15'),
+        apiFetch('/notifications/unread-count'),
+      ]);
+      if (listRes.ok) {
+        const d = await listRes.json();
+        setNotifications(Array.isArray(d.data) ? d.data : []);
       }
-    } catch (error) {
-      console.error('Erreur lors du chargement des notifications:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const fetchUnreadCount = async () => {
-    try {
-      const response = await apiFetch('/notifications/unread-count');
-      
-      if (response.ok) {
-        const data = await response.json();
-        setUnreadCount(data.count || 0);
+      if (countRes.ok) {
+        const c = await countRes.json();
+        setUnreadCount(c.count ?? 0);
       }
-    } catch (error) {
-      console.error('Erreur lors du chargement du compteur:', error);
-    }
-  };
-
-  const markAsRead = async (notificationId: number) => {
-    try {
-      await apiFetch(`/notifications/${notificationId}/read`, { method: 'POST' });
-      
-      setNotifications(notifications.map(n => 
-        n.id === notificationId ? { ...n, lu: true } : n
-      ));
-      setUnreadCount(Math.max(0, unreadCount - 1));
-    } catch (error) {
-      console.error('Erreur lors du marquage comme lu:', error);
-    }
-  };
-
-  const markAllAsRead = async () => {
-    try {
-      await apiFetch('/notifications/mark-all-read', { method: 'POST' });
-      
-      setNotifications(notifications.map(n => ({ ...n, lu: true })));
-      setUnreadCount(0);
-      toast.success('Toutes les notifications marquées comme lues');
-    } catch (error) {
-      console.error('Erreur lors du marquage tout comme lu:', error);
+    } catch {
+      /* ignore */
     }
   };
 
   useEffect(() => {
-    fetchNotifications();
-    fetchUnreadCount();
-
-    // Polling pour les notifications en temps réel (toutes les 30 secondes)
-    const interval = setInterval(() => {
-      fetchNotifications();
-      fetchUnreadCount();
-    }, 30000);
-
-    return () => clearInterval(interval);
+    fetchAll();
+    const t = setInterval(fetchAll, 30000);
+    return () => clearInterval(t);
   }, []);
 
-  const getNotificationIcon = (type: string) => {
-    switch (type) {
-      case 'stock_alert':
-      case 'stock_rupture':
-        return <Package className="w-5 h-5 text-orange-500" />;
-      case 'vente':
-        return <ShoppingCart className="w-5 h-5 text-green-500" />;
-      case 'user':
-        return <Users className="w-5 h-5 text-blue-500" />;
-      case 'paiement':
-        return <DollarSign className="w-5 h-5 text-purple-500" />;
-      default:
-        return <Bell className="w-5 h-5 text-slate-500" />;
-    }
+  useEffect(() => {
+    if (!isOpen) return;
+    const onClick = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setIsOpen(false);
+    };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [isOpen]);
+
+  const markOne = async (n: AppNotification) => {
+    await apiFetch(`/notifications/${n.id}/read`, { method: 'POST' }).catch(() => undefined);
+    setNotifications((prev) => prev.filter((x) => x.id !== n.id));
+    setUnreadCount((c) => Math.max(0, c - 1));
   };
 
-  const getNotificationColor = (type: string) => {
-    switch (type) {
-      case 'stock_alert':
-        return 'border-orange-500 bg-orange-50 dark:bg-orange-900/20';
-      case 'stock_rupture':
-        return 'border-red-500 bg-red-50 dark:bg-red-900/20';
-      case 'vente':
-        return 'border-green-500 bg-green-50 dark:bg-green-900/20';
-      default:
-        return 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800';
-    }
+  const markAll = async () => {
+    await apiFetch('/notifications/mark-all-read', { method: 'POST' }).catch(() => undefined);
+    setNotifications([]);
+    setUnreadCount(0);
+    toast.success('Toutes les notifications marquées comme lues');
   };
 
   return (
-    <div className="relative">
+    <div className="relative" ref={rootRef}>
       <Button
-        variant="outline"
+        variant="ghost"
         size="icon"
-        className="relative"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => setIsOpen((v) => !v)}
+        aria-label="Notifications"
+        className="relative hover:bg-orange-500/10"
       >
-        <Bell className="w-5 h-5" />
+        {unreadCount > 0 ? <BellRing className="w-5 h-5 text-orange-500" /> : <Bell className="w-5 h-5" />}
         {unreadCount > 0 && (
-          <Badge 
-            className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-red-500"
-          >
+          <span className="absolute -top-0.5 -right-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white shadow-sm">
             {unreadCount > 9 ? '9+' : unreadCount}
-          </Badge>
+          </span>
         )}
       </Button>
 
-      <AnimatePresence>
-        {isOpen && (
-          <>
-            {/* Backdrop */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsOpen(false)}
-              className="fixed inset-0 z-50"
-            />
+      {isOpen && (
+        <div className="absolute right-0 top-full mt-2 z-50 w-80 sm:w-96 overflow-hidden rounded-2xl border bg-white dark:bg-slate-900 shadow-2xl">
+          <div className="flex items-center justify-between border-b border-border px-4 py-3">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-sm">Notifications</span>
+              {unreadCount > 0 && (
+                <Badge variant="secondary" className="rounded-full px-1.5 py-0 text-[11px]">
+                  {unreadCount} non lue{unreadCount > 1 ? 's' : ''}
+                </Badge>
+              )}
+            </div>
+            {unreadCount > 0 && (
+              <Button variant="ghost" size="sm" onClick={markAll} className="h-7 gap-1 px-2 text-xs text-orange-600">
+                <CheckCheck className="w-3.5 h-3.5" />
+                Tout lire
+              </Button>
+            )}
+          </div>
 
-            {/* Notifications Panel */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              transition={{ duration: 0.2 }}
-              className="absolute right-0 top-12 w-96 max-h-[500px] bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 z-50 overflow-hidden"
-            >
-              {/* Header */}
-              <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                <h3 className="font-semibold text-slate-900 dark:text-white">
-                  Notifications
-                </h3>
-                <div className="flex items-center gap-2">
-                  {unreadCount > 0 && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={markAllAsRead}
-                      className="text-xs"
-                    >
-                      Tout marquer comme lu
-                    </Button>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setIsOpen(false)}
+          <div className="max-h-96 overflow-y-auto">
+            {notifications.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 text-slate-400">
+                <Inbox className="w-10 h-10 mb-2 opacity-50" />
+                <p className="text-sm">Vous êtes à jour !</p>
+              </div>
+            ) : (
+              notifications.map((n) => {
+                const meta = TYPE_META[n.type] ?? DEFAULT_META;
+                const Icon = meta.icon;
+                return (
+                  <button
+                    key={n.id}
+                    type="button"
+                    onClick={() => markOne(n)}
+                    className="block w-full border-b border-border/60 text-left transition-colors last:border-0 hover:bg-accent/50"
                   >
-                    <X className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-
-              {/* Notifications List */}
-              <div className="overflow-y-auto max-h-[400px]">
-                {isLoading ? (
-                  <div className="p-4 text-center text-slate-500">
-                    Chargement...
-                  </div>
-                ) : notifications.length === 0 ? (
-                  <div className="p-8 text-center text-slate-500">
-                    <Bell className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                    <p>Aucune notification</p>
-                  </div>
-                ) : (
-                  notifications.map((notification) => (
-                    <Card
-                      key={notification.id}
-                      className={`border-l-4 ${getNotificationColor(notification.type)} ${
-                        !notification.lu ? 'bg-slate-50 dark:bg-slate-800' : ''
-                      }`}
-                    >
-                      <CardContent className="p-4">
-                        <div className="flex items-start gap-3">
-                          <div className="mt-1">
-                            {getNotificationIcon(notification.type)}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm text-slate-900 dark:text-white">
-                              {notification.titre}
-                            </p>
-                            <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                              {notification.message}
-                            </p>
-                            <p className="text-xs text-slate-400 mt-2">
-                              {new Date(notification.created_at).toLocaleString()}
-                            </p>
-                          </div>
-                          {!notification.lu && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => markAsRead(notification.id)}
-                            >
-                              <Check className="w-4 h-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))
-                )}
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+                    <div className="flex items-start gap-3 px-4 py-3">
+                      <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${meta.tint}`}>
+                        <Icon className={`h-4 w-4 ${meta.text}`} />
+                      </span>
+                      <span className="flex-1 min-w-0">
+                        <span className="block truncate text-sm font-medium">{n.title}</span>
+                        <span className="mt-0.5 block text-xs text-muted-foreground line-clamp-2">{n.message}</span>
+                      </span>
+                      {!n.read_at && <Check className="mt-1 h-4 w-4 shrink-0 text-muted-foreground opacity-50" />}
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -152,6 +152,49 @@ export default function MessagesPage() {
 
   const initiale = (nom?: string) => (nom ?? '?').charAt(0).toUpperCase();
 
+  const AVATAR_GRADIENTS = [
+    'from-rose-500 to-pink-500',
+    'from-orange-500 to-amber-500',
+    'from-emerald-500 to-teal-500',
+    'from-sky-500 to-indigo-500',
+    'from-violet-500 to-purple-500',
+    'from-fuchsia-500 to-pink-500',
+  ];
+  const gradientPour = (id?: number) =>
+    AVATAR_GRADIENTS[((id ?? 0) % AVATAR_GRADIENTS.length + AVATAR_GRADIENTS.length) % AVATAR_GRADIENTS.length];
+  const gradientPourNom = (nom?: string) => {
+    const sum = (nom ?? '').split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+    return AVATAR_GRADIENTS[((sum % AVATAR_GRADIENTS.length) + AVATAR_GRADIENTS.length) % AVATAR_GRADIENTS.length];
+  };
+
+  const relativeDate = (iso?: string) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    const today = new Date();
+    const diff = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime() -
+      new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    const days = Math.round(diff / 86400000);
+    if (days === 0) return 'Aujourd\'hui';
+    if (days === 1) return 'Hier';
+    if (days < 7) return d.toLocaleDateString('fr-FR', { weekday: 'long' });
+    return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+  };
+
+  const separerParJour = (msgs: ChatMessage[]) => {
+    const groupes: Array<{ cle: string; libelle: string; messages: ChatMessage[] }> = [];
+    for (const m of msgs) {
+      const d = new Date(m.created_at);
+      const cle = d.toDateString();
+      const derniere = groupes[groupes.length - 1];
+      if (derniere && derniere.cle === cle) {
+        derniere.messages.push(m);
+      } else {
+        groupes.push({ cle, libelle: relativeDate(m.created_at), messages: [m] });
+      }
+    }
+    return groupes;
+  };
+
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
@@ -191,7 +234,7 @@ export default function MessagesPage() {
                   c.id === activeId ? 'bg-orange-500/10' : ''
                 }`}
               >
-                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-slate-400 to-slate-600 flex items-center justify-center text-white text-sm font-bold shrink-0">
+                <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${gradientPourNom(c.titre)} flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-sm`}>
                   {c.type === 'groupe' ? <Users className="w-4 h-4" /> : initiale(c.titre)}
                 </div>
                 <div className="min-w-0 flex-1">
@@ -229,41 +272,79 @@ export default function MessagesPage() {
                   {participants.map((p) => p.name).join(', ')}
                 </p>
               </div>
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                {messages.map((m) => {
-                  const mine = m.user_id === user?.id;
-                  if (m.type === 'systeme') {
-                    return (
-                      <p key={m.id} className="text-center text-xs text-muted-foreground py-1">
-                        {m.message}
-                      </p>
-                    );
-                  }
-                  return (
-                    <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-                      <div
-                        className={`max-w-[75%] rounded-2xl px-3.5 py-2 ${
-                          mine
-                            ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white'
-                            : 'bg-muted text-foreground'
-                        }`}
-                      >
-                        {!mine && (
-                          <p className="text-xs font-semibold opacity-80 mb-0.5">
-                            {m.user?.name ?? 'Membre'}
-                          </p>
-                        )}
-                        <p className="text-sm whitespace-pre-wrap break-words">{m.message}</p>
-                        <p className={`text-[10px] mt-1 ${mine ? 'text-white/70' : 'opacity-60'}`}>
-                          {new Date(m.created_at).toLocaleTimeString('fr-FR', {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </p>
-                      </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {messages.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
+                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-800 flex items-center justify-center mb-3">
+                      <MessageCircle className="w-6 h-6" />
                     </div>
-                  );
-                })}
+                    <p className="text-sm">Aucun message pour le moment.</p>
+                    <p className="text-xs text-muted-foreground/70">Écrivez le premier message de cette discussion.</p>
+                  </div>
+                ) : (
+                  separerParJour(messages).map((groupe) => (
+                    <div key={groupe.cle} className="space-y-3">
+                      <div className="flex items-center justify-center gap-3">
+                        <span className="h-px flex-1 bg-border/70" />
+                        <span className="rounded-full bg-muted px-3 py-1 text-[11px] font-medium text-muted-foreground capitalize">
+                          {groupe.libelle}
+                        </span>
+                        <span className="h-px flex-1 bg-border/70" />
+                      </div>
+                      {groupe.messages.map((m) => {
+                        const mine = m.user_id === user?.id;
+                        if (m.type === 'systeme') {
+                          return (
+                            <p key={m.id} className="text-center text-xs text-muted-foreground py-1">
+                              {m.message}
+                            </p>
+                          );
+                        }
+                        const estGroupe = groupe.messages.some(
+                          (x) => x !== m && x.user_id === m.user_id
+                        );
+                        return (
+                          <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'} items-end gap-2`}>
+                            {!mine && (
+                              <div
+                                className={`w-7 h-7 rounded-full bg-gradient-to-br ${gradientPour(m.user_id)} flex items-center justify-center text-white text-[11px] font-bold shrink-0 ${
+                                  estGroupe ? 'opacity-0' : ''
+                                }`}
+                              >
+                                {initiale(m.user?.name)}
+                              </div>
+                            )}
+                            <div
+                              className={`relative max-w-[75%] px-3.5 py-2 text-sm whitespace-pre-wrap break-words shadow-sm ${
+                                mine
+                                  ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-2xl rounded-br-md'
+                                  : 'bg-muted text-foreground rounded-2xl rounded-bl-md'
+                              }`}
+                            >
+                              {!mine && (
+                                <p className="text-xs font-semibold mb-0.5 text-orange-600 dark:text-orange-400">
+                                  {m.user?.name ?? 'Membre'}
+                                </p>
+                              )}
+                              <p>{m.message}</p>
+                              <p className={`mt-1 text-[10px] leading-none ${mine ? 'text-white/70' : 'text-muted-foreground'}`}>
+                                {new Date(m.created_at).toLocaleTimeString('fr-FR', {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </p>
+                            </div>
+                            {mine && (
+                              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center text-white text-[11px] font-bold shrink-0 shadow-sm">
+                                {initiale(user?.name)}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))
+                )}
                 <div ref={bottomRef} />
               </div>
               <div className="p-3 border-t border-border flex items-center gap-2">
@@ -317,7 +398,7 @@ export default function MessagesPage() {
                     }
                     className="accent-orange-500"
                   />
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-slate-400 to-slate-600 flex items-center justify-center text-white text-xs font-bold">
+                  <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${gradientPourNom(s.name)} flex items-center justify-center text-white text-xs font-bold`}>
                     {initiale(s.name)}
                   </div>
                   <div>
