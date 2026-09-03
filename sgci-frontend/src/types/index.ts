@@ -131,6 +131,64 @@ export interface MouvementStock {
   updated_at: string;
 }
 
+export interface Fournisseur {
+  id: number;
+  nom: string;
+  email?: string | null;
+  telephone?: string | null;
+  adresse?: string | null;
+  ville?: string | null;
+  pays?: string | null;
+  conditions_paiement?: string | null;
+  notes?: string | null;
+  actif: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LigneCommandeFournisseur {
+  id: number;
+  commande_fournisseur_id: number;
+  produit_id: number;
+  quantite_commandee: number;
+  quantite_recue: number;
+  prix_unitaire: number;
+  montant_total: number;
+  statut: string;
+  produit?: Produit;
+  quantite_restante?: number;
+}
+
+export interface CommandeFournisseur {
+  id: number;
+  numero_commande: string;
+  fournisseur_id: number;
+  boutique_id: number;
+  user_id: number;
+  date_commande: string;
+  date_livraison_prevue?: string | null;
+  date_livraison_reelle?: string | null;
+  statut: 'en_attente' | 'en_cours' | 'livre' | 'annule';
+  montant_total: number;
+  montant_paye: number;
+  conditions_paiement?: string | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+  fournisseur?: Fournisseur;
+  user?: { id: number; name: string };
+  lignes: LigneCommandeFournisseur[];
+}
+
+export interface ReceptionLigne {
+  ligne_id: number;
+  produit_id: number;
+  quantite_recue: number;
+  quantite_restante: number;
+  mouvement_id: number;
+  stock_apres: number;
+}
+
 export interface AnalyticsData {
   ventes: {
     total_ventes: number;

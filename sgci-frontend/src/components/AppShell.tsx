@@ -17,6 +17,7 @@ import {
   ClipboardList,
   ScrollText,
   FileText,
+  Truck,
   LogOut,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -31,6 +32,7 @@ const NAV = [
   { href: '/produits', label: 'Produits', icon: Package },
   { href: '/stock', label: 'Stock', icon: History },
   { href: '/arrivage', label: 'Arrivage', icon: TrendingUp },
+  { href: '/approvisionnement', label: 'Approvisionnement', icon: Truck, role: 'gerant' },
   { href: '/caisse', label: 'Caisse', icon: ShoppingCart },
   { href: '/clients', label: 'Clients', icon: Users },
   { href: '/retours', label: 'Retours', icon: RotateCcw, role: 'gerant' },
