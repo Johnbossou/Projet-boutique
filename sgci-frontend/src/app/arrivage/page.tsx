@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Plus, CheckCircle2, XCircle, Search, ChevronDown } from 'lucide-react';
+import { Plus, CheckCircle2, XCircle, Search, ChevronDown, PackageSearch } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -28,6 +28,11 @@ const initialForm = {
 const TYPE_LABEL: Record<string, string> = {
   entree: 'Entrée',
   sortie: 'Sortie',
+};
+
+const TYPE_BADGE: Record<string, string> = {
+  entree: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200',
+  sortie: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200',
 };
 
 export default function ArrivagePage() {
@@ -391,8 +396,11 @@ export default function ArrivagePage() {
               <TableBody>
                 {mouvements.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-6 text-slate-500">
-                      Aucun mouvement trouvé.
+                    <TableCell colSpan={8} className="text-center py-8">
+                      <div className="flex flex-col items-center justify-center text-muted-foreground">
+                        <PackageSearch className="h-8 w-8 mb-2 opacity-50" />
+                        <p className="text-sm">{pendingOnly ? 'Aucune demande en attente' : 'Aucun mouvement trouvé'}</p>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -400,7 +408,11 @@ export default function ArrivagePage() {
                     <TableRow key={mouvement.id}>
                       <TableCell>{new Date(mouvement.created_at).toLocaleString('fr-FR')}</TableCell>
                       <TableCell>{mouvement.produit?.nom ?? 'Produit inconnu'}</TableCell>
-                      <TableCell>{TYPE_LABEL[mouvement.type] ?? mouvement.type}</TableCell>
+                      <TableCell>
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${TYPE_BADGE[mouvement.type] ?? ''}`}>
+                          {TYPE_LABEL[mouvement.type] ?? mouvement.type}
+                        </span>
+                      </TableCell>
                       <TableCell>{mouvement.quantite}</TableCell>
                       <TableCell>
                         <Badge variant={mouvement.statut === 'accepte' ? 'default' : mouvement.statut === 'rejete' ? 'destructive' : 'secondary'}>

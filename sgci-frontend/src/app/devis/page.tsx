@@ -1,12 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { FileText, Download, Eye } from 'lucide-react';
+import { FileText, Download, FileX2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { EmptyState } from '@/components/EmptyState';
 import { apiFetch } from '@/lib/api-client';
 import { toast } from 'sonner';
 
@@ -33,6 +33,13 @@ const STATUT_COLORS: Record<string, string> = {
   accepte: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
   refuse: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
   expire: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200',
+};
+
+const STATUT_LABELS: Record<string, string> = {
+  en_attente: 'En attente',
+  accepte: 'Accepté',
+  refuse: 'Refusé',
+  expire: 'Expiré',
 };
 
 export default function DevisPage() {
@@ -81,10 +88,17 @@ export default function DevisPage() {
 
   return (
     <div className="p-4 lg:p-6 space-y-6">
-      <div className="flex items-center gap-3">
-        <FileText className="w-6 h-6 text-orange-500" />
-        <h1 className="text-2xl font-bold">Devis</h1>
-      </div>
+      <header className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 flex items-center justify-center">
+          <FileText className="w-5 h-5 text-white" />
+        </div>
+        <div>
+          <h1 className="text-xl font-bold">Devis</h1>
+          <p className="text-sm text-muted-foreground">
+            Proposés à vos clients et téléchargeables en PDF
+          </p>
+        </div>
+      </header>
 
       <div className="flex items-center gap-3">
         <Select value={filtreStatut} onValueChange={setFiltreStatut}>
@@ -102,9 +116,16 @@ export default function DevisPage() {
       <Card>
         <CardContent className="p-0">
           {isLoading ? (
-            <p className="p-6 text-center text-muted-foreground">Chargement…</p>
+            <div className="flex items-center justify-center gap-2 py-12 text-muted-foreground">
+              <Loader2 className="w-5 h-5 animate-spin" />
+              <span>Chargement des devis…</span>
+            </div>
           ) : devis.length === 0 ? (
-            <p className="p-6 text-center text-muted-foreground">Aucun devis trouvé</p>
+            <EmptyState
+              icon={FileX2}
+              title={filtreStatut === 'all' ? 'Aucun devis trouvé' : `Aucun devis au statut « ${filtreStatut} »`}
+              description="Les devis que vous créez apparaîtront ici. Vous pourrez ensuite les télécharger en PDF."
+            />
           ) : (
             <Table>
               <TableHeader>
@@ -126,7 +147,7 @@ export default function DevisPage() {
                     <TableCell className="text-right font-mono">{d.montant_total.toLocaleString('fr-FR')} XOF</TableCell>
                     <TableCell>
                       <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${STATUT_COLORS[d.statut] ?? ''}`}>
-                        {d.statut}
+                        {STATUT_LABELS[d.statut] ?? d.statut}
                       </span>
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">

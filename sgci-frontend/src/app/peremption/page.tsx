@@ -1,16 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import {
-  CalendarClock,
-  RefreshCw,
-  TriangleAlert,
-  PackageX,
-} from 'lucide-react';
+import { CalendarClock, RefreshCw, TriangleAlert, PackageX, Loader2, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { EmptyState } from '@/components/EmptyState';
 import { apiFetch } from '@/lib/api-client';
 import { toast } from 'sonner';
 import type { Produit, PeremptionResult } from '@/types';
@@ -59,12 +55,17 @@ export default function PeremptionPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Péremption</h1>
-        <p className="text-muted-foreground text-sm">
-          Produits périssables proches de la péremption ou périmés de la boutique courante.
-        </p>
-      </div>
+      <header className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 flex items-center justify-center">
+          <CalendarClock className="w-5 h-5 text-white" />
+        </div>
+        <div>
+          <h1 className="text-xl font-bold tracking-tight">Péremption</h1>
+          <p className="text-sm text-muted-foreground">
+            Produits périssables proches de la péremption ou périmés de la boutique courante.
+          </p>
+        </div>
+      </header>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Card>
@@ -111,11 +112,18 @@ export default function PeremptionPage() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="text-sm text-muted-foreground py-6 text-center">Chargement…</div>
-          ) : total === 0 ? (
-            <div className="text-sm text-muted-foreground py-6 text-center">
-              Aucun produit périssable proche de la péremption ou périmé. Les produits périssables avec une date valide apparaîtront ici.
+            <div className="flex items-center justify-center gap-2 py-12 text-muted-foreground">
+              <Loader2 className="w-5 h-5 animate-spin" />
+              <span>Synchronisation des alertes…</span>
             </div>
+          ) : total === 0 ? (
+            <EmptyState
+              icon={ShieldCheck}
+              title="Aucune alerte de péremption"
+              description="Les produits périssables proches de la péremption ou périmés apparaîtront ici."
+              actionLabel="Actualiser"
+              onAction={charger}
+            />
           ) : (
             <Table>
               <TableHeader>

@@ -1,11 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { ClipboardList, Play, CheckCircle2, XCircle, AlertTriangle, Eye } from 'lucide-react';
+import { ClipboardList, Play, CheckCircle2, AlertTriangle, Eye, Loader2, ClipboardX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { apiFetch } from '@/lib/api-client';
 import { toast } from 'sonner';
@@ -36,6 +35,13 @@ const STATUT_COLORS: Record<string, string> = {
   termine: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
   valide: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
   annule: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200',
+};
+
+const STATUT_LABELS: Record<string, string> = {
+  en_cours: 'En cours',
+  termine: 'Terminé',
+  valide: 'Validé',
+  annule: 'Annulé',
 };
 
 export default function InventairePage() {
@@ -138,22 +144,36 @@ export default function InventairePage() {
 
   return (
     <div className="p-4 lg:p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <header className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <ClipboardList className="w-6 h-6 text-orange-500" />
-          <h1 className="text-2xl font-bold">Inventaire Physique</h1>
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 flex items-center justify-center">
+            <ClipboardList className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold">Inventaire Physique</h1>
+            <p className="text-sm text-muted-foreground">Comptez votre stock et ajustez automatiquement les écarts</p>
+          </div>
         </div>
         <Button onClick={creerInventaire} className="bg-gradient-to-r from-orange-500 to-red-500">
           <Play className="w-4 h-4 mr-1" /> Nouvel inventaire
         </Button>
-      </div>
+      </header>
 
       <Card>
         <CardContent className="p-0">
           {isLoading ? (
-            <p className="p-6 text-center text-muted-foreground">Chargement…</p>
+            <div className="flex items-center justify-center gap-2 py-12 text-muted-foreground">
+              <Loader2 className="w-5 h-5 animate-spin" />
+              <span>Chargement des inventaires…</span>
+            </div>
           ) : inventaires.length === 0 ? (
-            <p className="p-6 text-center text-muted-foreground">Aucun inventaire. Cliquez sur « Nouvel inventaire » pour commencer.</p>
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-muted text-muted-foreground/60">
+                <ClipboardX className="h-6 w-6" />
+              </div>
+              <p className="text-sm font-medium">Aucun inventaire</p>
+              <p className="mt-1 text-sm text-muted-foreground">Cliquez sur « Nouvel inventaire » pour lancer un comptage.</p>
+            </div>
           ) : (
             <Table>
               <TableHeader>
@@ -173,7 +193,7 @@ export default function InventairePage() {
                     <TableCell className="font-mono text-xs">{inv.reference}</TableCell>
                     <TableCell>
                       <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${STATUT_COLORS[inv.statut] ?? ''}`}>
-                        {inv.statut}
+                        {STATUT_LABELS[inv.statut] ?? inv.statut}
                       </span>
                     </TableCell>
                     <TableCell className="text-right">{inv.total_produits}</TableCell>
@@ -206,7 +226,7 @@ export default function InventairePage() {
               <div className="flex items-center justify-between">
                 <CardTitle>{detail.reference}</CardTitle>
                 <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${STATUT_COLORS[detail.statut] ?? ''}`}>
-                  {detail.statut}
+                  {STATUT_LABELS[detail.statut] ?? detail.statut}
                 </span>
               </div>
             </CardHeader>

@@ -1,10 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { RotateCcw, CheckCircle2, XCircle, Eye, Filter } from 'lucide-react';
+import { RotateCcw, CheckCircle2, XCircle, Eye, Filter, Loader2, PackageSearch } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { apiFetch } from '@/lib/api-client';
@@ -36,6 +35,18 @@ const STATUT_COLORS: Record<string, string> = {
   en_attente: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
   valide: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
   refuse: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+};
+
+const STATUT_LABELS: Record<string, string> = {
+  en_attente: 'En attente',
+  valide: 'Validé',
+  refuse: 'Refusé',
+};
+
+const TYPE_LABELS: Record<string, string> = {
+  total: 'Remboursement total',
+  partiel: 'Partiel',
+  echange: 'Échange',
 };
 
 const MOTIF_LABELS: Record<string, string> = {
@@ -106,10 +117,15 @@ export default function RetoursPage() {
 
   return (
     <div className="p-4 lg:p-6 space-y-6">
-      <div className="flex items-center gap-3">
-        <RotateCcw className="w-6 h-6 text-orange-500" />
-        <h1 className="text-2xl font-bold">Retours & Remboursements</h1>
-      </div>
+      <header className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 flex items-center justify-center">
+          <RotateCcw className="w-5 h-5 text-white" />
+        </div>
+        <div>
+          <h1 className="text-xl font-bold">Retours & Remboursements</h1>
+          <p className="text-sm text-muted-foreground">Gérez les retours clients et la remise à jour du stock</p>
+        </div>
+      </header>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
@@ -142,9 +158,20 @@ export default function RetoursPage() {
       <Card>
         <CardContent className="p-0">
           {isLoading ? (
-            <p className="p-6 text-center text-muted-foreground">Chargement…</p>
+            <div className="flex items-center justify-center gap-2 py-12 text-muted-foreground">
+              <Loader2 className="w-5 h-5 animate-spin" />
+              <span>Chargement des retours…</span>
+            </div>
           ) : retours.length === 0 ? (
-            <p className="p-6 text-center text-muted-foreground">Aucun retour trouvé</p>
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-muted text-muted-foreground/60">
+                <PackageSearch className="h-6 w-6" />
+              </div>
+              <p className="text-sm font-medium">
+                {filtreStatut === 'all' ? 'Aucun retour' : `Aucun retour « ${STATUT_LABELS[filtreStatut] ?? filtreStatut} »`}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">Les retours clients apparaîtront ici une fois créés.</p>
+            </div>
           ) : (
             <Table>
               <TableHeader>
@@ -164,12 +191,12 @@ export default function RetoursPage() {
                   <TableRow key={r.id}>
                     <TableCell className="font-mono text-xs">RET-{String(r.id).padStart(5, '0')}</TableCell>
                     <TableCell>{r.vente?.numero_vente ?? '—'}</TableCell>
-                    <TableCell className="capitalize">{r.type}</TableCell>
+                    <TableCell className="capitalize">{TYPE_LABELS[r.type] ?? r.type}</TableCell>
                     <TableCell>{MOTIF_LABELS[r.motif] ?? r.motif}</TableCell>
                     <TableCell className="text-right font-mono">{r.montant_rembourse.toLocaleString('fr-FR')} XOF</TableCell>
                     <TableCell>
                       <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${STATUT_COLORS[r.statut] ?? ''}`}>
-                        {r.statut}
+                        {STATUT_LABELS[r.statut] ?? r.statut}
                       </span>
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">{new Date(r.created_at).toLocaleDateString('fr-FR')}</TableCell>
@@ -195,7 +222,7 @@ export default function RetoursPage() {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div><span className="text-muted-foreground">Vente :</span> {detailOuvert.vente?.numero_vente ?? '—'}</div>
-                <div><span className="text-muted-foreground">Type :</span> <span className="capitalize">{detailOuvert.type}</span></div>
+                <div><span className="text-muted-foreground">Type :</span> <span className="capitalize">{TYPE_LABELS[detailOuvert.type] ?? detailOuvert.type}</span></div>
                 <div><span className="text-muted-foreground">Motif :</span> {MOTIF_LABELS[detailOuvert.motif] ?? detailOuvert.motif}</div>
                 <div><span className="text-muted-foreground">Montant :</span> <span className="font-bold">{detailOuvert.montant_rembourse.toLocaleString('fr-FR')} XOF</span></div>
                 <div><span className="text-muted-foreground">Créé par :</span> {detailOuvert.user?.name ?? '—'}</div>

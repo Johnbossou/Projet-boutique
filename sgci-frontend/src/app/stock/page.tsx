@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Search, CheckCircle2, XCircle } from 'lucide-react';
+import { Search, CheckCircle2, XCircle, PackageSearch } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -27,6 +27,24 @@ const STATUT_LABEL: Record<string, string> = {
   en_attente: 'En attente',
   accepte: 'Accepté',
   rejete: 'Rejeté',
+};
+
+const TYPE_LABEL: Record<string, string> = {
+  entree: 'Entrée',
+  sortie: 'Sortie',
+};
+
+const TYPE_BADGE: Record<string, string> = {
+  entree: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200',
+  sortie: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200',
+};
+
+const RAISON_LABEL: Record<string, string> = {
+  arrivage: 'Arrivage',
+  vente: 'Vente',
+  ajustement: 'Ajustement',
+  retour: 'Retour',
+  casse: 'Casse',
 };
 
 // ✅ CORRIGÉ : value="all" au lieu de value=""
@@ -295,8 +313,11 @@ export default function StockHistoryPage() {
             <TableBody>
               {mouvements.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-6 text-slate-500">
-                    Aucun mouvement à afficher.
+                  <TableCell colSpan={9} className="text-center py-8">
+                    <div className="flex flex-col items-center justify-center text-muted-foreground">
+                      <PackageSearch className="h-8 w-8 mb-2 opacity-50" />
+                      <p className="text-sm">Aucun mouvement ne correspond aux filtres.</p>
+                    </div>
                   </TableCell>
                 </TableRow>
               ) : (
@@ -304,8 +325,12 @@ export default function StockHistoryPage() {
                   <TableRow key={mouvement.id}>
                     <TableCell>{new Date(mouvement.created_at).toLocaleString('fr-FR')}</TableCell>
                     <TableCell>{mouvement.produit?.nom ?? '—'}</TableCell>
-                    <TableCell>{mouvement.type}</TableCell>
-                    <TableCell>{mouvement.raison}</TableCell>
+                    <TableCell>
+                      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${TYPE_BADGE[mouvement.type] ?? ''}`}>
+                        {TYPE_LABEL[mouvement.type] ?? mouvement.type}
+                      </span>
+                    </TableCell>
+                    <TableCell>{RAISON_LABEL[mouvement.raison] ?? mouvement.raison}</TableCell>
                     <TableCell>{mouvement.quantite}</TableCell>
                     <TableCell>{mouvement.quantite_avant ?? '—'}</TableCell>
                     <TableCell>{mouvement.quantite_apres ?? '—'}</TableCell>

@@ -9,10 +9,13 @@ import {
   Filter,
   Repeat,
   Truck,
+  Clock4,
+  Loader2,
+  ArrowRightLeft,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { EmptyState } from '@/components/EmptyState';
 import {
   Dialog,
   DialogContent,
@@ -252,7 +255,9 @@ export default function TransfertsPage() {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">En attente</CardTitle>
+            <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
+              <Clock4 className="w-4 h-4 text-amber-500" /> En attente
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold text-amber-600">{stats?.transferts_en_attente ?? '—'}</p>
@@ -260,7 +265,9 @@ export default function TransfertsPage() {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">En cours</CardTitle>
+            <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
+              <Truck className="w-4 h-4 text-blue-500" /> En cours
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold text-blue-600">{stats?.transferts_en_cours ?? '—'}</p>
@@ -268,7 +275,9 @@ export default function TransfertsPage() {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">Terminés</CardTitle>
+            <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-green-500" /> Terminés
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold text-green-600">{stats?.transferts_termines ?? '—'}</p>
@@ -298,9 +307,19 @@ export default function TransfertsPage() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="text-sm text-muted-foreground py-6 text-center">Chargement…</div>
+            <div className="flex items-center justify-center gap-2 py-12 text-muted-foreground">
+              <Loader2 className="w-5 h-5 animate-spin" />
+              <span>Chargement des transferts…</span>
+            </div>
           ) : transferts.length === 0 ? (
-            <div className="text-sm text-muted-foreground py-6 text-center">Aucun transfert trouvé.</div>
+            <EmptyState
+              icon={ArrowRightLeft}
+              title={filtreStatut === 'all' ? 'Aucun transfert' : `Aucun transfert « ${STATUT_LABELS[filtreStatut] ?? filtreStatut} »`}
+              description="Créez un transfert pour déplacer du stock vers une autre de vos boutiques."
+              actionLabel={userPeutGerer ? 'Nouveau transfert' : undefined}
+              onAction={() => setCreerOuvert(true)}
+              compact
+            />
           ) : (
             <Table>
               <TableHeader>
