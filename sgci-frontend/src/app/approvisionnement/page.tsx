@@ -84,6 +84,7 @@ export default function ApprovisionnementPage() {
   const [nfEmail, setNfEmail] = useState('');
 
   const [receptions, setReceptions] = useState<Record<number, string>>({});
+  const [montantPaiement, setMontantPaiement] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   const chargerCommandes = useCallback(async () => {
@@ -247,6 +248,33 @@ export default function ApprovisionnementPage() {
     }
   };
 
+  const payerCommande = async (commande: CommandeFournisseur) => {
+    const montant = Number(montantPaiement);
+    if (!montant || montant <= 0) {
+      toast.error('Indiquez un montant à régler');
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const res = await apiFetch(`/commandes-fournisseurs/${commande.id}/payer`, {
+        method: 'POST',
+        body: JSON.stringify({ montant }),
+      });
+      if (res.ok) {
+        toast.success('Règlement enregistré');
+        setMontantPaiement('');
+        chargerCommandes();
+      } else {
+        const d = await res.json();
+        toast.error(d.message || 'Erreur lors du règlement');
+      }
+    } catch {
+      toast.error('Erreur réseau');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const ajouterLigne = () => {
     if (lignes.length >= 20) return;
     setLignes([...lignes, { produit_id: 0, quantite_commandee: 1, prix_unitaire: 0 }]);
@@ -361,6 +389,7 @@ export default function ApprovisionnementPage() {
                       <TableHead>N° commande</TableHead>
                       <TableHead>Fournisseur</TableHead>
                       <TableHead className="text-right">Montant</TableHead>
+                      <TableHead className="text-right">Reste à payer</TableHead>
                       <TableHead>Statut</TableHead>
                       <TableHead>Date</TableHead>
                       <TableHead />
@@ -372,6 +401,9 @@ export default function ApprovisionnementPage() {
                         <TableCell className="font-mono text-xs">{c.numero_commande}</TableCell>
                         <TableCell>{c.fournisseur?.nom ?? '—'}</TableCell>
                         <TableCell className="text-right font-mono">{c.montant_total.toLocaleString('fr-FR')} XOF</TableCell>
+                        <TableCell className="text-right font-mono">
+                          {Math.max(0, c.montant_total - c.montant_paye).toLocaleString('fr-FR')} XOF
+                        </TableCell>
                         <TableCell>
                           <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${STATUT_COLORS[c.statut] ?? ''}`}>
                             {STATUT_LABELS[c.statut] ?? c.statut}
@@ -559,6 +591,13 @@ export default function ApprovisionnementPage() {
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div><span className="text-muted-foreground">Date :</span> {new Date(detailOuvert.date_commande).toLocaleDateString('fr-FR')}</div>
                 <div><span className="text-muted-foreground">Montant :</span> <span className="font-bold">{detailOuvert.montant_total.toLocaleString('fr-FR')} XOF</span></div>
+                <div><span className="text-muted-foreground">Payé :</span> {detailOuvert.montant_paye.toLocaleString('fr-FR')} XOF</div>
+                <div>
+                  <span className="text-muted-foreground">Reste à payer :</span>{' '}
+                  <span className={detailOuvert.montant_total - detailOuvert.montant_paye > 0 ? 'text-amber-600 font-semibold' : 'text-green-600 font-semibold'}>
+                    {(detailOuvert.montant_total - detailOuvert.montant_paye).toLocaleString('fr-FR')} XOF
+                  </span>
+                </div>
                 {detailOuvert.date_livraison_reelle && (
                   <div><span className="text-muted-foreground">Reçue le :</span> {new Date(detailOuvert.date_livraison_reelle).toLocaleDateString('fr-FR')}</div>
                 )}
@@ -617,6 +656,32 @@ export default function ApprovisionnementPage() {
                         </div>
                       );
                     })}
+                  </div>
+                </div>
+              )}
+
+              {detailOuvert.statut !== 'annule' && detailOuvert.montant_paye < detailOuvert.montant_total && userPeutGerer && (
+                <div className="space-y-3 border rounded-lg p-3">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-green-600" />
+                    <p className="text-sm font-medium">Règlement</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="text-muted-foreground">Payé : <span className="font-semibold text-green-600">{detailOuvert.montant_paye.toLocaleString('fr-FR')} XOF</span></div>
+                    <div className="text-muted-foreground">Reste : <span className="font-semibold text-amber-600">{(detailOuvert.montant_total - detailOuvert.montant_paye).toLocaleString('fr-FR')} XOF</span></div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      min={1}
+                      max={detailOuvert.montant_total - detailOuvert.montant_paye}
+                      placeholder="Montant à régler"
+                      value={montantPaiement}
+                      onChange={(e) => setMontantPaiement(e.target.value)}
+                    />
+                    <Button onClick={() => payerCommande(detailOuvert)} disabled={isSaving}>
+                      Payer
+                    </Button>
                   </div>
                 </div>
               )}

@@ -182,6 +182,54 @@ class CommandeFournisseurController extends Controller
     }
 
     /**
+     * Enregistre un règlement sur une commande fournisseur.
+     * Accumule dans montant_paye sans jamais dépasser montant_total.
+     */
+    public function payer(Request $request, CommandeFournisseur $commande): JsonResponse
+    {
+        if ($commande->boutique_id !== $request->user()->current_boutique_id) {
+            return response()->json(['message' => 'Non autorisé'], 403);
+        }
+
+        if (in_array($commande->statut, ['annule', 'livre'], true)) {
+            return response()->json([
+                'message' => 'Cette commande ne peut plus recevoir de paiement',
+            ], 400);
+        }
+
+        $validated = $request->validate([
+            'montant' => 'required|numeric|min:1',
+        ]);
+
+        $montantPaiement = (float) $validated['montant'];
+        $montantTotal = (float) $commande->montant_total;
+        $montantPaye = (float) $commande->montant_paye;
+
+        if ($montantPaye >= $montantTotal) {
+            return response()->json([
+                'message' => 'Cette commande est déjà entièrement payée',
+            ], 400);
+        }
+
+        $reste = round($montantTotal - $montantPaye, 2);
+        if ($montantPaiement > $reste) {
+            return response()->json([
+                'message' => "Le règlement dépasse le reste à payer ({$reste} XOF)",
+            ], 422);
+        }
+
+        $commande->montant_paye += $montantPaiement;
+        $commande->save();
+
+        $this->auditUpdate($commande, ['montant_paye' => $montantPaye]);
+
+        return response()->json([
+            'message' => 'Règlement enregistré',
+            'data' => $commande->fresh(),
+        ]);
+    }
+
+    /**
      * Réceptionne tout ou partie des lignes d'une commande fournisseur validée.
      * Chaque quantité reçue est tracée via un mouvement de stock « arrivage » validé
      * (le stock de la boutique est incrémenté) et reportée sur quantite_recue.
