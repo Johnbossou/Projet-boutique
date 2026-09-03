@@ -192,6 +192,10 @@ class TransfertStockController extends Controller
                     'code_qr' => $produitOriginal->code_qr,
                     'unite_mesure' => $produitOriginal->unite_mesure,
                     'image_url' => $produitOriginal->image_url,
+                    'date_peremption' => $produitOriginal->date_peremption,
+                    'date_fabrication' => $produitOriginal->date_fabrication,
+                    'lot_numero' => $produitOriginal->lot_numero,
+                    'duree_conservation_jours' => $produitOriginal->duree_conservation_jours,
                     'boutique_id' => $transfert->boutique_destination_id,
                 ]);
             }
