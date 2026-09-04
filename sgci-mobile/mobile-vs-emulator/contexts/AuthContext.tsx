@@ -12,13 +12,18 @@ import React, {
 import { Alert } from 'react-native';
 import { apiFetch } from '@/lib/api-client';
 import { fetchBoutiqueSettings } from '@/lib/boutique-settings';
-import { User, Boutique } from '@/types';
+import { User } from '@/types';
+
+export type LoginResult =
+  | { success: true }
+  | { success: false; message: string }
+  | { requiresTwoFactor: true };
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, twoFactorCode?: string) => Promise<LoginResult>;
   logout: () => Promise<void>;
   getToken: () => Promise<string | null>;
   switchBoutique: (boutiqueId: number) => Promise<void>;
@@ -70,32 +75,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [checkAuth]);
 
   const login = useCallback(
-    async (email: string, password: string) => {
-      setIsLoading(true);
+    async (email: string, password: string, twoFactorCode?: string): Promise<LoginResult> => {
+      const body: Record<string, unknown> = { email, password };
+      if (twoFactorCode) body.two_factor_code = twoFactorCode;
       try {
         const response = await apiFetch('/login', {
           method: 'POST',
-          body: JSON.stringify({ email, password }),
+          body: JSON.stringify(body),
         });
+        const data = await response.json().catch(() => ({}));
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.message || 'Identifiants incorrects');
+          return { success: false, message: data.message || 'Identifiants incorrects' };
         }
 
-        const data = await response.json();
+        if (data.requires_two_factor) {
+          return { requiresTwoFactor: true };
+        }
+
+        if (!data.token) {
+          return { success: false, message: 'Réponse du serveur invalide' };
+        }
+
         await SecureStore.setItemAsync('auth_token', data.token);
         await AsyncStorage.setItem('user_data', JSON.stringify(data.user));
         setUser(data.user);
         fetchBoutiqueSettings().catch(() => undefined);
         router.replace('/(tabs)');
-      } catch (error: unknown) {
-        const message =
-          error instanceof Error ? error.message : 'Erreur de connexion';
-        Alert.alert('Erreur', message);
-        throw error;
-      } finally {
-        setIsLoading(false);
+        return { success: true };
+      } catch {
+        return { success: false, message: 'Erreur réseau. Vérifiez votre connexion.' };
       }
     },
     [router]

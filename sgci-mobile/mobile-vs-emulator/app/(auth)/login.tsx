@@ -7,6 +7,7 @@ import {
     Eye,
     EyeOff,
     LogIn,
+    ShieldCheck,
     Smartphone as MobileIcon,
     Sparkles,
     Store
@@ -27,6 +28,7 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
+import { useRouter } from "expo-router";
 import { useAuth } from "../../contexts/AuthContext";
 
 const { width, height } = Dimensions.get("window");
@@ -38,6 +40,10 @@ export default function LoginScreen() {
     email: "",
     password: "",
   });
+
+  const router = useRouter();
+  const [twoFactorCode, setTwoFactorCode] = useState("");
+  const [twoFactorRequired, setTwoFactorRequired] = useState(false);
 
   const { login, isLoading, user, switchBoutique } = useAuth();
 
@@ -148,25 +154,24 @@ export default function LoginScreen() {
   }, []);
 
   const handleLogin = async () => {
-    if (!formData.email || !formData.password) {
-      Alert.alert("Erreur", "Veuillez remplir tous les champs");
+    if (isLoading) return;
+    if (!formData.email.trim() || !formData.password) {
+      Alert.alert("Champs requis", "Veuillez remplir votre email et votre mot de passe.");
       return;
     }
-
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      await login(formData.email, formData.password);
-      
-      // Check if user is a proprietaire with multiple boutiques
-      if (user && user.role === 'proprietaire' && user.boutiques && user.boutiques.length > 1) {
-        setShowBoutiqueSelection(true);
+      const result = await login(formData.email, formData.password, twoFactorCode || undefined);
+      if ("requiresTwoFactor" in result) {
+        setTwoFactorRequired(true);
+        Alert.alert("Code 2FA requis", "Entrez le code à 6 chiffres de votre application d'authentification.");
+      } else if (!result.success) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        Alert.alert("Erreur", result.message);
       }
-    } catch (error: any) {
+    } catch {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert(
-        "Erreur de connexion",
-        error.message || "Email ou mot de passe incorrect"
-      );
+      Alert.alert("Erreur de connexion", "Email ou mot de passe incorrect");
     }
   };
 
@@ -578,6 +583,24 @@ export default function LoginScreen() {
                     </View>
                   </Animated.View>
 
+                  {twoFactorRequired && (
+                    <View style={styles.inputContainer}>
+                      <Text style={styles.inputLabel}>Code 2FA</Text>
+                      <View style={styles.inputWrapper}>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="123456"
+                          placeholderTextColor="#94a3b8"
+                          value={twoFactorCode}
+                          onChangeText={setTwoFactorCode}
+                          keyboardType="number-pad"
+                          maxLength={6}
+                          editable={!isLoading}
+                        />
+                      </View>
+                    </View>
+                  )}
+
                   {/* Bouton de connexion */}
                   <Animated.View
                     style={[
@@ -648,8 +671,12 @@ export default function LoginScreen() {
                         </View>
                       ) : (
                         <View style={styles.buttonContent}>
-                          <Sparkles size={20} color="#ffffff" />
-                          <Text style={styles.buttonText}>Se connecter</Text>
+                          {twoFactorRequired ? (
+                            <ShieldCheck size={20} color="#ffffff" />
+                          ) : (
+                            <Sparkles size={20} color="#ffffff" />
+                          )}
+                          <Text style={styles.buttonText}>{twoFactorRequired ? "Vérifier le code" : "Se connecter"}</Text>
                           <ChevronRight size={20} color="#ffffff" />
                         </View>
                       )}
@@ -700,6 +727,15 @@ export default function LoginScreen() {
                 </View>
               </BlurView>
             </Animated.View>
+
+            <View style={styles.authLinks}>
+              <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/(auth)/forgot-password"); }}>
+                <Text style={styles.authLinkForgot}>Mot de passe oublié ?</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/(auth)/register"); }}>
+                <Text style={styles.authLink}>S'inscrire</Text>
+              </TouchableOpacity>
+            </View>
 
             {/* Footer */}
             <Animated.View
@@ -1027,6 +1063,9 @@ const styles = StyleSheet.create({
   testAccountPassword: {
     color: "#f97316",
   },
+  authLinks: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", width: "100%", marginTop: 20 },
+  authLinkForgot: { fontSize: 15, fontWeight: "600", color: "#94a3b8" },
+  authLink: { fontSize: 15, fontWeight: "700", color: "#f97316", padding: 8 },
   footer: {
     marginTop: 40,
     alignItems: "center",
