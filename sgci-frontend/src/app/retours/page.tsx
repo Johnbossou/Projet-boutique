@@ -61,6 +61,7 @@ export default function RetoursPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [filtreStatut, setFiltreStatut] = useState('all');
   const [detailOuvert, setDetailOuvert] = useState<Retour | null>(null);
+  const [actionEnCours, setActionEnCours] = useState<number | null>(null);
 
   const chargerRetours = useCallback(async () => {
     setIsLoading(true);
@@ -83,6 +84,7 @@ export default function RetoursPage() {
 
   const validerRetour = async (retour: Retour) => {
     try {
+      setActionEnCours(retour.id);
       const res = await apiFetch(`/retours/${retour.id}/valider`, { method: 'POST' });
       if (res.ok) {
         toast.success('Retour validé — stock remis à jour');
@@ -94,11 +96,14 @@ export default function RetoursPage() {
       }
     } catch {
       toast.error('Erreur réseau');
+    } finally {
+      setActionEnCours(null);
     }
   };
 
   const refuserRetour = async (retour: Retour) => {
     try {
+      setActionEnCours(retour.id);
       const res = await apiFetch(`/retours/${retour.id}/refuser`, { method: 'POST' });
       if (res.ok) {
         toast.success('Retour refusé');
@@ -110,6 +115,8 @@ export default function RetoursPage() {
       }
     } catch {
       toast.error('Erreur réseau');
+    } finally {
+      setActionEnCours(null);
     }
   };
 
@@ -257,11 +264,11 @@ export default function RetoursPage() {
 
               {detailOuvert.statut === 'en_attente' && (
                 <div className="flex gap-3 pt-2">
-                  <Button className="flex-1 bg-green-600 hover:bg-green-700" onClick={() => validerRetour(detailOuvert)}>
-                    <CheckCircle2 className="w-4 h-4 mr-1" /> Valider
+                  <Button className="flex-1 bg-green-600 hover:bg-green-700" disabled={actionEnCours === detailOuvert.id} onClick={() => validerRetour(detailOuvert)}>
+                    {actionEnCours === detailOuvert.id ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-1" />} Valider
                   </Button>
-                  <Button variant="destructive" className="flex-1" onClick={() => refuserRetour(detailOuvert)}>
-                    <XCircle className="w-4 h-4 mr-1" /> Refuser
+                  <Button variant="destructive" className="flex-1" disabled={actionEnCours === detailOuvert.id} onClick={() => refuserRetour(detailOuvert)}>
+                    {actionEnCours === detailOuvert.id ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <XCircle className="w-4 h-4 mr-1" />} Refuser
                   </Button>
                 </div>
               )}

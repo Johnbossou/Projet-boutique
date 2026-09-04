@@ -49,6 +49,7 @@ export default function InventairePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [detail, setDetail] = useState<Inventaire | null>(null);
   const [comptages, setComptages] = useState<Record<string, number>>({});
+  const [actionEnCours, setActionEnCours] = useState(false);
 
   const chargerInventaires = useCallback(async () => {
     setIsLoading(true);
@@ -69,6 +70,7 @@ export default function InventairePage() {
 
   const creerInventaire = async () => {
     try {
+      setActionEnCours(true);
       const res = await apiFetch('/inventaires', { method: 'POST', body: JSON.stringify({}) });
       if (res.ok) {
         toast.success('Inventaire créé — comptage prêt');
@@ -79,6 +81,8 @@ export default function InventairePage() {
       }
     } catch {
       toast.error('Erreur réseau');
+    } finally {
+      setActionEnCours(false);
     }
   };
 
@@ -106,6 +110,7 @@ export default function InventairePage() {
     }
 
     try {
+      setActionEnCours(true);
       const res = await apiFetch(`/inventaires/${detail.id}/compter`, {
         method: 'POST',
         body: JSON.stringify({ lignes: lignesPayload }),
@@ -121,12 +126,15 @@ export default function InventairePage() {
       }
     } catch {
       toast.error('Erreur réseau');
+    } finally {
+      setActionEnCours(false);
     }
   };
 
   const validerInventaire = async () => {
     if (!detail) return;
     try {
+      setActionEnCours(true);
       const res = await apiFetch(`/inventaires/${detail.id}/valider`, { method: 'POST' });
       if (res.ok) {
         const data = await res.json();
@@ -139,6 +147,8 @@ export default function InventairePage() {
       }
     } catch {
       toast.error('Erreur réseau');
+    } finally {
+      setActionEnCours(false);
     }
   };
 
@@ -154,8 +164,8 @@ export default function InventairePage() {
             <p className="text-sm text-muted-foreground">Comptez votre stock et ajustez automatiquement les écarts</p>
           </div>
         </div>
-        <Button onClick={creerInventaire} className="bg-gradient-to-r from-orange-500 to-red-500">
-          <Play className="w-4 h-4 mr-1" /> Nouvel inventaire
+        <Button onClick={creerInventaire} disabled={actionEnCours} className="bg-gradient-to-r from-orange-500 to-red-500">
+          {actionEnCours ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Play className="w-4 h-4 mr-1" />} Nouvel inventaire
         </Button>
       </header>
 
@@ -286,14 +296,14 @@ export default function InventairePage() {
               </Table>
 
               {detail.statut === 'en_cours' && (
-                <Button onClick={soumettreComptage} className="w-full bg-gradient-to-r from-orange-500 to-red-500">
-                  <CheckCircle2 className="w-4 h-4 mr-1" /> Soumettre le comptage
+                <Button onClick={soumettreComptage} disabled={actionEnCours} className="w-full bg-gradient-to-r from-orange-500 to-red-500">
+                  {actionEnCours ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-1" />} Soumettre le comptage
                 </Button>
               )}
 
               {detail.statut === 'termine' && detail.ecarts_detectes > 0 && (
-                <Button onClick={validerInventaire} className="w-full bg-green-600 hover:bg-green-700">
-                  <CheckCircle2 className="w-4 h-4 mr-1" /> Valider et ajuster le stock
+                <Button onClick={validerInventaire} disabled={actionEnCours} className="w-full bg-green-600 hover:bg-green-700">
+                  {actionEnCours ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-1" />} Valider et ajuster le stock
                 </Button>
               )}
             </CardContent>

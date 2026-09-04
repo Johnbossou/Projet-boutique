@@ -21,6 +21,7 @@ import { apiFetch } from '@/lib/api-client';
 import { getEffectiveRole, canGerer } from '@/lib/role';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { useRouter } from 'next/navigation';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 
 // Types pour les données réelles
@@ -81,6 +82,7 @@ const DEFAULT_WIDGETS: Widget[] = [
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const router = useRouter();
   const roleCourant = getEffectiveRole(user);
   const userPeutGerer = canGerer(user, roleCourant);
   const [isLoading, setIsLoading] = useState(true);
@@ -374,7 +376,7 @@ export default function Dashboard() {
                               </p>
                             )}
                           </div>
-                          <Button size="sm" variant="outline" className="border-orange-300 text-orange-600 hover:bg-orange-50">
+                          <Button size="sm" variant="outline" className="border-orange-300 text-orange-600 hover:bg-orange-50" onClick={() => router.push('/approvisionnement')}>
                             Commander
                           </Button>
                         </div>
