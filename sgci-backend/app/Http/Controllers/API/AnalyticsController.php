@@ -14,6 +14,11 @@ use Carbon\Carbon;
 
 class AnalyticsController extends Controller
 {
+    private function boutiqueId(Request $request): int
+    {
+        return $request->user()->current_boutique_id;
+    }
+
     /**
      * Get date range based on period parameter
      */
@@ -35,9 +40,11 @@ class AnalyticsController extends Controller
     {
         $periode = $request->get('periode', '30j');
         $dateDebut = $this->getDateRange($periode);
+        $boutiqueId = $this->boutiqueId($request);
 
         // Stats des ventes avec filtre de période
         $statsVentes = Vente::where('statut', 'termine')
+            ->where('boutique_id', $boutiqueId)
             ->where('created_at', '>=', $dateDebut)
             ->select(
                 DB::raw('COUNT(*) as total_ventes'),
@@ -47,14 +54,15 @@ class AnalyticsController extends Controller
             ->first();
 
         // Stats des produits (toujours le total, pas de filtre période)
-        $statsProduits = Produit::select(
+        $statsProduits = Produit::where('boutique_id', $boutiqueId)
+            ->select(
             DB::raw('COUNT(*) as total_produits'),
             DB::raw('SUM(quantite_stock) as total_stock'),
             DB::raw('SUM(prix * quantite_stock) as valeur_stock_total')
         )->first();
 
-        $produitsEnAlerte = Produit::enAlerte()->count();
-        $produitsEnRupture = Produit::enRupture()->count();
+        $produitsEnAlerte = Produit::enAlerte()->where('boutique_id', $boutiqueId)->count();
+        $produitsEnRupture = Produit::enRupture()->where('boutique_id', $boutiqueId)->count();
 
         return response()->json([
             'ventes' => [
@@ -85,8 +93,10 @@ class AnalyticsController extends Controller
     {
         $periode = $request->get('periode', '30j');
         $dateDebut = $this->getDateRange($periode);
+        $boutiqueId = $this->boutiqueId($request);
 
         $ventes = Vente::where('statut', 'termine')
+            ->where('boutique_id', $boutiqueId)
             ->where('created_at', '>=', $dateDebut)
             ->select(
                 DB::raw('DATE(created_at) as date'),
@@ -104,9 +114,12 @@ class AnalyticsController extends Controller
      * GET /api/analytics/ventes-mensuelles
      * Returns monthly sales (kept for compatibility)
      */
-    public function ventesMensuelles(): JsonResponse
+    public function ventesMensuelles(Request $request): JsonResponse
     {
+        $boutiqueId = $this->boutiqueId($request);
+
         $ventes = Vente::where('statut', 'termine')
+            ->where('boutique_id', $boutiqueId)
             ->select(
                 DB::raw('YEAR(created_at) as annee'),
                 DB::raw('MONTH(created_at) as mois'),
@@ -131,10 +144,12 @@ class AnalyticsController extends Controller
         $periode = $request->get('periode', '30j');
         $limit = $request->get('limit', 10);
         $dateDebut = $this->getDateRange($periode);
+        $boutiqueId = $this->boutiqueId($request);
 
         $produits = LigneVente::with('produit')
-            ->whereHas('vente', function($query) use ($dateDebut) {
+            ->whereHas('vente', function($query) use ($dateDebut, $boutiqueId) {
                 $query->where('statut', 'termine')
+                      ->where('boutique_id', $boutiqueId)
                       ->where('created_at', '>=', $dateDebut);
             })
             ->select(
@@ -154,9 +169,12 @@ class AnalyticsController extends Controller
      * GET /api/analytics/chiffre-affaires
      * Returns revenue stats (kept for compatibility)
      */
-    public function chiffreAffaires(): JsonResponse
+    public function chiffreAffaires(Request $request): JsonResponse
     {
+        $boutiqueId = $this->boutiqueId($request);
+
         $chiffreAffaires = Vente::where('statut', 'termine')
+            ->where('boutique_id', $boutiqueId)
             ->select(
                 DB::raw('SUM(montant_total) as total'),
                 DB::raw('AVG(montant_total) as panier_moyen'),
@@ -175,11 +193,13 @@ class AnalyticsController extends Controller
     {
         $periode = $request->get('periode', '30j');
         $dateDebut = $this->getDateRange($periode);
+        $boutiqueId = $this->boutiqueId($request);
 
         $categories = LigneVente::join('ventes', 'ligne_ventes.vente_id', '=', 'ventes.id')
             ->join('produits', 'ligne_ventes.produit_id', '=', 'produits.id')
             ->join('categories', 'produits.categorie_id', '=', 'categories.id')
             ->where('ventes.statut', 'termine')
+            ->where('ventes.boutique_id', $boutiqueId)
             ->where('ventes.created_at', '>=', $dateDebut)
             ->select(
                 'categories.id as categorie_id',
@@ -224,9 +244,12 @@ class AnalyticsController extends Controller
      * GET /api/analytics/alertes-stock
      * NEW - Returns stock alerts for the dashboard
      */
-    public function alertesStock(): JsonResponse
+    public function alertesStock(Request $request): JsonResponse
     {
+        $boutiqueId = $this->boutiqueId($request);
+
         $produitsEnAlerte = Produit::enAlerte()
+            ->where('boutique_id', $boutiqueId)
             ->with('categorie')
             ->select('id', 'nom', 'quantite_stock', 'seuil_alerte', 'prix', 'categorie_id')
             ->orderBy('quantite_stock', 'asc')
@@ -234,6 +257,7 @@ class AnalyticsController extends Controller
             ->get();
 
         $produitsEnRupture = Produit::enRupture()
+            ->where('boutique_id', $boutiqueId)
             ->with('categorie')
             ->select('id', 'nom', 'quantite_stock', 'seuil_alerte', 'prix', 'categorie_id')
             ->orderBy('quantite_stock', 'asc')

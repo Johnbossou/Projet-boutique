@@ -27,12 +27,13 @@ class AIController extends Controller
     public function predictionsDemande(Request $request): JsonResponse
     {
         try {
-            // Utilise directement la version algorithmique avec données réelles
-            return $this->predictionsAlgorithmiquesAmeliorees();
+            $boutiqueId = $request->user()->current_boutique_id;
+            return $this->predictionsAlgorithmiquesAmeliorees($boutiqueId);
 
         } catch (\Exception $e) {
             Log::error('Erreur prédictions IA: ' . $e->getMessage());
-            return $this->predictionsAlgorithmiquesAmeliorees();
+            $boutiqueId = $request->user()->current_boutique_id;
+            return $this->predictionsAlgorithmiquesAmeliorees($boutiqueId);
         }
     }
 
@@ -42,12 +43,13 @@ class AIController extends Controller
     public function recommandationsPromotions(Request $request): JsonResponse
     {
         try {
-            // Utilise directement la version algorithmique avec données réelles
-            return $this->recommandationsAlgorithmiquesAvanceesV2();
+            $boutiqueId = $request->user()->current_boutique_id;
+            return $this->recommandationsAlgorithmiquesAvanceesV2($boutiqueId);
 
         } catch (\Exception $e) {
             Log::error('Erreur recommandations IA: ' . $e->getMessage());
-            return $this->recommandationsAlgorithmiquesAvanceesV2();
+            $boutiqueId = $request->user()->current_boutique_id;
+            return $this->recommandationsAlgorithmiquesAvanceesV2($boutiqueId);
         }
     }
 
@@ -56,8 +58,9 @@ class AIController extends Controller
      */
     public function metricsPerformance(Request $request): JsonResponse
     {
-        $metrics = $this->calculerMetricsPrecisionReelle();
-        $impactBusiness = $this->calculerImpactBusinessReel();
+        $boutiqueId = $request->user()->current_boutique_id;
+        $metrics = $this->calculerMetricsPrecisionReelle($boutiqueId);
+        $impactBusiness = $this->calculerImpactBusinessReel($boutiqueId);
         $historiquePrecision = $this->getHistoriquePrecision();
 
         return response()->json([
@@ -65,7 +68,7 @@ class AIController extends Controller
             'impact_business' => $impactBusiness,
             'historique' => $historiquePrecision,
             'statut_modele' => $this->getStatutModele(),
-            'donnees_temps_reel' => $this->getDonneesTempsReel(),
+            'donnees_temps_reel' => $this->getDonneesTempsReel($boutiqueId),
             'avertissement' => 'Indicateurs dérivés de vos ventes et stocks. Assistant statistique, pas un modèle ML.',
         ]);
     }
@@ -78,14 +81,13 @@ class AIController extends Controller
         try {
             sleep(1);
 
-            // Calcul de métriques réelles basées sur vos données
-            $precision = $this->calculerPrecisionReelle();
-            $loss = $this->calculerLossReel();
+            $boutiqueId = $request->user()->current_boutique_id;
+            $precision = $this->calculerPrecisionReelle($boutiqueId);
+            $loss = $this->calculerLossReel($boutiqueId);
 
-            // INSERTION DIRECTE - plus de statut "en_cours"
             DB::table('ai_metrics')->insert([
                 'type_entrainement' => 'recalcul_analyses',
-                'date_debut' => now()->subSeconds(2), // Début il y a 2 secondes (simulation)
+                'date_debut' => now()->subSeconds(2),
                 'date_fin' => now(),
                 'statut' => 'termine',
                 'precision' => $precision,
@@ -112,7 +114,6 @@ class AIController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            // En cas d'erreur, on insère un enregistrement d'erreur
             DB::table('ai_metrics')->insert([
                 'type_entrainement' => 'recalcul_analyses',
                 'date_debut' => now(),
@@ -140,21 +141,19 @@ class AIController extends Controller
     /**
      * PRÉDICTIONS ALGORITHMIQUES - AVEC VOS DONNÉES RÉELLES
      */
-    private function predictionsAlgorithmiquesAmeliorees(): JsonResponse
+    private function predictionsAlgorithmiquesAmeliorees($boutiqueId): JsonResponse
     {
-        $produits = Produit::with('categorie')->get();
+        $produits = Produit::with('categorie')->where('boutique_id', $boutiqueId)->get();
 
-        $predictions = $produits->map(function ($produit) {
-            $ventes7Jours = $this->calculerVentesPeriode($produit->id, 7);
-            $ventes30Jours = $this->calculerVentesPeriode($produit->id, 30);
-            $ventes90Jours = $this->calculerVentesPeriode($produit->id, 90);
+        $predictions = $produits->map(function ($produit) use ($boutiqueId) {
+            $ventes7Jours = $this->calculerVentesPeriode($produit->id, 7, $boutiqueId);
+            $ventes30Jours = $this->calculerVentesPeriode($produit->id, 30, $boutiqueId);
+            $ventes90Jours = $this->calculerVentesPeriode($produit->id, 90, $boutiqueId);
 
-            // ALGORITHME AMÉLIORÉ AVEC VOS DONNÉES
-            $tendance = $this->calculerTendanceVentesProduit($produit->id);
-            $saisonnalite = $this->calculerSaisonnaliteProduit($produit->id);
+            $tendance = $this->calculerTendanceVentesProduit($produit->id, $boutiqueId);
+            $saisonnalite = $this->calculerSaisonnaliteProduit($produit->id, $boutiqueId);
             $facteurPerissable = $produit->est_perissable ? 1.2 : 1.0;
 
-            // FORMULE AVANCÉE
             $demandePredite = ceil(
                 (($ventes7Jours * 0.4) + ($ventes30Jours * 0.4) + ($ventes90Jours/3 * 0.2))
                 * $facteurPerissable
@@ -165,7 +164,6 @@ class AIController extends Controller
             $besoin = $demandePredite - $produit->quantite_stock;
             $niveauUrgence = $this->determinerNiveauUrgence($besoin, $produit->seuil_alerte);
 
-            // CALCUL DE CONFIANCE RÉEL
             $confiance = max(0.6, min(0.95,
                 0.8 + ($tendance * 0.1) - (abs($saisonnalite - 1) * 0.05)
             ));
@@ -191,7 +189,7 @@ class AIController extends Controller
 
         return response()->json([
             'predictions' => $predictions,
-            'metrics' => $this->calculerMetricsAlgorithmiques(),
+            'metrics' => $this->calculerMetricsAlgorithmiques($boutiqueId),
             'dernier_entrainement' => $this->getDernierEntrainement(),
             'meta' => [
                 'type' => 'assistant_statistique',
@@ -205,37 +203,34 @@ class AIController extends Controller
     /**
      * RECOMMANDATIONS ALGORITHMIQUES - VERSION AMÉLIORÉE V2
      */
-    private function recommandationsAlgorithmiquesAvanceesV2(): JsonResponse
+    private function recommandationsAlgorithmiquesAvanceesV2($boutiqueId): JsonResponse
     {
         $recommandations = Produit::with(['categorie', 'ligneVentes.vente'])
+            ->where('boutique_id', $boutiqueId)
             ->get()
-            ->map(function ($produit) {
-                $ventes30Jours = $this->calculerVentesPeriode($produit->id, 30);
-                $ventes90Jours = $this->calculerVentesPeriode($produit->id, 90);
+            ->map(function ($produit) use ($boutiqueId) {
+                $ventes30Jours = $this->calculerVentesPeriode($produit->id, 30, $boutiqueId);
+                $ventes90Jours = $this->calculerVentesPeriode($produit->id, 90, $boutiqueId);
 
-                // NOUVEAU CALCUL DE SCORE PLUS INTELLIGENT
                 $ratioStockVentes = $ventes30Jours > 0 ? $produit->quantite_stock / $ventes30Jours : 10;
-                $tendance = $this->calculerTendanceVentesProduit($produit->id);
+                $tendance = $this->calculerTendanceVentesProduit($produit->id, $boutiqueId);
                 $joursStock = $ventes30Jours > 0 ? $produit->quantite_stock / ($ventes30Jours / 30) : 999;
 
-                // SCORE MULTI-CRITÈRES
                 $scoreStock = $this->calculerScoreStock($ratioStockVentes, $joursStock);
                 $scoreTendance = $this->calculerScoreTendance($tendance);
-                $scoreSaisonnalite = $this->calculerScoreSaisonnalite($produit->id);
+                $scoreSaisonnalite = $this->calculerScoreSaisonnalite($produit->id, $boutiqueId);
                 $scorePerissable = $produit->est_perissable ? 15 : 0;
 
                 $scorePromo = min(100, max(0,
-                    $scoreStock * 0.5 +          // Poids fort sur stock
-                    $scoreTendance * 0.3 +       // Poids moyen sur tendance
-                    $scoreSaisonnalite * 0.15 +  // Poids faible sur saisonnalité
-                    $scorePerissable * 0.05      // Bonus péremption
+                    $scoreStock * 0.5 +
+                    $scoreTendance * 0.3 +
+                    $scoreSaisonnalite * 0.15 +
+                    $scorePerissable * 0.05
                 ));
 
-                // RÉDUCTION VARIABLE SELON SCORE
                 $reduction = $this->determinerReductionOptimaleAmelioree($scorePromo, $produit);
                 $prixSuggere = round($produit->prix * (1 - $reduction/100));
 
-                // DURÉE VARIABLE
                 $duree = $this->determinerDureePromotionAmelioree($scorePromo, $produit);
 
                 return [
@@ -286,13 +281,12 @@ class AIController extends Controller
      */
     private function calculerScoreStock($ratioStockVentes, $joursStock): float
     {
-        // Ratio idéal : 1.5 à 2.5 mois de stock
-        if ($ratioStockVentes >= 6) return 100;    // Stock très excessif (>6 mois)
-        if ($ratioStockVentes >= 4) return 80;     // Stock excessif (4-6 mois)
-        if ($ratioStockVentes >= 3) return 60;     // Stock élevé (3-4 mois)
-        if ($ratioStockVentes >= 2) return 40;     // Stock confortable (2-3 mois)
-        if ($ratioStockVentes >= 1) return 20;     // Stock normal (1-2 mois)
-        return 0;                                  // Stock faible
+        if ($ratioStockVentes >= 6) return 100;
+        if ($ratioStockVentes >= 4) return 80;
+        if ($ratioStockVentes >= 3) return 60;
+        if ($ratioStockVentes >= 2) return 40;
+        if ($ratioStockVentes >= 1) return 20;
+        return 0;
     }
 
     /**
@@ -300,26 +294,26 @@ class AIController extends Controller
      */
     private function calculerScoreTendance($tendance): float
     {
-        if ($tendance <= -0.3) return 100;     // Forte baisse
-        if ($tendance <= -0.15) return 70;     // Baisse modérée
-        if ($tendance <= -0.05) return 40;     // Légère baisse
-        if ($tendance >= 0.3) return 0;        // Forte hausse - pas de promo
-        if ($tendance >= 0.15) return 10;      // Hausse modérée
-        return 30;                             // Stabilité
+        if ($tendance <= -0.3) return 100;
+        if ($tendance <= -0.15) return 70;
+        if ($tendance <= -0.05) return 40;
+        if ($tendance >= 0.3) return 0;
+        if ($tendance >= 0.15) return 10;
+        return 30;
     }
 
     /**
      * CALCUL SCORE SAISONNALITÉ
      */
-    private function calculerScoreSaisonnalite($produitId): float
+    private function calculerScoreSaisonnalite($produitId, $boutiqueId = null): float
     {
-        $saisonnalite = $this->calculerSaisonnaliteProduit($produitId);
+        $saisonnalite = $this->calculerSaisonnaliteProduit($produitId, $boutiqueId);
 
-        if ($saisonnalite < 0.7) return 100;   // Basse saison
-        if ($saisonnalite < 0.9) return 70;    // Fin de saison
-        if ($saisonnalite > 1.3) return 0;     // Pleine saison
-        if ($saisonnalite > 1.1) return 20;    // Début saison
-        return 50;                             // Hors saison
+        if ($saisonnalite < 0.7) return 100;
+        if ($saisonnalite < 0.9) return 70;
+        if ($saisonnalite > 1.3) return 0;
+        if ($saisonnalite > 1.1) return 20;
+        return 50;
     }
 
     /**
@@ -327,7 +321,6 @@ class AIController extends Controller
      */
     private function determinerReductionOptimaleAmelioree($scorePromo, $produit): int
     {
-        // Réduction progressive selon score
         if ($scorePromo >= 90) return 25;
         if ($scorePromo >= 80) return 20;
         if ($scorePromo >= 70) return 18;
@@ -357,7 +350,6 @@ class AIController extends Controller
         $ventesMoyennes = $this->calculerMoyenneVentes($produit->id, 30);
         $joursPromo = (int) $duree;
 
-        // Impact plus réaliste basé sur réduction
         $augmentationAttendue = min(4.0, 1 + ($reduction / 100) * 2);
         $ventesAttendues = round($ventesMoyennes * $augmentationAttendue * ($joursPromo / 30));
 
@@ -376,7 +368,6 @@ class AIController extends Controller
     {
         $besoin = $demandePredite - $produit->quantite_stock;
 
-        // CORRECTION : GESTION DES CAS LIMITES
         if ($produit->quantite_stock <= 0) {
             return $demandePredite > 0
                 ? 'RUPTURE - Commander URGENCE'
@@ -389,7 +380,6 @@ class AIController extends Controller
 
         $ratio = $produit->quantite_stock / $demandePredite;
 
-        // Seuils ajustés
         if ($ratio >= 4.0) return 'Stock très excessif - Promotion urgente recommandée';
         if ($ratio >= 2.5) return 'Stock excessif - Considérer promotion';
         if ($ratio >= 1.8) return 'Stock confortable';
@@ -404,25 +394,28 @@ class AIController extends Controller
     // MÉTHODES EXISTANTES (CONSERVEES)
     // =========================================================================
 
-    private function calculerVentesPeriode($produitId, $jours): int
+    private function calculerVentesPeriode($produitId, $jours, $boutiqueId = null): int
     {
         return LigneVente::where('produit_id', $produitId)
-            ->whereHas('vente', function($query) use ($jours) {
+            ->whereHas('vente', function($query) use ($jours, $boutiqueId) {
                 $query->terminees()->where('created_at', '>=', now()->subDays($jours));
+                if ($boutiqueId) {
+                    $query->where('boutique_id', $boutiqueId);
+                }
             })
             ->sum('quantite');
     }
 
-    private function calculerMoyenneVentes($produitId, $jours): float
+    private function calculerMoyenneVentes($produitId, $jours, $boutiqueId = null): float
     {
-        $ventes = $this->calculerVentesPeriode($produitId, $jours);
+        $ventes = $this->calculerVentesPeriode($produitId, $jours, $boutiqueId);
         return $ventes / $jours;
     }
 
-    private function calculerTendanceVentesProduit($produitId): float
+    private function calculerTendanceVentesProduit($produitId, $boutiqueId = null): float
     {
-        $ventes7Jours = $this->calculerVentesPeriode($produitId, 7);
-        $ventes14Jours = $this->calculerVentesPeriode($produitId, 14);
+        $ventes7Jours = $this->calculerVentesPeriode($produitId, 7, $boutiqueId);
+        $ventes14Jours = $this->calculerVentesPeriode($produitId, 14, $boutiqueId);
 
         if ($ventes14Jours == 0) return 0;
 
@@ -432,10 +425,10 @@ class AIController extends Controller
         return ($ventes7Jours - $ventes7Premiers) / $ventes7Premiers;
     }
 
-    private function calculerSaisonnaliteProduit($produitId): float
+    private function calculerSaisonnaliteProduit($produitId, $boutiqueId = null): float
     {
-        $ventesMoisCourant = $this->calculerVentesPeriode($produitId, 30);
-        $ventes3Mois = $this->calculerVentesPeriode($produitId, 90);
+        $ventesMoisCourant = $this->calculerVentesPeriode($produitId, 30, $boutiqueId);
+        $ventes3Mois = $this->calculerVentesPeriode($produitId, 90, $boutiqueId);
 
         if ($ventes3Mois == 0) return 1.0;
 
@@ -454,13 +447,12 @@ class AIController extends Controller
     /**
      * CALCUL DE PRÉCISION RÉELLE BASÉE SUR VOS DONNÉES
      */
-    private function calculerMetricsPrecisionReelle(): array
+    private function calculerMetricsPrecisionReelle($boutiqueId): array
     {
-        $totalProduits = Produit::count();
-        $produitsAlerte = Produit::enAlerte()->count();
-        $produitsRupture = Produit::enRupture()->count();
+        $totalProduits = Produit::where('boutique_id', $boutiqueId)->count();
+        $produitsAlerte = Produit::where('boutique_id', $boutiqueId)->enAlerte()->count();
+        $produitsRupture = Produit::where('boutique_id', $boutiqueId)->enRupture()->count();
 
-        // Calcul de précision basé sur la cohérence des données
         $precisionBase = $totalProduits > 0 ?
             min(0.95, max(0.75, (($totalProduits - $produitsAlerte - $produitsRupture) / $totalProduits) * 1.2)) : 0.85;
 
@@ -469,8 +461,8 @@ class AIController extends Controller
             'precision_stock_alerte' => round($precisionBase * 1.05, 3),
             'precision_demandes' => round($precisionBase * 0.98, 3),
             'taux_confiance' => round($precisionBase, 3),
-            'nombre_echantillons' => Vente::terminees()->count(),
-            'total_ventes_historique' => Vente::terminees()->count(),
+            'nombre_echantillons' => Vente::where('boutique_id', $boutiqueId)->terminees()->count(),
+            'total_ventes_historique' => Vente::where('boutique_id', $boutiqueId)->terminees()->count(),
             'dernier_calcul' => now()->toISOString(),
             'mode' => 'assistant_statistique',
             'libelle' => 'Indice de fiabilité stock (basé sur alertes/ruptures)',
@@ -480,13 +472,12 @@ class AIController extends Controller
     /**
      * CALCUL D'IMPACT BUSINESS RÉEL
      */
-    private function calculerImpactBusinessReel(): array
+    private function calculerImpactBusinessReel($boutiqueId): array
     {
-        $produitsEnAlerte = Produit::enAlerte()->count();
-        $produitsEnRupture = Produit::enRupture()->count();
-        $totalProduits = Produit::count();
+        $produitsEnAlerte = Produit::where('boutique_id', $boutiqueId)->enAlerte()->count();
+        $produitsEnRupture = Produit::where('boutique_id', $boutiqueId)->enRupture()->count();
+        $totalProduits = Produit::where('boutique_id', $boutiqueId)->count();
 
-        // CALCULS RÉELS basés sur vos données
         $reductionRuptures = $totalProduits > 0 ?
             max(0, 100 - (($produitsEnRupture / $totalProduits) * 100)) : 0;
 
@@ -503,9 +494,9 @@ class AIController extends Controller
         ];
     }
 
-    private function calculerMetricsAlgorithmiques(): array
+    private function calculerMetricsAlgorithmiques($boutiqueId): array
     {
-        $totalProduits = Produit::count();
+        $totalProduits = Produit::where('boutique_id', $boutiqueId)->count();
         $precisionBase = $totalProduits > 0 ? 0.82 : 0.75;
 
         return [
@@ -518,19 +509,18 @@ class AIController extends Controller
         ];
     }
 
-    // Méthodes de calcul pour l'entraînement
-    private function calculerPrecisionReelle(): float
+    private function calculerPrecisionReelle($boutiqueId): float
     {
-        $totalProduits = Produit::count();
-        $produitsAlerte = Produit::enAlerte()->count();
+        $totalProduits = Produit::where('boutique_id', $boutiqueId)->count();
+        $produitsAlerte = Produit::where('boutique_id', $boutiqueId)->enAlerte()->count();
 
         return $totalProduits > 0 ?
             min(0.95, max(0.75, (($totalProduits - $produitsAlerte) / $totalProduits) * 1.1)) : 0.85;
     }
 
-    private function calculerLossReel(): float
+    private function calculerLossReel($boutiqueId): float
     {
-        return max(0.1, 0.2 - ($this->calculerPrecisionReelle() * 0.1));
+        return max(0.1, 0.2 - ($this->calculerPrecisionReelle($boutiqueId) * 0.1));
     }
 
     private function getDernierEntrainement(): ?array
@@ -570,14 +560,14 @@ class AIController extends Controller
         ];
     }
 
-    private function getDonneesTempsReel(): array
+    private function getDonneesTempsReel($boutiqueId): array
     {
         return [
-            'total_produits' => Produit::count(),
-            'produits_alerte' => Produit::enAlerte()->count(),
-            'produits_rupture' => Produit::enRupture()->count(),
-            'ventes_du_jour' => Vente::terminees()->duJour()->count(),
-            'chiffre_affaires_jour' => Vente::terminees()->duJour()->sum('montant_total'),
+            'total_produits' => Produit::where('boutique_id', $boutiqueId)->count(),
+            'produits_alerte' => Produit::where('boutique_id', $boutiqueId)->enAlerte()->count(),
+            'produits_rupture' => Produit::where('boutique_id', $boutiqueId)->enRupture()->count(),
+            'ventes_du_jour' => Vente::where('boutique_id', $boutiqueId)->terminees()->duJour()->count(),
+            'chiffre_affaires_jour' => Vente::where('boutique_id', $boutiqueId)->terminees()->duJour()->sum('montant_total'),
             'mise_a_jour' => now()->toISOString()
         ];
     }

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Produit;
 use App\Models\LigneVente;
 use App\Models\AiPrediction;
+use App\Models\Vente;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -19,23 +20,22 @@ class PredictionsController extends Controller
      */
     public function predictionsDemande(Request $request): JsonResponse
     {
+        $boutiqueId = $request->user()->current_boutique_id;
         $datePrediction = $request->input('date', now()->toDateString());
         $typePrediction = $request->input('type', 'demande_hebdo');
         
-        $produits = Produit::with('categorie')->get();
+        $produits = Produit::with('categorie')->where('boutique_id', $boutiqueId)->get();
         
-        $predictions = $produits->map(function ($produit) use ($datePrediction, $typePrediction) {
-            $ventes7Jours = $this->calculerVentesPeriode($produit->id, 7);
-            $ventes30Jours = $this->calculerVentesPeriode($produit->id, 30);
-            $ventes90Jours = $this->calculerVentesPeriode($produit->id, 90);
+        $predictions = $produits->map(function ($produit) use ($datePrediction, $typePrediction, $boutiqueId) {
+            $ventes7Jours = $this->calculerVentesPeriode($produit->id, 7, $boutiqueId);
+            $ventes30Jours = $this->calculerVentesPeriode($produit->id, 30, $boutiqueId);
+            $ventes90Jours = $this->calculerVentesPeriode($produit->id, 90, $boutiqueId);
 
-            // ALGORITHME AMÉLIORÉ AVEC POIDS ADAPTATIFS
-            $poids = $this->calculerPoidsAdaptatifs($produit->id);
-            $tendance = $this->calculerTendanceVentesProduit($produit->id);
-            $saisonnalite = $this->calculerSaisonnaliteProduit($produit->id);
+            $poids = $this->calculerPoidsAdaptatifs($produit->id, $boutiqueId);
+            $tendance = $this->calculerTendanceVentesProduit($produit->id, $boutiqueId);
+            $saisonnalite = $this->calculerSaisonnaliteProduit($produit->id, $boutiqueId);
             $facteurPerissable = $produit->est_perissable ? 1.2 : 1.0;
 
-            // FORMULE AVANCÉE AVEC POIDS ADAPTATIFS
             $demandePredite = ceil(
                 (($ventes7Jours * $poids['poids_7j']) + 
                  ($ventes30Jours * $poids['poids_30j']) + 
@@ -48,10 +48,8 @@ class PredictionsController extends Controller
             $besoin = $demandePredite - $produit->quantite_stock;
             $niveauUrgence = $this->determinerNiveauUrgence($besoin, $produit->seuil_alerte);
 
-            // CALCUL DE CONFIANCE RÉEL AMÉLIORÉ
             $confiance = $this->calculerConfianceAmelioree($produit->id, $tendance, $saisonnalite);
 
-            // STOCKER LA PRÉDICTION
             $prediction = AiPrediction::updateOrCreate(
                 [
                     'produit_id' => $produit->id,
@@ -97,7 +95,7 @@ class PredictionsController extends Controller
             'predictions' => $predictions,
             'date_prediction' => $datePrediction,
             'type_prediction' => $typePrediction,
-            'metrics' => $this->calculerMetricsAlgorithmiques(),
+            'metrics' => $this->calculerMetricsAlgorithmiques($boutiqueId),
             'meta' => [
                 'type' => 'assistant_analytics',
                 'base' => 'ventes_terminees',
@@ -112,11 +110,14 @@ class PredictionsController extends Controller
      */
     public function validerPredictions(Request $request): JsonResponse
     {
+        $boutiqueId = $request->user()->current_boutique_id;
         $dateValidation = $request->input('date', now()->subDay()->toDateString());
         
-        // Récupérer toutes les prédictions non validées pour cette date
         $predictions = AiPrediction::where('date_prediction', $dateValidation)
             ->whereNull('date_validation')
+            ->whereHas('produit', function ($query) use ($boutiqueId) {
+                $query->where('boutique_id', $boutiqueId);
+            })
             ->get();
 
         $resultats = [];
@@ -124,15 +125,14 @@ class PredictionsController extends Controller
         $totalPrecises = 0;
 
         foreach ($predictions as $prediction) {
-            // Calculer les ventes réelles pour la période
             $periodeJours = $this->getPeriodeJours($prediction->type_prediction);
             $ventesReelles = $this->calculerVentesPeriodeDate(
                 $prediction->produit_id, 
                 $dateValidation, 
-                $periodeJours
+                $periodeJours,
+                $boutiqueId
             );
 
-            // Valider la prédiction
             $prediction->calculerErreur($ventesReelles);
             
             $totalValidees++;
@@ -168,12 +168,15 @@ class PredictionsController extends Controller
      */
     public function metricsPerformance(Request $request): JsonResponse
     {
+        $boutiqueId = $request->user()->current_boutique_id;
         $jours = $request->input('jours', 30);
         $dateDebut = now()->subDays($jours);
         
-        // Récupérer toutes les prédictions validées
         $predictions = AiPrediction::validees()
             ->where('date_validation', '>=', $dateDebut)
+            ->whereHas('produit', function ($query) use ($boutiqueId) {
+                $query->where('boutique_id', $boutiqueId);
+            })
             ->get();
 
         if ($predictions->isEmpty()) {
@@ -183,14 +186,12 @@ class PredictionsController extends Controller
             ]);
         }
 
-        // Calculer les métriques réelles
         $mae = $this->calculerMAE($predictions);
         $rmse = $this->calculerRMSE($predictions);
         $mape = $this->calculerMAPE($predictions);
         $accuracy = $this->calculerAccuracy($predictions, 20);
         $precision = $this->calculerPrecision($predictions);
 
-        // Métriques par type de prédiction
         $metricsParType = $predictions->groupBy('type_prediction')->map(function ($group) {
             return [
                 'count' => $group->count(),
@@ -200,8 +201,7 @@ class PredictionsController extends Controller
             ];
         });
 
-        // Historique de performance
-        $historique = $this->getHistoriquePerformance($jours);
+        $historique = $this->getHistoriquePerformance($jours, $boutiqueId);
 
         return response()->json([
             'periode' => [
@@ -220,7 +220,7 @@ class PredictionsController extends Controller
             'historique' => $historique,
             'total_predictions' => $predictions->count(),
             'statut_modele' => $this->getStatutModeleAmeliore($predictions),
-            'donnees_temps_reel' => $this->getDonneesTempsReel(),
+            'donnees_temps_reel' => $this->getDonneesTempsReel($boutiqueId),
         ]);
     }
 
@@ -229,33 +229,32 @@ class PredictionsController extends Controller
      */
     public function recommandationsPromotions(Request $request): JsonResponse
     {
+        $boutiqueId = $request->user()->current_boutique_id;
         $recommandations = Produit::with(['categorie', 'ligneVentes.vente'])
+            ->where('boutique_id', $boutiqueId)
             ->get()
-            ->map(function ($produit) {
-                $ventes30Jours = $this->calculerVentesPeriode($produit->id, 30);
-                $ventes90Jours = $this->calculerVentesPeriode($produit->id, 90);
+            ->map(function ($produit) use ($boutiqueId) {
+                $ventes30Jours = $this->calculerVentesPeriode($produit->id, 30, $boutiqueId);
+                $ventes90Jours = $this->calculerVentesPeriode($produit->id, 90, $boutiqueId);
 
-                // CALCUL DE SCORE PLUS INTELLIGENT
                 $ratioStockVentes = $ventes30Jours > 0 ? $produit->quantite_stock / $ventes30Jours : 10;
-                $tendance = $this->calculerTendanceVentesProduit($produit->id);
+                $tendance = $this->calculerTendanceVentesProduit($produit->id, $boutiqueId);
                 $joursStock = $ventes30Jours > 0 ? $produit->quantite_stock / ($ventes30Jours / 30) : 999;
 
-                // SCORE MULTI-CRITÈRES
                 $scoreStock = $this->calculerScoreStock($ratioStockVentes, $joursStock);
                 $scoreTendance = $this->calculerScoreTendance($tendance);
-                $scoreSaisonnalite = $this->calculerScoreSaisonnalite($produit->id);
+                $scoreSaisonnalite = $this->calculerScoreSaisonnalite($produit->id, $boutiqueId);
                 $scorePerissable = $produit->est_perissable ? 15 : 0;
 
-                // INTÉGRATION PRÉCISION HISTORIQUE
                 $precisionHistorique = $this->getPrecisionHistoriqueProduit($produit->id);
-                $scorePrecision = (1 - $precisionHistorique) * 10; // Pénalité si mauvaise précision
+                $scorePrecision = (1 - $precisionHistorique) * 10;
 
                 $scorePromo = min(100, max(0,
-                    $scoreStock * 0.45 +          // Poids fort sur stock
-                    $scoreTendance * 0.30 +       // Poids moyen sur tendance
-                    $scoreSaisonnalite * 0.10 +  // Poids faible sur saisonnalité
-                    $scorePerissable * 0.10 +     // Bonus péremption
-                    $scorePrecision * 0.05       // Pénalité précision
+                    $scoreStock * 0.45 +
+                    $scoreTendance * 0.30 +
+                    $scoreSaisonnalite * 0.10 +
+                    $scorePerissable * 0.10 +
+                    $scorePrecision * 0.05
                 ));
 
                 $reduction = $this->determinerReductionOptimale($scorePromo, $produit);
@@ -307,6 +306,7 @@ class PredictionsController extends Controller
      */
     public function crossSelling(Request $request): JsonResponse
     {
+        $boutiqueId = $request->user()->current_boutique_id;
         $produitIds = $request->input('produit_ids', []);
         
         if (empty($produitIds)) {
@@ -316,11 +316,23 @@ class PredictionsController extends Controller
             ]);
         }
 
-        // Analyser les associations de produits
-        $suggestions = $this->analyserAssociationsProduits($produitIds);
+        // Verify products belong to user's boutique
+        $validProduitIds = Produit::where('boutique_id', $boutiqueId)
+            ->whereIn('id', $produitIds)
+            ->pluck('id')
+            ->toArray();
+
+        if (empty($validProduitIds)) {
+            return response()->json([
+                'message' => 'Aucun produit valide trouvé dans votre boutique',
+                'suggestions' => [],
+            ]);
+        }
+
+        $suggestions = $this->analyserAssociationsProduits($validProduitIds, $boutiqueId);
 
         return response()->json([
-            'produits_panier' => $produitIds,
+            'produits_panier' => $validProduitIds,
             'suggestions' => $suggestions,
             'meta' => [
                 'description' => 'Suggestions basées sur l\'analyse des associations de produits (Market Basket Analysis).',
@@ -333,26 +345,24 @@ class PredictionsController extends Controller
      */
     public function predictionsReapprovisionnement(Request $request): JsonResponse
     {
+        $boutiqueId = $request->user()->current_boutique_id;
         $horizonJours = $request->input('horizon', 30);
         
-        $produits = Produit::with('categorie')->get();
+        $produits = Produit::with('categorie')->where('boutique_id', $boutiqueId)->get();
         
-        $recommandations = $produits->map(function ($produit) use ($horizonJours) {
-            // Prédire la demande sur l'horizon
-            $demandePredite = $this->predireDemandeHorizon($produit->id, $horizonJours);
+        $recommandations = $produits->map(function ($produit) use ($horizonJours, $boutiqueId) {
+            $demandePredite = $this->predireDemandeHorizon($produit->id, $horizonJours, $boutiqueId);
             
             $stockActuel = $produit->quantite_stock;
             $besoin = max(0, $demandePredite - $stockActuel);
             
-            // Calculer le point de commande optimal
-            $ventesMoyennesJournalieres = $this->calculerMoyenneVentes($produit->id, 30);
-            $delaiLivraison = 7; // 7 jours par défaut
+            $ventesMoyennesJournalieres = $this->calculerMoyenneVentes($produit->id, 30, $boutiqueId);
+            $delaiLivraison = 7;
             $securiteStock = ceil($ventesMoyennesJournalieres * $delaiLivraison * 1.5);
             
             $pointCommande = max($produit->seuil_alerte, $securiteStock);
             $quantiteCommande = max($pointCommande, $besoin);
             
-            // Urgence
             $joursRestants = $ventesMoyennesJournalieres > 0 ? floor($stockActuel / $ventesMoyennesJournalieres) : 999;
             $urgence = $this->determinerUrgenceReappro($joursRestants);
 
@@ -391,34 +401,28 @@ class PredictionsController extends Controller
     // MÉTHODES DE CALCUL AMÉLIORÉES
     // =========================================================================
 
-    private function calculerPoidsAdaptatifs($produitId): array
+    private function calculerPoidsAdaptatifs($produitId, $boutiqueId = null): array
     {
-        // Calculer la volatilité des ventes
-        $ventes7Jours = $this->calculerVentesPeriode($produitId, 7);
-        $ventes30Jours = $this->calculerVentesPeriode($produitId, 30);
-        $ventes90Jours = $this->calculerVentesPeriode($produitId, 90);
+        $ventes7Jours = $this->calculerVentesPeriode($produitId, 7, $boutiqueId);
+        $ventes30Jours = $this->calculerVentesPeriode($produitId, 30, $boutiqueId);
+        $ventes90Jours = $this->calculerVentesPeriode($produitId, 90, $boutiqueId);
 
-        // Volatilité = écart-type relatif
         $moyenne30 = $ventes30Jours / 30;
         $volatilite = $moyenne30 > 0 ? abs($ventes7Jours - $moyenne30) / $moyenne30 : 0;
 
-        // Ajuster les poids selon la volatilité
         if ($volatilite > 0.5) {
-            // Haute volatilité: privilégier le court terme
             return [
                 'poids_7j' => 0.6,
                 'poids_30j' => 0.3,
                 'poids_90j' => 0.1,
             ];
         } elseif ($volatilite > 0.2) {
-            // Volatilité moyenne: poids équilibrés
             return [
                 'poids_7j' => 0.4,
                 'poids_30j' => 0.4,
                 'poids_90j' => 0.2,
             ];
         } else {
-            // Faible volatilité: privilégier le long terme
             return [
                 'poids_7j' => 0.2,
                 'poids_30j' => 0.5,
@@ -429,20 +433,16 @@ class PredictionsController extends Controller
 
     private function calculerConfianceAmelioree($produitId, $tendance, $saisonnalite): float
     {
-        // Récupérer la précision historique
         $precisionHistorique = $this->getPrecisionHistoriqueProduit($produitId);
         
-        // Base de confiance
         $confiance = 0.7 + ($precisionHistorique * 0.2);
         
-        // Ajuster selon la tendance
         if (abs($tendance) > 0.3) {
-            $confiance -= 0.1; // Pénalité pour forte volatilité
+            $confiance -= 0.1;
         }
         
-        // Ajuster selon la saisonnalité
         if ($saisonnalite < 0.7 || $saisonnalite > 1.3) {
-            $confiance -= 0.05; // Pénalité pour saisonnalité extrême
+            $confiance -= 0.05;
         }
         
         return max(0.5, min(0.95, $confiance));
@@ -456,7 +456,7 @@ class PredictionsController extends Controller
             ->get();
 
         if ($predictions->isEmpty()) {
-            return 0.8; // Valeur par défaut
+            return 0.8;
         }
 
         $precises = $predictions->filter(function ($p) {
@@ -466,11 +466,11 @@ class PredictionsController extends Controller
         return $precises / $predictions->count();
     }
 
-    private function predireDemandeHorizon($produitId, $horizonJours): int
+    private function predireDemandeHorizon($produitId, $horizonJours, $boutiqueId = null): int
     {
-        $ventes30Jours = $this->calculerVentesPeriode($produitId, 30);
-        $tendance = $this->calculerTendanceVentesProduit($produitId);
-        $saisonnalite = $this->calculerSaisonnaliteProduit($produitId);
+        $ventes30Jours = $this->calculerVentesPeriode($produitId, 30, $boutiqueId);
+        $tendance = $this->calculerTendanceVentesProduit($produitId, $boutiqueId);
+        $saisonnalite = $this->calculerSaisonnaliteProduit($produitId, $boutiqueId);
 
         $ventesMoyennesJournalieres = $ventes30Jours / 30;
         
@@ -528,10 +528,18 @@ class PredictionsController extends Controller
         return $this->calculerAccuracy($predictions, 20);
     }
 
-    private function getHistoriquePerformance($jours): array
+    private function getHistoriquePerformance($jours, $boutiqueId = null): array
     {
-        return AiPrediction::validees()
-            ->where('date_validation', '>=', now()->subDays($jours))
+        $query = AiPrediction::validees()
+            ->where('date_validation', '>=', now()->subDays($jours));
+
+        if ($boutiqueId) {
+            $query->whereHas('produit', function ($q) use ($boutiqueId) {
+                $q->where('boutique_id', $boutiqueId);
+            });
+        }
+
+        return $query
             ->selectRaw('DATE(date_validation) as date, AVG(erreur_pourcentage) as mape')
             ->groupBy('date')
             ->orderBy('date')
@@ -574,39 +582,44 @@ class PredictionsController extends Controller
     // MÉTHODES UTILITAIRES
     // =========================================================================
 
-    private function calculerVentesPeriode($produitId, $jours): int
+    private function calculerVentesPeriode($produitId, $jours, $boutiqueId = null): int
     {
-        // Inclure les ventes offline synchronisées (avec created_at préservé)
         return LigneVente::where('produit_id', $produitId)
-            ->whereHas('vente', function($query) use ($jours) {
+            ->whereHas('vente', function($query) use ($jours, $boutiqueId) {
                 $query->terminees()->where('created_at', '>=', now()->subDays($jours));
+                if ($boutiqueId) {
+                    $query->where('boutique_id', $boutiqueId);
+                }
             })
             ->sum('quantite');
     }
 
-    private function calculerVentesPeriodeDate($produitId, $date, $jours): int
+    private function calculerVentesPeriodeDate($produitId, $date, $jours, $boutiqueId = null): int
     {
         $dateDebut = Carbon::parse($date)->subDays($jours);
         $dateFin = Carbon::parse($date);
 
         return LigneVente::where('produit_id', $produitId)
-            ->whereHas('vente', function($query) use ($dateDebut, $dateFin) {
+            ->whereHas('vente', function($query) use ($dateDebut, $dateFin, $boutiqueId) {
                 $query->terminees()
                     ->whereBetween('created_at', [$dateDebut, $dateFin]);
+                if ($boutiqueId) {
+                    $query->where('boutique_id', $boutiqueId);
+                }
             })
             ->sum('quantite');
     }
 
-    private function calculerMoyenneVentes($produitId, $jours): float
+    private function calculerMoyenneVentes($produitId, $jours, $boutiqueId = null): float
     {
-        $ventes = $this->calculerVentesPeriode($produitId, $jours);
+        $ventes = $this->calculerVentesPeriode($produitId, $jours, $boutiqueId);
         return $ventes / $jours;
     }
 
-    private function calculerTendanceVentesProduit($produitId): float
+    private function calculerTendanceVentesProduit($produitId, $boutiqueId = null): float
     {
-        $ventes7Jours = $this->calculerVentesPeriode($produitId, 7);
-        $ventes14Jours = $this->calculerVentesPeriode($produitId, 14);
+        $ventes7Jours = $this->calculerVentesPeriode($produitId, 7, $boutiqueId);
+        $ventes14Jours = $this->calculerVentesPeriode($produitId, 14, $boutiqueId);
 
         if ($ventes14Jours == 0) return 0;
 
@@ -616,17 +629,16 @@ class PredictionsController extends Controller
         return ($ventes7Jours - $ventes7Premiers) / $ventes7Premiers;
     }
 
-    private function calculerSaisonnaliteProduit($produitId): float
+    private function calculerSaisonnaliteProduit($produitId, $boutiqueId = null): float
     {
-        $ventesMoisCourant = $this->calculerVentesPeriode($produitId, 30);
-        $ventes3Mois = $this->calculerVentesPeriode($produitId, 90);
+        $ventesMoisCourant = $this->calculerVentesPeriode($produitId, 30, $boutiqueId);
+        $ventes3Mois = $this->calculerVentesPeriode($produitId, 90, $boutiqueId);
 
         $facteurSaison = 1.0;
         if ($ventes3Mois > 0) {
             $facteurSaison = $ventesMoisCourant / ($ventes3Mois / 3);
         }
 
-        // Ajustement jours fériés béninois (±15 jours autour)
         $facteurFeries = $this->facteurJoursFeriesBbeninois();
         $facteurJourSemaine = $this->facteurJourSemaine();
 
@@ -660,11 +672,10 @@ class PredictionsController extends Controller
 
         foreach ($feries as $f) {
             if (!empty($f[0])) {
-                return 1.25; // Boost ventes autour des fêtes
+                return 1.25;
             }
         }
 
-        // Vérifier si on est à ±15 jours d'un férié fixe
         foreach ([101, 110, 427, 501, 525, 801, 815, 1026, 1101, 1130, 1225] as $fDate) {
             $fMois = intdiv($fDate, 100);
             $fJour = $fDate % 100;
@@ -672,10 +683,9 @@ class PredictionsController extends Controller
                 $dateFerie = now()->setMonth($fMois)->setDay($fJour);
                 $diff = abs((int) now()->diffInDays($dateFerie, false));
                 if ($diff <= 15) {
-                    return 1.12; // Légère hausse 15j avant/après
+                    return 1.12;
                 }
             } catch (\Throwable) {
-                // Ignorer dates invalides (30 fév etc.)
             }
         }
 
@@ -687,10 +697,10 @@ class PredictionsController extends Controller
      */
     private function facteurJourSemaine(): float
     {
-        $jourSemaine = (int) now()->format('w'); // 0=dim, 6=sam
+        $jourSemaine = (int) now()->format('w');
         return match ($jourSemaine) {
-            6 => 1.15,  // Samedi : marché
-            0 => 0.75,  // Dimanche : calme
+            6 => 1.15,
+            0 => 0.75,
             default => 1.0,
         };
     }
@@ -750,9 +760,9 @@ class PredictionsController extends Controller
         return 30;
     }
 
-    private function calculerScoreSaisonnalite($produitId): float
+    private function calculerScoreSaisonnalite($produitId, $boutiqueId = null): float
     {
-        $saisonnalite = $this->calculerSaisonnaliteProduit($produitId);
+        $saisonnalite = $this->calculerSaisonnaliteProduit($produitId, $boutiqueId);
 
         if ($saisonnalite < 0.7) return 100;
         if ($saisonnalite < 0.9) return 70;
@@ -797,9 +807,9 @@ class PredictionsController extends Controller
         ];
     }
 
-    private function calculerMetricsAlgorithmiques(): array
+    private function calculerMetricsAlgorithmiques($boutiqueId): array
     {
-        $totalProduits = Produit::count();
+        $totalProduits = Produit::where('boutique_id', $boutiqueId)->count();
         $precisionBase = $totalProduits > 0 ? 0.82 : 0.75;
 
         return [
@@ -822,33 +832,51 @@ class PredictionsController extends Controller
         };
     }
 
-    private function getDonneesTempsReel(): array
+    private function getDonneesTempsReel($boutiqueId): array
     {
         return [
-            'total_produits' => Produit::count(),
-            'produits_alerte' => Produit::enAlerte()->count(),
-            'produits_rupture' => Produit::enRupture()->count(),
-            'predictions_en_attente' => AiPrediction::enAttente()->count(),
-            'predictions_validees' => AiPrediction::validees()->count(),
+            'total_produits' => Produit::where('boutique_id', $boutiqueId)->count(),
+            'produits_alerte' => Produit::where('boutique_id', $boutiqueId)->enAlerte()->count(),
+            'produits_rupture' => Produit::where('boutique_id', $boutiqueId)->enRupture()->count(),
+            'predictions_en_attente' => AiPrediction::enAttente()
+                ->whereHas('produit', function ($q) use ($boutiqueId) {
+                    $q->where('boutique_id', $boutiqueId);
+                })
+                ->count(),
+            'predictions_validees' => AiPrediction::validees()
+                ->whereHas('produit', function ($q) use ($boutiqueId) {
+                    $q->where('boutique_id', $boutiqueId);
+                })
+                ->count(),
             'mise_a_jour' => now()->toISOString()
         ];
     }
 
-    private function analyserAssociationsProduits(array $produitIds): array
+    private function analyserAssociationsProduits(array $produitIds, $boutiqueId = null): array
     {
-        // Récupérer les ventes contenant les produits du panier
-        $ventesAvecProduits = \App\Models\Vente::terminees()
+        $ventesQuery = \App\Models\Vente::terminees()
             ->whereHas('ligneVentes', function ($query) use ($produitIds) {
                 $query->whereIn('produit_id', $produitIds);
-            })
+            });
+
+        if ($boutiqueId) {
+            $ventesQuery->where('boutique_id', $boutiqueId);
+        }
+
+        $ventesAvecProduits = $ventesQuery
             ->with('ligneVentes.produit')
             ->get();
 
         if ($ventesAvecProduits->isEmpty()) {
-            // Si pas de données historiques, suggérer les produits populaires
-            return Produit::with('categorie')
+            $fallbackQuery = Produit::with('categorie')
                 ->whereNotIn('id', $produitIds)
-                ->where('quantite_stock', '>', 0)
+                ->where('quantite_stock', '>', 0);
+
+            if ($boutiqueId) {
+                $fallbackQuery->where('boutique_id', $boutiqueId);
+            }
+
+            return $fallbackQuery
                 ->orderByDesc('quantite_stock')
                 ->take(5)
                 ->map(function ($produit) {
@@ -864,7 +892,6 @@ class PredictionsController extends Controller
                 ->toArray();
         }
 
-        // Calculer les associations (Market Basket Analysis)
         $associations = [];
         $totalVentes = $ventesAvecProduits->count();
 
@@ -884,20 +911,25 @@ class PredictionsController extends Controller
             }
         }
 
-        // Calculer les scores et récupérer les produits
         $suggestions = collect($associations)
-            ->map(function ($data, $produitId) use ($totalVentes) {
-                $produit = Produit::with('categorie')->find($produitId);
+            ->map(function ($data, $produitId) use ($totalVentes, $boutiqueId) {
+                $produitQuery = Produit::with('categorie')->where('id', $produitId);
+                if ($boutiqueId) {
+                    $produitQuery->where('boutique_id', $boutiqueId);
+                }
+                $produit = $produitQuery->first();
                 
                 if (!$produit || $produit->quantite_stock <= 0) {
                     return null;
                 }
 
-                // Score = fréquence d'association
                 $score = $data['count'] / $totalVentes;
                 
-                // Bonus si même catégorie
-                $categoriePanier = Produit::whereIn('id', $produitIds)->first()?->categorie_id;
+                $categoriePanierQuery = Produit::whereIn('id', $produitIds);
+                if ($boutiqueId) {
+                    $categoriePanierQuery->where('boutique_id', $boutiqueId);
+                }
+                $categoriePanier = $categoriePanierQuery->first()?->categorie_id;
                 if ($categoriePanier && $produit->categorie_id == $categoriePanier) {
                     $score *= 1.3;
                 }

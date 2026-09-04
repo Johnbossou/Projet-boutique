@@ -70,7 +70,7 @@ class NotificationController extends Controller
             return response()->json(['message' => 'Réservé au gérant'], 403);
         }
 
-        $created = $this->generateStockAlerts();
+        $created = self::generateStockAlerts($user->current_boutique_id);
 
         return response()->json([
             'message' => 'Alertes stock synchronisées',
@@ -78,12 +78,25 @@ class NotificationController extends Controller
         ]);
     }
 
-    public static function generateStockAlerts(): int
+    public static function generateStockAlerts(?int $boutiqueId = null): int
     {
-        $gerants = User::where('role', 'gerant')->where('est_actif', true)->pluck('id');
         $created = 0;
 
-        $alertes = Produit::enAlerte()->with('categorie')->get();
+        if ($boutiqueId) {
+            $gerants = User::where('role', 'gerant')
+                ->where('est_actif', true)
+                ->whereHas('boutiques', function ($q) use ($boutiqueId) {
+                    $q->where('boutiques.id', $boutiqueId);
+                })
+                ->pluck('id');
+
+            $alertes = Produit::enAlerte()->where('boutique_id', $boutiqueId)->with('categorie')->get();
+            $ruptures = Produit::enRupture()->where('boutique_id', $boutiqueId)->get();
+        } else {
+            $gerants = User::where('role', 'gerant')->where('est_actif', true)->pluck('id');
+            $alertes = Produit::enAlerte()->with('categorie')->get();
+            $ruptures = Produit::enRupture()->get();
+        }
         foreach ($alertes as $produit) {
             foreach ($gerants as $userId) {
                 $exists = AppNotification::where('user_id', $userId)
@@ -105,7 +118,6 @@ class NotificationController extends Controller
             }
         }
 
-        $ruptures = Produit::enRupture()->get();
         foreach ($ruptures as $produit) {
             foreach ($gerants as $userId) {
                 $exists = AppNotification::where('user_id', $userId)

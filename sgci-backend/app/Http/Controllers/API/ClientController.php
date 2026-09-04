@@ -217,7 +217,7 @@ class ClientController extends Controller
 
             return response()->json([
                 'message' => 'Erreur lors du chargement des détails du client',
-                'error' => env('APP_DEBUG') ? $e->getMessage() : 'Erreur interne du serveur'
+                'error' => config('app.debug') ? $e->getMessage() : 'Erreur interne du serveur'
             ], 500);
         }
     }

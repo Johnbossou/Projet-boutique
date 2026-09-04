@@ -92,7 +92,7 @@ class SendStockAlertsJob implements ShouldQueue
                     }
 
                     // Envoyer SMS (si configuré)
-                    if (env('SMS_ENABLED', false)) {
+                    if (config('services.sms.enabled', false)) {
                         $this->smsService->sendStockAlert(
                             $gerant,
                             $product->nom,
