@@ -1,6 +1,5 @@
 'use client';
 
-import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import {
@@ -17,14 +16,11 @@ import {
   RefreshCw,
   Eye,
   EyeOff,
-  Check,
-  X,
   Trash2,
   Key,
   Mail,
   Phone,
   Store,
-  CreditCard,
   Plus,
   Edit
 } from 'lucide-react';
@@ -73,11 +69,18 @@ interface BoutiqueSettings {
   delai_annulation_vente_minutes: number;
 }
 
+interface BoutiqueItem {
+  id: number;
+  nom: string;
+  adresse?: string | null;
+  telephone?: string | null;
+  email?: string | null;
+}
+
 export default function ParametresPage() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const { setTheme } = useTheme();
   const [activeTab, setActiveTab] = useState('profil');
-  const [isLoading, setIsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // Rôle effectif = rôle dans la boutique courante (multi-boutique)
@@ -117,7 +120,7 @@ export default function ParametresPage() {
   // 🎯 États pour les modals de boutique
   const [showCreateBoutiqueModal, setShowCreateBoutiqueModal] = useState(false);
   const [showEditBoutiqueModal, setShowEditBoutiqueModal] = useState(false);
-  const [editingBoutique, setEditingBoutique] = useState<any>(null);
+  const [editingBoutique, setEditingBoutique] = useState<BoutiqueItem | null>(null);
   const [newBoutique, setNewBoutique] = useState<{
     nom: string;
     adresse: string;
@@ -420,7 +423,7 @@ export default function ParametresPage() {
     }
   };
 
-  const openEditModal = (boutique: any) => {
+  const openEditModal = (boutique: BoutiqueItem) => {
     setEditingBoutique({ ...boutique });
     setShowEditBoutiqueModal(true);
   };
@@ -788,7 +791,7 @@ export default function ParametresPage() {
                   </div>
 
                   <div className="space-y-3">
-                    {user.boutiques?.map((boutique: any) => (
+                    {user.boutiques?.map((boutique: BoutiqueItem) => (
                       <div
                         key={boutique.id}
                         className="flex items-center justify-between p-4 bg-white/50 dark:bg-slate-700/50 rounded-lg border border-slate-200/50 dark:border-slate-600/50"
@@ -889,7 +892,7 @@ export default function ParametresPage() {
                     <span>Interface & Système</span>
                   </CardTitle>
                   <CardDescription>
-                    Personnalisez l'apparence et le comportement du système
+                    Personnalisez l&apos;apparence et le comportement du système
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -1375,7 +1378,7 @@ export default function ParametresPage() {
                   <Input
                     id="edit-boutique-nom"
                     value={editingBoutique.nom}
-                    onChange={(e) => setEditingBoutique((prev: any) => ({ ...prev, nom: e.target.value }))}
+                    onChange={(e) => setEditingBoutique((prev) => prev ? { ...prev, nom: e.target.value } : null)}
                     placeholder="Ex: Ma Boutique Principale"
                   />
                 </div>
@@ -1383,8 +1386,8 @@ export default function ParametresPage() {
                   <Label htmlFor="edit-boutique-adresse">Adresse *</Label>
                   <Input
                     id="edit-boutique-adresse"
-                    value={editingBoutique.adresse}
-                    onChange={(e) => setEditingBoutique((prev: any) => ({ ...prev, adresse: e.target.value }))}
+                    value={editingBoutique.adresse || ''}
+                    onChange={(e) => setEditingBoutique((prev) => prev ? { ...prev, adresse: e.target.value } : null)}
                     placeholder="Ex: 123 Rue du Commerce, Cotonou"
                   />
                 </div>
@@ -1392,8 +1395,8 @@ export default function ParametresPage() {
                   <Label htmlFor="edit-boutique-telephone">Téléphone</Label>
                   <Input
                     id="edit-boutique-telephone"
-                    value={editingBoutique.telephone}
-                    onChange={(e) => setEditingBoutique((prev: any) => ({ ...prev, telephone: e.target.value }))}
+                    value={editingBoutique.telephone || ''}
+                    onChange={(e) => setEditingBoutique((prev) => prev ? { ...prev, telephone: e.target.value } : null)}
                     placeholder="Ex: +229 XX XX XX XX"
                   />
                 </div>
@@ -1402,8 +1405,8 @@ export default function ParametresPage() {
                   <Input
                     id="edit-boutique-email"
                     type="email"
-                    value={editingBoutique.email}
-                    onChange={(e) => setEditingBoutique((prev: any) => ({ ...prev, email: e.target.value }))}
+                    value={editingBoutique.email || ''}
+                    onChange={(e) => setEditingBoutique((prev) => prev ? { ...prev, email: e.target.value } : null)}
                     placeholder="Ex: contact@boutique.bj"
                   />
                 </div>

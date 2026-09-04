@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { UserPlus, RefreshCw, Trash2, Save, Mail, Download, Upload, FileText } from 'lucide-react';
+import { UserPlus, RefreshCw, Trash2, Save, Mail, Download, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -444,7 +444,7 @@ export function UsersManagement() {
           </div>
           <div className="space-y-2">
             <Label htmlFor="invite-role">Rôle</Label>
-            <Select value={inviteRole} onValueChange={(value: any) => setInviteRole(value)}>
+            <Select value={inviteRole} onValueChange={(value: string) => setInviteRole(value as 'gerant' | 'caissier')}>
               <SelectTrigger id="invite-role">
                 <SelectValue />
               </SelectTrigger>
@@ -527,7 +527,7 @@ export function UsersManagement() {
         <div className="py-2 text-sm text-slate-600 dark:text-slate-400">
           <p className="font-medium">{pendingConfirm?.gerantName}</p>
           <p className="mt-2">
-            Si vous continuez, l'ancien gérant sera <strong>rétrogradé en caissier</strong> et le nouveau membre deviendra gérant.
+            Si vous continuez, l&apos;ancien gérant sera <strong>rétrogradé en caissier</strong> et le nouveau membre deviendra gérant.
           </p>
         </div>
         <DialogFooter>
@@ -535,7 +535,7 @@ export function UsersManagement() {
             Annuler
           </Button>
           <Button onClick={() => pendingConfirm?.action()} disabled={saving}>
-            Continuer (rétrograder l'ancien gérant)
+            Continuer (rétrograder l&apos;ancien gérant)
           </Button>
         </DialogFooter>
       </DialogContent>

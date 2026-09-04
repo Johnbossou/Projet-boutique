@@ -165,6 +165,7 @@ export default function Dashboard() {
         }
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   // Sauvegarder les préférences de widgets

@@ -105,6 +105,7 @@ export default function BoutiqueSettingsPage() {
     if (user && boutiqueId) {
       fetchBoutique();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, boutiqueId]);
 
   if (!user || user.role !== 'proprietaire') {

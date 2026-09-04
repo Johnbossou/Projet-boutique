@@ -18,7 +18,6 @@ import {
   Receipt,
   TrendingUp,
   Star,
-  Sparkles,
 } from 'lucide-react';
 
 const fadeUp = {

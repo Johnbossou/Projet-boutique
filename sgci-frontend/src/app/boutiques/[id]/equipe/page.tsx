@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Users, 
-  Plus, 
   Mail, 
   Phone, 
   Shield, 
@@ -143,6 +142,7 @@ export default function BoutiqueEquipePage() {
       fetchBoutique();
       fetchEquipe();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, boutiqueId]);
 
   if (!user || user.role !== 'proprietaire') {

@@ -9,7 +9,7 @@ import React, {
   useMemo,
 } from 'react';
 import { useRouter } from 'next/navigation';
-import { User, Boutique } from '@/types';
+import { User } from '@/types';
 import { apiFetch } from '@/lib/api-client';
 import { fetchBoutiqueSettings } from '@/lib/boutique-settings';
 

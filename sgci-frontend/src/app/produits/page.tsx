@@ -499,8 +499,8 @@ export default function ProduitsPage() {
       setShowCategorieForm(false);
       resetCategorieForm();
       toast.success('Catégorie créée avec succès');
-    } catch (error: any) {
-      toast.error(error.message || 'Erreur lors de la création de la catégorie');
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Erreur lors de la création de la catégorie');
     }
   };
 
@@ -531,8 +531,8 @@ export default function ProduitsPage() {
       setEditingCategorie(null);
       resetCategorieForm();
       toast.success('Catégorie modifiée avec succès');
-    } catch (error: any) {
-      toast.error(error.message || 'Erreur lors de la modification de la catégorie');
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Erreur lors de la modification de la catégorie');
     }
   };
 
@@ -556,8 +556,8 @@ export default function ProduitsPage() {
       setShowDeleteCategorieDialog(false);
       setCategorieToDelete(null);
       toast.success('Catégorie supprimée avec succès');
-    } catch (error: any) {
-      toast.error(error.message || 'Erreur lors de la suppression de la catégorie');
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Erreur lors de la suppression de la catégorie');
     }
   };
 
@@ -1068,7 +1068,7 @@ export default function ProduitsPage() {
             </div>
           )}
           <div className="space-y-2">
-            <Label htmlFor="seuil_alerte">Seuil d'alerte *</Label>
+            <Label htmlFor="seuil_alerte">Seuil d&apos;alerte *</Label>
             <Input
               id="seuil_alerte"
               type="number"
@@ -1734,7 +1734,7 @@ export default function ProduitsPage() {
           <DialogHeader>
             <DialogTitle>Confirmer la suppression</DialogTitle>
             <DialogDescription>
-              Êtes-vous sûr de vouloir supprimer le produit "{produitToDelete?.nom}" ? Cette action est irréversible.
+              Êtes-vous sûr de vouloir supprimer le produit &quot;{produitToDelete?.nom}&quot; ? Cette action est irréversible.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -1755,7 +1755,7 @@ export default function ProduitsPage() {
           <DialogHeader>
             <DialogTitle>Statistiques des Produits</DialogTitle>
             <DialogDescription>
-              Vue d'ensemble de votre inventaire et indicateurs clés
+              Vue d&apos;ensemble de votre inventaire et indicateurs clés
             </DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-6">
@@ -1792,7 +1792,7 @@ export default function ProduitsPage() {
                   {stats?.valeur_stock_total ? formatPrix(stats.valeur_stock_total) : '-'}
                 </div>
                 <p className="text-sm text-slate-500 text-center mt-2">
-                  Valeur totale de l'inventaire
+                  Valeur totale de l&apos;inventaire
                 </p>
               </CardContent>
             </Card>
@@ -2067,7 +2067,7 @@ export default function ProduitsPage() {
               {categorieToDelete && (
                 <>
                   Êtes-vous sûr de vouloir supprimer la catégorie 
-                  <strong> "{categorieToDelete.nom}"</strong> ?
+                  <strong> &quot;{categorieToDelete.nom}&quot;</strong> ?
                   <br />
                   <span className="text-red-600 font-medium mt-2 block">
                     {(categorieToDelete.produits_count || 0) > 0 

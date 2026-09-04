@@ -249,7 +249,7 @@ export interface LoginResponse {
   user: User;
 }
 
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   data: T;
   message?: string;
   status: 'success' | 'error';

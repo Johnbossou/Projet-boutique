@@ -6,9 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
+import type { Produit } from '@/types';
 
 interface BarcodeScannerProps {
-  onCodeDetected: (code: string, produit?: any) => void;
+  onCodeDetected: (code: string, produit?: Produit) => void;
   apiBaseUrl?: string;
 }
 
@@ -74,15 +75,15 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
 
     // Utiliser jsQR si disponible, sinon fallback simple
     try {
-      // @ts-ignore - jsQR peut ne pas être chargé
+      // @ts-expect-error - jsQR peut ne pas être chargé
       if (window.jsQR) {
-        // @ts-ignore
+        // @ts-expect-error jsQR may not be loaded on window
         const code = window.jsQR(imageData.data, imageData.width, imageData.height);
         if (code && code.data) {
           handleDetectedCode(code.data);
         }
       }
-    } catch (err) {
+    } catch {
       // Ignorer les erreurs de parsing
     }
 
@@ -113,7 +114,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
       });
 
       if (response.ok) {
-        const produit = await response.json();
+        const produit: Produit = await response.json();
         onCodeDetected(code, produit);
         stopScanning();
       } else if (response.status === 404) {
@@ -141,7 +142,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
   useEffect(() => {
     if (typeof window === 'undefined') return;
     
-    if (!(window as any).jsQR) {
+    if (!(window as unknown as Record<string, unknown>).jsQR) {
       const script = document.createElement('script');
       script.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
       script.async = true;

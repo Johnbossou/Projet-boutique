@@ -78,7 +78,7 @@ export class ErrorBoundary extends Component<Props, State> {
               </h2>
               
               <p className="text-gray-600 dark:text-gray-400 mb-6">
-                Désolé, quelque chose s'est mal passé. Veuillez rafraîchir la page ou réessayer.
+                Désolé, quelque chose s&apos;est mal passé. Veuillez rafraîchir la page ou réessayer.
               </p>
 
               {process.env.NODE_ENV === 'development' && this.state.error && (

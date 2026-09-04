@@ -18,7 +18,7 @@ export default function LoadingSpinner() {
           className="space-y-2"
         >
           <h2 className="text-2xl font-bold text-white">Chargement</h2>
-          <p className="text-gray-400">Vérification de l'authentification...</p>
+          <p className="text-gray-400">Vérification de l&apos;authentification...</p>
         </motion.div>
       </div>
     </div>

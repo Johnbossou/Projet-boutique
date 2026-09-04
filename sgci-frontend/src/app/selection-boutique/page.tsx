@@ -151,6 +151,7 @@ export default function SelectionBoutiquePage() {
     if (user) {
       fetchBoutiques();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   // Redirection si non connecté ou moins de 2 boutiques
