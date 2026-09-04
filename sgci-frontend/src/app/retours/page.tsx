@@ -134,11 +134,11 @@ export default function RetoursPage() {
         </Card>
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">En attente</CardTitle></CardHeader>
-          <CardContent><p className="text-2xl font-bold text-yellow-600">{retours.filter(r => r.statut === 'en_attente').length}</p></CardContent>
+          <CardContent><p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{retours.filter(r => r.statut === 'en_attente').length}</p></CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Remboursé</CardTitle></CardHeader>
-          <CardContent><p className="text-2xl font-bold text-green-600">{totalRembourse.toLocaleString('fr-FR')} XOF</p></CardContent>
+          <CardContent><p className="text-2xl font-bold text-green-600 dark:text-green-400">{totalRembourse.toLocaleString('fr-FR')} XOF</p></CardContent>
         </Card>
       </div>
 

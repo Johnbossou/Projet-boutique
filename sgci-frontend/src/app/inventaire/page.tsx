@@ -199,7 +199,7 @@ export default function InventairePage() {
                     <TableCell className="text-right">{inv.total_produits}</TableCell>
                     <TableCell className="text-right">
                       {inv.ecarts_detectes > 0 ? (
-                        <span className="text-red-600 font-medium flex items-center justify-end gap-1">
+                        <span className="text-red-600 dark:text-red-400 font-medium flex items-center justify-end gap-1">
                           <AlertTriangle className="w-3 h-3" /> {inv.ecarts_detectes}
                         </span>
                       ) : '0'}
@@ -273,7 +273,7 @@ export default function InventairePage() {
                           <TableCell className="text-right">{ligne.quantite_physique ?? '—'}</TableCell>
                           <TableCell className="text-right">
                             {ligne.ecart !== null && ligne.ecart !== 0 ? (
-                              <span className={ligne.ecart > 0 ? 'text-green-600' : 'text-red-600'}>
+                              <span className={ligne.ecart > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
                                 {ligne.ecart > 0 ? '+' : ''}{ligne.ecart}
                               </span>
                             ) : '0'}

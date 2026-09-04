@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Search, CheckCircle2, XCircle, PackageSearch } from 'lucide-react';
+import { Search, CheckCircle2, XCircle, PackageSearch, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -292,7 +292,7 @@ export default function StockHistoryPage() {
         <CardHeader>
           <CardTitle>Liste des mouvements</CardTitle>
           <CardDescription>
-            {isLoading ? 'Chargement...' : `${mouvements.length} mouvement(s) affiché(s)`}
+            {isLoading ? <span className="flex items-center gap-1.5"><Loader2 className="w-4 h-4 animate-spin" /> Chargement...</span> : `${mouvements.length} mouvement(s) affiché(s)`}
           </CardDescription>
         </CardHeader>
         <CardContent className="overflow-x-auto">
@@ -350,7 +350,7 @@ export default function StockHistoryPage() {
                           </Button>
                         </>
                       ) : (
-                        <span className="text-slate-500">Pas d&apos;action</span>
+                        <span className="text-slate-500 dark:text-slate-400">Pas d&apos;action</span>
                       )}
                     </TableCell>
                   </TableRow>

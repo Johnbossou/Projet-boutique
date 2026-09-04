@@ -260,7 +260,7 @@ export default function TransfertsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-amber-600">{stats?.transferts_en_attente ?? '—'}</p>
+            <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{stats?.transferts_en_attente ?? '—'}</p>
           </CardContent>
         </Card>
         <Card>
@@ -270,7 +270,7 @@ export default function TransfertsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-blue-600">{stats?.transferts_en_cours ?? '—'}</p>
+            <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats?.transferts_en_cours ?? '—'}</p>
           </CardContent>
         </Card>
         <Card>
@@ -280,7 +280,7 @@ export default function TransfertsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-green-600">{stats?.transferts_termines ?? '—'}</p>
+            <p className="text-2xl font-bold text-green-600 dark:text-green-400">{stats?.transferts_termines ?? '—'}</p>
           </CardContent>
         </Card>
       </div>
