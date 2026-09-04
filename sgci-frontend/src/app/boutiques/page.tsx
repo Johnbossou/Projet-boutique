@@ -8,10 +8,10 @@ import {
   Users, 
   Settings, 
   TrendingUp,
-  ChevronRight,
   MapPin,
   Phone,
-  DollarSign
+  DollarSign,
+  Loader2
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -420,7 +420,7 @@ export default function BoutiquesPage() {
                 className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600"
                 disabled={isCreating}
               >
-                {isCreating ? 'Création...' : 'Créer'}
+                {isCreating ? <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Création...</span> : 'Créer'}
               </Button>
             </DialogFooter>
           </form>

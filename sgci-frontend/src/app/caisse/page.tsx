@@ -1661,7 +1661,9 @@ export default function CaissePage() {
                   </div>
                   <div className="flex justify-between">
                     <span>Mode paiement</span>
-                    <span className="font-semibold capitalize">{previewVente.mode_paiement}</span>
+                    <span className="font-semibold">{
+                        { especes: 'Espèces', mtn: 'MTN Money', moov: 'Moov Money', carte: 'Carte Bancaire' }[previewVente.mode_paiement || 'especes'] ?? previewVente.mode_paiement
+                      }</span>
                   </div>
                   {previewVente.numero_transaction && (
                     <div className="flex justify-between text-xs text-slate-500">
@@ -1769,12 +1771,14 @@ export default function CaissePage() {
                             <div className="text-sm text-slate-500">#{vente.id} • {new Date(vente.created_at).toLocaleTimeString('fr-FR')}</div>
                             <div className="flex items-center gap-2 text-base font-semibold text-slate-900 dark:text-white">
                               <span>{vente.client?.nom || 'Anonyme'}</span>
-                              <Badge variant={vente.statut === 'annule' ? 'destructive' : 'secondary'}>{vente.statut}</Badge>
+                              <Badge variant={vente.statut === 'annule' ? 'destructive' : 'secondary'}>{vente.statut === 'termine' ? 'Terminé' : vente.statut === 'annule' ? 'Annulé' : vente.statut}</Badge>
                             </div>
                           </div>
                           <div className="text-right space-y-1 text-sm text-slate-600 dark:text-slate-400">
                             <div>Total: {vente.montant_total.toLocaleString()} FCFA</div>
-                            <div>Mode: {vente.mode_paiement || 'espèces'}</div>
+                            <div>Mode: {
+                                { especes: 'Espèces', mtn: 'MTN Money', moov: 'Moov Money', carte: 'Carte Bancaire' }[vente.mode_paiement || 'especes'] ?? vente.mode_paiement
+                              }</div>
                           </div>
                         </div>
                         <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
@@ -1837,7 +1841,7 @@ export default function CaissePage() {
                 <div className="text-center">
                   <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-3" />
                   <h3 className="text-xl font-bold text-slate-900 dark:text-white">
-                    Paiement Réussi!
+                    Paiement réussi !
                   </h3>
                   <p className="text-slate-600 dark:text-slate-400">
                     Vente #{lastVente.numero_vente || lastVente.id}

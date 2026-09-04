@@ -5,13 +5,11 @@ import { motion } from 'framer-motion';
 import { 
   Store, 
   Settings, 
-  MapPin, 
-  Phone, 
-  Mail, 
   DollarSign,
   Save,
   ArrowLeft,
-  Percent
+  Percent,
+  Loader2
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -285,7 +283,7 @@ export default function BoutiqueSettingsPage() {
                 <div className="space-y-6">
                   <div className="space-y-2">
                     <Label htmlFor="delai_annulation_vente_minutes">
-                      Délai d'annulation de vente (minutes)
+                      Délai d&apos;annulation de vente (minutes)
                     </Label>
                     <Input
                       id="delai_annulation_vente_minutes"
@@ -315,7 +313,7 @@ export default function BoutiqueSettingsPage() {
                 disabled={isSaving}
               >
                 <Save className="w-4 h-4 mr-2" />
-                {isSaving ? 'Enregistrement...' : 'Enregistrer'}
+                {isSaving ? <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Enregistrement...</span> : 'Enregistrer'}
               </Button>
             </div>
           </motion.div>

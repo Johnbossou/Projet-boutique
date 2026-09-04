@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Mail, CheckCircle2, ArrowLeft } from 'lucide-react';
+import { Mail, CheckCircle2, ArrowLeft, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -105,7 +105,7 @@ export default function ForgotPasswordPage() {
                   className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600"
                   disabled={isLoading}
                 >
-                  {isLoading ? 'Envoi...' : 'Envoyer le lien de réinitialisation'}
+                  {isLoading ? <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Envoi...</span> : 'Envoyer le lien de réinitialisation'}
                 </Button>
 
                 <div className="text-center">
@@ -126,7 +126,7 @@ export default function ForgotPasswordPage() {
                   Consultez votre boîte de réception et cliquez sur le lien pour réinitialiser votre mot de passe.
                 </p>
 
-                {resetToken && (
+                {resetToken && process.env.NODE_ENV === 'development' && (
                   <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                     <p className="text-xs text-muted-foreground mb-2">
                       Mode développement - Token de réinitialisation:

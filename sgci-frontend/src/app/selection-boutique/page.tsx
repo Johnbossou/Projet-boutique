@@ -12,13 +12,12 @@ import {
   ShoppingCart,
   Plus,
   Search,
-  Filter,
-  TrendingUp,
   DollarSign,
   Clock,
   Star,
   Grid3x3,
-  List
+  List,
+  Loader2
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -26,7 +25,6 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiFetch } from '@/lib/api-client';
-import { getEffectiveRole } from '@/lib/role';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -231,7 +229,7 @@ export default function SelectionBoutiquePage() {
             {/* Tri */}
             <select
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
+              onChange={(e) => setSortBy(e.target.value as 'nom' | 'ventes' | 'ca' | 'date')}
               className="h-12 px-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
             >
               <option value="nom">Trier par nom</option>
@@ -442,7 +440,7 @@ export default function SelectionBoutiquePage() {
                       disabled={isSwitching}
                     >
                       {isSwitching ? (
-                        <span>Chargement...</span>
+                        <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Chargement...</span>
                       ) : (
                         <span className="flex items-center justify-center space-x-2">
                           {boutique.id === user.current_boutique_id ? (

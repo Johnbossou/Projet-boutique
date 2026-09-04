@@ -29,7 +29,8 @@ import {
   RefreshCw,
   ArrowUpRight,
   ArrowDownRight,
-  Sparkles
+  Sparkles,
+  Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -328,7 +329,7 @@ export default function AnalyticsPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <Loader2 className="w-16 h-16 text-purple-500 animate-spin mx-auto mb-4" />
           <p className="text-slate-600 dark:text-slate-400">Chargement des données utilisateur...</p>
         </div>
       </div>
@@ -545,7 +546,7 @@ export default function AnalyticsPage() {
                       {isLoading ? (
                         <div className="h-full flex items-center justify-center">
                           <div className="text-center text-slate-500">
-                            <div className="w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                            <Loader2 className="w-8 h-8 text-purple-500 animate-spin mx-auto mb-2" />
                             <p>Chargement des données...</p>
                           </div>
                         </div>
@@ -611,7 +612,7 @@ export default function AnalyticsPage() {
                       {isLoading ? (
                         <div className="h-full flex items-center justify-center">
                           <div className="text-center text-slate-500">
-                            <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                            <Loader2 className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-2" />
                             <p>Chargement des données...</p>
                           </div>
                         </div>

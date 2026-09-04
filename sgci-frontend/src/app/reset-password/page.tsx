@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Lock, CheckCircle2, AlertCircle, ArrowLeft } from 'lucide-react';
+import { Lock, Eye, EyeOff, CheckCircle2, ArrowLeft, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -114,9 +114,9 @@ export default function ResetPasswordPage() {
                       type={showPassword ? 'text' : 'password'}
                       value={formData.password}
                       onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                      placeholder="Minimum 6 caractères"
+                      placeholder="Minimum 8 caractères"
                       required
-                      minLength={6}
+                      minLength={8}
                       disabled={isLoading}
                     />
                     <Button
@@ -128,9 +128,9 @@ export default function ResetPasswordPage() {
                       disabled={isLoading}
                     >
                       {showPassword ? (
-                        <Lock className="w-4 h-4" />
+                        <Eye className="w-4 h-4" />
                       ) : (
-                        <Lock className="w-4 h-4" />
+                        <EyeOff className="w-4 h-4" />
                       )}
                     </Button>
                   </div>
@@ -146,7 +146,7 @@ export default function ResetPasswordPage() {
                       onChange={(e) => setFormData({ ...formData, password_confirmation: e.target.value })}
                       placeholder="Confirmez votre mot de passe"
                       required
-                      minLength={6}
+                      minLength={8}
                       disabled={isLoading}
                     />
                     <Button
@@ -158,9 +158,9 @@ export default function ResetPasswordPage() {
                       disabled={isLoading}
                     >
                       {showConfirmPassword ? (
-                        <Lock className="w-4 h-4" />
+                        <Eye className="w-4 h-4" />
                       ) : (
-                        <Lock className="w-4 h-4" />
+                        <EyeOff className="w-4 h-4" />
                       )}
                     </Button>
                   </div>
@@ -171,7 +171,7 @@ export default function ResetPasswordPage() {
                   className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600"
                   disabled={isLoading}
                 >
-                  {isLoading ? 'Réinitialisation...' : 'Réinitialiser le mot de passe'}
+                  {isLoading ? <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Réinitialisation...</span> : 'Réinitialiser le mot de passe'}
                 </Button>
 
                 <div className="text-center">

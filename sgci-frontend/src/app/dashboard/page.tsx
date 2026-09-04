@@ -5,12 +5,8 @@ import {
   TrendingUp, 
   Package, 
   ShoppingCart, 
-  Users, 
   AlertTriangle,
   DollarSign,
-  BarChart3,
-  Brain,
-  Sparkles,
   Zap,
   Settings,
   Plus,
@@ -98,13 +94,11 @@ export default function Dashboard() {
   const fetchDashboardData = async () => {
     try {
       setIsLoading(true);
-      console.log('🔄 Début du chargement des données...');
 
       // Récupérer les stats de la boutique courante de l'utilisateur
       const statsResponse = await apiFetch('/analytics/stats-globales');
       
       if (!statsResponse.ok) {
-        console.warn('⚠️ API stats non disponible, affichage de données vides');
         setStats({
           ventes: {
             total_ventes: 0,
@@ -121,7 +115,6 @@ export default function Dashboard() {
         });
       } else {
         const statsData = await statsResponse.json();
-        console.log('📊 STATS GLOBALES:', statsData);
         setStats(statsData);
       }
 
@@ -131,15 +124,12 @@ export default function Dashboard() {
         
         if (alerteResponse.ok) {
           const alerteData = await alerteResponse.json();
-          console.log('🚨 PRODUITS ALERTE:', alerteData);
           setProduitsAlerte(alerteData);
         } else {
-          console.warn('⚠️ API alerte-stock non disponible, utilisation des données simulées');
           // Données simulées basées sur les stocks
           setProduitsAlerte([]);
         }
-      } catch (alerteError) {
-        console.warn('⚠️ Erreur API alerte-stock:', alerteError);
+      } catch {
         setProduitsAlerte([]);
       }
 
@@ -148,10 +138,7 @@ export default function Dashboard() {
       
       if (!populairesResponse.ok) throw new Error('Erreur produits populaires');
       const populairesData = await populairesResponse.json();
-      console.log('📈 PRODUITS POPULAIRES:', populairesData);
       setProduitsPopulaires(populairesData);
-
-      console.log('✅ Données chargées avec succès!');
 
     } catch (error) {
       console.error('❌ Erreur chargement données:', error);
@@ -210,8 +197,6 @@ export default function Dashboard() {
       setWidgets(newWidgets.map((w, i) => ({ ...w, order: i })));
     }
   };
-
-  const enabledWidgets = widgets.filter(w => w.enabled).sort((a, b) => a.order - b.order);
 
   // 🎯 STATS CALCULÉES EN TEMPS RÉEL - VERSION CORRIGÉE
   const calculatedStats = [
@@ -373,7 +358,7 @@ export default function Dashboard() {
                         </div>
                       ))
                     ) : produitsAlerte.length > 0 ? (
-                      produitsAlerte.slice(0, 5).map((produit, index) => (
+                      produitsAlerte.slice(0, 5).map((produit) => (
                         <div key={produit.id} className="flex items-center justify-between p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
                           <div>
                             <p className="font-medium text-slate-900 dark:text-white">
