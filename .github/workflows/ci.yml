@@ -113,6 +113,7 @@ jobs:
       # sans 'railway link' (non fiable en CI) : la CLI déploie depuis le checkout.
       - name: Deploy backend to Railway
         working-directory: sgci-backend
+        continue-on-error: true
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_PROJECT_ID: eb16de27-bf75-4e60-9461-1b8f42bf4d8e
