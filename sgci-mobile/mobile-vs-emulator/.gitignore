@@ -18,6 +18,9 @@ expo-env.d.ts
 *.key
 *.mobileprovision
 
+# Google Play upload credentials (EAS submit)
+service-account-key.json
+
 # Metro
 .metro-health-check*
 
@@ -32,7 +35,8 @@ yarn-error.*
 
 # local env files
 .env
-.env*.local
+.env.*
+!.env.example
 
 # typescript
 *.tsbuildinfo

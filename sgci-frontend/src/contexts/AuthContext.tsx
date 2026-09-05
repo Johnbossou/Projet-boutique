@@ -161,6 +161,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem('user_data', JSON.stringify(next));
         return next;
       });
+      // Rafraîchir les paramètres de la nouvelle boutique (TVA, devise, délai).
+      try {
+        await fetchBoutiqueSettings();
+      } catch {
+        // Non bloquant : les paramètres sont rechargés via /me à la prochaine visite.
+      }
     } catch (error: unknown) {
       throw new Error(
         error instanceof Error ? error.message : 'Échec du changement de boutique'

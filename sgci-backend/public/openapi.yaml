@@ -1,0 +1,4854 @@
+openapi: 3.0.0
+info:
+  title: "SGCI Benin API"
+  version: "1.2.0"
+  description: |
+    API REST pour le systeme de gestion commerciale et d'inventaire SGCI Benin.
+
+    ## Authentification
+    Toutes les routes authentifiees necessitent l'en-tete `Authorization: Bearer <token>` (Laravel Sanctum).
+
+    ## Multi-tenancy
+    Toutes les ressources sont isolees boutique par boutique. La boutique courante est definie via `POST /switch-boutique` ; chaque operation est automatiquement scopee a cette boutique. Toute tentative d'acces a une ressource d'une autre boutique renvoie 404.
+
+    ## Roles
+    - **proprietaire** : acces complet, gestion des boutiques et de l'equipe.
+    - **gerant** : gestion des operations quotidiennes (ventes, stock, fournisseurs, etc.).
+    - **caissier** : accès en lecture et operations de vente basees.
+
+    Certaines routes exigent le role `gerant` ou `proprietaire`. D'autres sont reservees au `proprietaire` uniquement.
+  contact:
+    name: SGCI Benin
+  license:
+    name: Proprietaire
+
+servers:
+  - url: /
+    description: Serveur local
+  - url: "https://sgci-backend-production.up.railway.app"
+    description: Production
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Auth
+    description: Authentification, inscription, mot de passe, 2FA
+  - name: Multi-boutique
+    description: Gestion de la boutique courante et de ses parametres
+  - name: Utilisateurs & Equipe
+    description: Gestion des utilisateurs, equipes et roles
+  - name: Produits
+    description: Catalogue de produits et images
+  - name: Categories
+    description: Categories de produits
+  - name: Stock
+    description: Mouvements de stock, alertes, transferts, peremption
+  - name: Ventes
+    description: Ventes, caisse et synchronisation hors ligne
+  - name: Clients
+    description: Gestion de la base clients et programme VIP
+  - name: Fournisseurs
+    description: Gestion des fournisseurs
+  - name: Commandes
+    description: Commandes fournisseurs et commandes clients
+  - name: Devis
+    description: Devis et conversion en commande
+  - name: Factures
+    description: Generation et envoi de factures
+  - name: Retours
+    description: Retours sur ventes
+  - name: Inventaire
+    description: Inventaires physiques et ecarts
+  - name: Fidelite
+    description: Programme de fidelite, points et recompenses
+  - name: Mobile Money
+    description: Paiements mobile money (MTN, Moov, etc.)
+  - name: Notifications
+    description: Notifications et alertes
+  - name: Messagerie
+    description: Chat et conversations internes
+  - name: Analytics
+    description: Statistiques et tableaux de bord
+  - name: IA & Previsions
+    description: Predictions, recommandations et intelligence artificielle
+  - name: Audit
+    description: Journaux d'audit et traçabilite
+
+paths:
+  # ──────────────────────────────────────
+  # PUBLIC
+  # ──────────────────────────────────────
+  /api/health:
+    get:
+      tags: [Auth]
+      summary: "Verifier l'etat de l'API"
+      description: "Endpoint publique pour verifier que l'API fonctionne."
+      security: []
+      operationId: healthCheck
+      responses:
+        "200":
+          description: "API operative"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /api/register:
+    post:
+      tags: [Auth]
+      summary: "Creer un compte"
+      description: "Inscription d'un nouvel utilisateur. Le premier utilisateur cree devient proprietaire."
+      security: []
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password, password_confirmation]
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+                password_confirmation:
+                  type: string
+                  format: password
+      responses:
+        "201":
+          description: "Compte cree"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/login:
+    post:
+      tags: [Auth]
+      summary: "Se connecter"
+      description: "Authentification. Peut repondre `requires_two_factor: true` si la 2FA est activee."
+      security: []
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+      responses:
+        "200":
+          description: "Connecte ou 2FA requis"
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    properties:
+                      token:
+                        type: string
+                      user:
+                        $ref: "#/components/schemas/User"
+                  - type: object
+                    properties:
+                      requires_two_factor:
+                        type: boolean
+                        example: true
+                      two_factor_token:
+                        type: string
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/forgot-password:
+    post:
+      tags: [Auth]
+      summary: "Demander une reinitialisation de mot de passe"
+      security: []
+      operationId: forgotPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        "200":
+          description: "Email envoye si l'adresse existe"
+
+  /api/reset-password:
+    post:
+      tags: [Auth]
+      summary: "Reinitialiser le mot de passe"
+      security: []
+      operationId: resetPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, email, password, password_confirmation]
+              properties:
+                token:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+                password_confirmation:
+                  type: string
+                  format: password
+      responses:
+        "200":
+          description: "Mot de passe reinitialise"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  # ──────────────────────────────────────
+  # AUTH (session management)
+  # ──────────────────────────────────────
+  /api/logout:
+    post:
+      tags: [Auth]
+      summary: "Se deconnecter"
+      description: "Revoque le token Sanctum courant."
+      operationId: logout
+      responses:
+        "200":
+          description: "Deconnexion reussie"
+
+  /api/refresh:
+    post:
+      tags: [Auth]
+      summary: "Rafraichir le token"
+      operationId: refreshToken
+      responses:
+        "200":
+          description: "Nouveau token"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+
+  /api/me:
+    get:
+      tags: [Auth]
+      summary: "Obtenir l'utilisateur courant"
+      operationId: getMe
+      responses:
+        "200":
+          description: "Profil utilisateur"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/me/profile:
+    put:
+      tags: [Auth]
+      summary: "Mettre a jour le profil"
+      operationId: updateProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                phone:
+                  type: string
+      responses:
+        "200":
+          description: "Profil mis a jour"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/me/password:
+    put:
+      tags: [Auth]
+      summary: "Changer le mot de passe"
+      operationId: changePassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [current_password, password, password_confirmation]
+              properties:
+                current_password:
+                  type: string
+                  format: password
+                password:
+                  type: string
+                  format: password
+                password_confirmation:
+                  type: string
+                  format: password
+      responses:
+        "200":
+          description: "Mot de passe change"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/2fa/enable:
+    post:
+      tags: [Auth]
+      summary: "Activer la double authentification"
+      description: "Genere un QR code et des codes de secours."
+      operationId: enable2fa
+      responses:
+        "200":
+          description: "2FA preparee"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  qr_code:
+                    type: string
+                    description: "URL du QR code en base64"
+                  recovery_codes:
+                    type: array
+                    items:
+                      type: string
+
+  /api/2fa/confirm:
+    post:
+      tags: [Auth]
+      summary: "Confirmer l'activation de la 2FA"
+      operationId: confirm2fa
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+      responses:
+        "200":
+          description: "2FA activee"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/2fa/disable:
+    post:
+      tags: [Auth]
+      summary: "Desactiver la 2FA"
+      operationId: disable2fa
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password:
+                  type: string
+                  format: password
+      responses:
+        "200":
+          description: "2FA desactivee"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  # ──────────────────────────────────────
+  # MULTI-BOUTIQUE
+  # ──────────────────────────────────────
+  /api/switch-boutique:
+    post:
+      tags: [Multi-boutique]
+      summary: "Changer de boutique courante"
+      description: "Definit la boutique courante pour toutes les operations ulterieures."
+      operationId: switchBoutique
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [boutique_id]
+              properties:
+                boutique_id:
+                  type: integer
+      responses:
+        "200":
+          description: "Boutique changee"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  current_boutique_id:
+                    type: integer
+                  current_boutique:
+                    $ref: "#/components/schemas/Boutique"
+                  role_courant:
+                    type: string
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/mes-boutiques:
+    get:
+      tags: [Multi-boutique]
+      summary: "Lister mes boutiques"
+      description: "Retourne la liste des boutiques auxquelles l'utilisateur a acces."
+      operationId: mesBoutiques
+      responses:
+        "200":
+          description: "Liste des boutiques"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Boutique"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/boutique/settings:
+    get:
+      tags: [Multi-boutique]
+      summary: "Obtenir les parametres de la boutique courante"
+      operationId: getBoutiqueSettings
+      responses:
+        "200":
+          description: "Parametres de la boutique"
+          content:
+            application/json:
+              schema:
+                type: object
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    put:
+      tags: [Multi-boutique]
+      summary: "Mettre a jour les parametres de la boutique"
+      operationId: updateBoutiqueSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                address:
+                  type: string
+                phone:
+                  type: string
+                email:
+                  type: string
+      responses:
+        "200":
+          description: "Parametres mis a jour"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  # ──────────────────────────────────────
+  # BOUTIQUES (proprietaire)
+  # ──────────────────────────────────────
+  /api/boutiques:
+    get:
+      tags: [Multi-boutique]
+      summary: "Lister les boutiques"
+      description: "Reserve au proprietaire. Liste toutes les boutiques du compte."
+      operationId: listBoutiques
+      responses:
+        "200":
+          description: "Liste des boutiques"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Boutique"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Multi-boutique]
+      summary: "Creer une boutique"
+      description: "Reserve au proprietaire."
+      operationId: createBoutique
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Boutique"
+      responses:
+        "201":
+          description: "Boutique creee"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Boutique"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/boutiques/{boutique}:
+    get:
+      tags: [Multi-boutique]
+      summary: "Obtenir une boutique"
+      operationId: getBoutique
+      parameters:
+        - $ref: "#/components/parameters/BoutiqueId"
+      responses:
+        "200":
+          description: "Boutique"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Boutique"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Multi-boutique]
+      summary: "Modifier une boutique"
+      description: "Reserve au proprietaire."
+      operationId: updateBoutique
+      parameters:
+        - $ref: "#/components/parameters/BoutiqueId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Boutique"
+      responses:
+        "200":
+          description: "Boutique mise a jour"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Validation"
+    delete:
+      tags: [Multi-boutique]
+      summary: "Supprimer une boutique"
+      description: "Reserve au proprietaire."
+      operationId: deleteBoutique
+      parameters:
+        - $ref: "#/components/parameters/BoutiqueId"
+      responses:
+        "200":
+          description: "Boutique supprimee"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ──────────────────────────────────────
+  # EQUIPE (boutique.manage)
+  # ──────────────────────────────────────
+  /api/boutiques/{boutique}/users:
+    get:
+      tags: [Utilisateurs & Equipe]
+      summary: "Lister les utilisateurs d'une boutique"
+      description: "Necessite la permission boutique.manage (proprietaire ou gerant)."
+      operationId: listBoutiqueUsers
+      parameters:
+        - $ref: "#/components/parameters/BoutiqueId"
+      responses:
+        "200":
+          description: "Liste des utilisateurs"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Utilisateurs & Equipe]
+      summary: "Ajouter un utilisateur a la boutique"
+      operationId: addBoutiqueUser
+      parameters:
+        - $ref: "#/components/parameters/BoutiqueId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id, role]
+              properties:
+                user_id:
+                  type: integer
+                role:
+                  type: string
+                  enum: [proprietaire, gerant, caissier]
+      responses:
+        "201":
+          description: "Utilisateur ajoute"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/boutiques/{boutique}/users/{userId}:
+    delete:
+      tags: [Utilisateurs & Equipe]
+      summary: "Retirer un utilisateur de la boutique"
+      operationId: removeBoutiqueUser
+      parameters:
+        - $ref: "#/components/parameters/BoutiqueId"
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: "Utilisateur retire"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/boutiques/{boutique}/users/{user}/assignUser:
+    post:
+      tags: [Utilisateurs & Equipe]
+      summary: "Assigner un role a un utilisateur dans la boutique"
+      operationId: assignBoutiqueUser
+      parameters:
+        - $ref: "#/components/parameters/BoutiqueId"
+        - name: user
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role:
+                  type: string
+                  enum: [proprietaire, gerant, caissier]
+      responses:
+        "200":
+          description: "Role assigne"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/boutiques/{boutique}/users/{user}/removeUser:
+    delete:
+      tags: [Utilisateurs & Equipe]
+      summary: "Retirer le role d'un utilisateur dans la boutique"
+      operationId: removeRoleBoutiqueUser
+      parameters:
+        - $ref: "#/components/parameters/BoutiqueId"
+        - name: user
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: "Role retire"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ──────────────────────────────────────
+  # USERS (role.gerant)
+  # ──────────────────────────────────────
+  /api/users/caissiers:
+    get:
+      tags: [Utilisateurs & Equipe]
+      summary: "Lister les caissiers de la boutique"
+      operationId: listCaissiers
+      responses:
+        "200":
+          description: "Liste des caissiers"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/users:
+    get:
+      tags: [Utilisateurs & Equipe]
+      summary: "Lister les utilisateurs"
+      description: "Necessite le role gerant ou proprietaire."
+      operationId: listUsers
+      responses:
+        "200":
+          description: "Liste des utilisateurs"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Utilisateurs & Equipe]
+      summary: "Creer un utilisateur"
+      description: "Necessite le role gerant ou proprietaire."
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+                role:
+                  type: string
+                  enum: [proprietaire, gerant, caissier]
+      responses:
+        "201":
+          description: "Utilisateur cree"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/users/invite:
+    post:
+      tags: [Utilisateurs & Equipe]
+      summary: "Inviter un utilisateur par email"
+      operationId: inviteUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, role]
+              properties:
+                email:
+                  type: string
+                  format: email
+                role:
+                  type: string
+                  enum: [proprietaire, gerant, caissier]
+      responses:
+        "200":
+          description: "Invitation envoyee"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/users/export:
+    post:
+      tags: [Utilisateurs & Equipe]
+      summary: "Exporter les utilisateurs"
+      operationId: exportUsers
+      responses:
+        "200":
+          description: "Fichier exporte"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/users/import:
+    post:
+      tags: [Utilisateurs & Equipe]
+      summary: "Importer des utilisateurs"
+      operationId: importUsers
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: "Import reussi"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/users/{user}:
+    put:
+      tags: [Utilisateurs & Equipe]
+      summary: "Modifier un utilisateur"
+      operationId: updateUser
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                role:
+                  type: string
+                  enum: [proprietaire, gerant, caissier]
+      responses:
+        "200":
+          description: "Utilisateur mis a jour"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Validation"
+    delete:
+      tags: [Utilisateurs & Equipe]
+      summary: "Supprimer un utilisateur"
+      operationId: deleteUser
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          description: "Utilisateur supprime"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/users/{user}/assign-boutique:
+    post:
+      tags: [Utilisateurs & Equipe]
+      summary: "Assigner un utilisateur a une boutique"
+      operationId: assignUserBoutique
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [boutique_id, role]
+              properties:
+                boutique_id:
+                  type: integer
+                role:
+                  type: string
+                  enum: [proprietaire, gerant, caissier]
+      responses:
+        "200":
+          description: "Utilisateur assigne"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/users/{user}/boutiques/{boutiqueId}:
+    delete:
+      tags: [Utilisateurs & Equipe]
+      summary: "Retirer un utilisateur d'une boutique"
+      operationId: removeUserFromBoutique
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - name: boutiqueId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: "Utilisateur retire de la boutique"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ──────────────────────────────────────
+  # PRODUITS
+  # ──────────────────────────────────────
+  /api/produits/alerte-stock:
+    get:
+      tags: [Produits]
+      summary: "Produits en alerte de stock"
+      description: "Liste les produits dont le stock est inferieur au seuil d'alerte."
+      operationId: produitsAlerteStock
+      responses:
+        "200":
+          description: "Liste des produits en alerte"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Produit"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/produits/statistiques:
+    get:
+      tags: [Produits]
+      summary: "Statistiques des produits"
+      operationId: produitsStatistiques
+      responses:
+        "200":
+          description: "Statistiques"
+          content:
+            application/json:
+              schema:
+                type: object
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/produits/search/{search}:
+    get:
+      tags: [Produits]
+      summary: "Rechercher des produits"
+      operationId: searchProduits
+      parameters:
+        - name: search
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: "Resultats de recherche"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Produit"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/produits/code/{code}:
+    get:
+      tags: [Produits]
+      summary: "Obtenir un produit par son code"
+      operationId: getProduitByCode
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: "Produit"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Produit"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/produits/image:
+    post:
+      tags: [Produits]
+      summary: "Uploader une image de produit"
+      operationId: uploadProduitImage
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [image]
+              properties:
+                image:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: "Image uploadee"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/produits:
+    get:
+      tags: [Produits]
+      summary: "Lister les produits"
+      operationId: listProduits
+      responses:
+        "200":
+          description: "Liste des produits"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Produit"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Produits]
+      summary: "Creer un produit"
+      description: "Necessite le role gerant ou proprietaire."
+      operationId: createProduit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nom, prix_vente, categorie_id]
+              properties:
+                nom:
+                  type: string
+                description:
+                  type: string
+                code_barres:
+                  type: string
+                prix_vente:
+                  type: number
+                  format: float
+                prix_achat:
+                  type: number
+                  format: float
+                quantite_stock:
+                  type: integer
+                stock_min:
+                  type: integer
+                categorie_id:
+                  type: integer
+                image:
+                  type: string
+      responses:
+        "201":
+          description: "Produit cree"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Produit"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/produits/{produit}:
+    get:
+      tags: [Produits]
+      summary: "Obtenir un produit"
+      operationId: getProduit
+      parameters:
+        - $ref: "#/components/parameters/ProduitId"
+      responses:
+        "200":
+          description: "Produit"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Produit"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Produits]
+      summary: "Modifier un produit"
+      description: "Necessite le role gerant ou proprietaire."
+      operationId: updateProduit
+      parameters:
+        - $ref: "#/components/parameters/ProduitId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nom:
+                  type: string
+                description:
+                  type: string
+                code_barres:
+                  type: string
+                prix_vente:
+                  type: number
+                  format: float
+                prix_achat:
+                  type: number
+                  format: float
+                quantite_stock:
+                  type: integer
+                stock_min:
+                  type: integer
+                categorie_id:
+                  type: integer
+                image:
+                  type: string
+      responses:
+        "200":
+          description: "Produit mis a jour"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Validation"
+    delete:
+      tags: [Produits]
+      summary: "Supprimer un produit"
+      description: "Necessite le role gerant ou proprietaire."
+      operationId: deleteProduit
+      parameters:
+        - $ref: "#/components/parameters/ProduitId"
+      responses:
+        "200":
+          description: "Produit supprime"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ──────────────────────────────────────
+  # CATEGORIES
+  # ──────────────────────────────────────
+  /api/categories/statistiques/overview:
+    get:
+      tags: [Categories]
+      summary: "Vue d'ensemble des statistiques categories"
+      operationId: categoriesStatsOverview
+      responses:
+        "200":
+          description: "Statistiques"
+          content:
+            application/json:
+              schema:
+                type: object
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/categories/{id}/produits:
+    get:
+      tags: [Categories]
+      summary: "Lister les produits d'une categorie"
+      operationId: categoriesIdProduits
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: "Liste des produits"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Produit"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/categories:
+    get:
+      tags: [Categories]
+      summary: "Lister les categories"
+      operationId: listCategories
+      responses:
+        "200":
+          description: "Liste des categories"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Categories]
+      summary: "Creer une categorie"
+      operationId: createCategorie
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nom]
+              properties:
+                nom:
+                  type: string
+                description:
+                  type: string
+      responses:
+        "201":
+          description: "Categorie creee"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/categories/{categorie}:
+    get:
+      tags: [Categories]
+      summary: "Obtenir une categorie"
+      operationId: getCategorie
+      parameters:
+        - $ref: "#/components/parameters/CategorieId"
+      responses:
+        "200":
+          description: "Categorie"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Categories]
+      summary: "Modifier une categorie"
+      operationId: updateCategorie
+      parameters:
+        - $ref: "#/components/parameters/CategorieId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nom:
+                  type: string
+                description:
+                  type: string
+      responses:
+        "200":
+          description: "Categorie mise a jour"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Validation"
+    delete:
+      tags: [Categories]
+      summary: "Supprimer une categorie"
+      operationId: deleteCategorie
+      parameters:
+        - $ref: "#/components/parameters/CategorieId"
+      responses:
+        "200":
+          description: "Categorie supprimee"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ──────────────────────────────────────
+  # STOCK (mouvements, alertes, transferts, peremption)
+  # ──────────────────────────────────────
+  /api/mouvements-stock/statistiques:
+    get:
+      tags: [Stock]
+      summary: "Statistiques des mouvements de stock"
+      operationId: mouvementsStockStats
+      responses:
+        "200":
+          description: "Statistiques"
+          content:
+            application/json:
+              schema:
+                type: object
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/mouvements-stock/export:
+    get:
+      tags: [Stock]
+      summary: "Exporter les mouvements de stock"
+      operationId: exportMouvementsStock
+      responses:
+        "200":
+          description: "Fichier exporte"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/mouvements-stock:
+    get:
+      tags: [Stock]
+      summary: "Lister les mouvements de stock"
+      operationId: listMouvementsStock
+      responses:
+        "200":
+          description: "Liste des mouvements"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Stock]
+      summary: "Creer un mouvement de stock"
+      operationId: createMouvementStock
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [produit_id, type_mouvement, quantite]
+              properties:
+                produit_id:
+                  type: integer
+                type_mouvement:
+                  type: string
+                  enum: [entree, sortie, correction]
+                quantite:
+                  type: integer
+                motif:
+                  type: string
+      responses:
+        "201":
+          description: "Mouvement cree"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/mouvements-stock/{mouvement}:
+    get:
+      tags: [Stock]
+      summary: "Obtenir un mouvement de stock"
+      operationId: getMouvementStock
+      parameters:
+        - name: mouvement
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: "Mouvement"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Stock]
+      summary: "Modifier un mouvement de stock"
+      operationId: updateMouvementStock
+      parameters:
+        - name: mouvement
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                quantite:
+                  type: integer
+                motif:
+                  type: string
+      responses:
+        "200":
+          description: "Mouvement mis a jour"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/mouvements-stock/{mouvement}/valider:
+    post:
+      tags: [Stock]
+      summary: "Valider un mouvement de stock"
+      description: "Necessite le role gerant ou proprietaire."
+      operationId: validerMouvementStock
+      parameters:
+        - name: mouvement
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: "Mouvement valide"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/mouvements-stock/{mouvement}/rejeter:
+    post:
+      tags: [Stock]
+      summary: "Rejeter un mouvement de stock"
+      description: "Necessite le role gerant ou proprietaire."
+      operationId: rejeterMouvementStock
+      parameters:
+        - name: mouvement
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: "Mouvement rejete"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/stock-alerts/check:
+    post:
+      tags: [Stock]
+      summary: "Verifier les alertes de stock"
+      description: "Necessite le role gerant ou proprietaire."
+      operationId: checkStockAlerts
+      responses:
+        "200":
+          description: "Alertes verifiees"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/stock-alerts/sync:
+    post:
+      tags: [Stock]
+      summary: "Synchroniser les alertes de stock"
+      operationId: syncStockAlerts
+      responses:
+        "200":
+          description: "Alertes synchronisees"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/peremption/check:
+    post:
+      tags: [Stock]
+      summary: "Verifier les produits proches de la peremption"
+      description: "Necessite le role gerant ou proprietaire."
+      operationId: checkPeremption
+      responses:
+        "200":
+          description: "Verification effectuee"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/peremption/sync:
+    post:
+      tags: [Stock]
+      summary: "Synchroniser les alertes de peremption"
+      operationId: syncPeremption
+      responses:
+        "200":
+          description: "Synchronisation effectuee"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/transferts-stock:
+    get:
+      tags: [Stock]
+      summary: "Lister les transferts de stock"
+      operationId: listTransfertsStock
+      responses:
+        "200":
+          description: "Liste des transferts"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Stock]
+      summary: "Creer un transfert de stock"
+      description: "Necessite le role gerant ou proprietaire."
+      operationId: createTransfertStock
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [produit_id, boutique_destination_id, quantite]
+              properties:
+                produit_id:
+                  type: integer
+                boutique_destination_id:
+                  type: integer
+                quantite:
+                  type: integer
+                motif:
+                  type: string
+      responses:
+        "201":
+          description: "Transfert cree"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/transferts-stock/statistiques:
+    get:
+      tags: [Stock]
+      summary: "Statistiques des transferts de stock"
+      operationId: transfertsStockStats
+      responses:
+        "200":
+          description: "Statistiques"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/transferts-stock/{transfert}:
+    get:
+      tags: [Stock]
+      summary: "Obtenir un transfert de stock"
+      operationId: getTransfertStock
+      parameters:
+        - name: transfert
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: "Transfert"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/transferts-stock/{transfert}/annuler:
+    post:
+      tags: [Stock]
+      summary: "Annuler un transfert de stock"
+      operationId: annulerTransfertStock
+      parameters:
+        - name: transfert
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: "Transfert annule"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/transferts-stock/{transfert}/recevoir:
+    post:
+      tags: [Stock]
+      summary: "Recevoir un transfert de stock"
+      operationId: recevoirTransfertStock
+      parameters:
+        - name: transfert
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: "Transfert recu"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ──────────────────────────────────────
+  # VENTES
+  # ──────────────────────────────────────
+  /api/ventes/aujourdhui/stats:
+    get:
+      tags: [Ventes]
+      summary: "Statistiques des ventes du jour"
+      operationId: ventesAujourdhuiStats
+      responses:
+        "200":
+          description: "Statistiques du jour"
+          content:
+            application/json:
+              schema:
+                type: object
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/ventes/statistiques/general:
+    get:
+      tags: [Ventes]
+      summary: "Statistiques generales des ventes"
+      operationId: ventesStatistiquesGeneral
+      responses:
+        "200":
+          description: "Statistiques generales"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/ventes/checkout:
+    post:
+      tags: [Ventes]
+      summary: "Effectuer une vente (caisse)"
+      operationId: ventesCheckout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lignes]
+              properties:
+                lignes:
+                  type: array
+                  items:
+                    type: object
+                    required: [produit_id, quantite]
+                    properties:
+                      produit_id:
+                        type: integer
+                      quantite:
+                        type: integer
+                client_id:
+                  type: integer
+                mode_paiement:
+                  type: string
+                  enum: [especes, mobile_money, carte, virement]
+                montant_recu:
+                  type: number
+                  format: float
+      responses:
+        "201":
+          description: "Vente creee"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vente"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/ventes/{vente}/terminer:
+    post:
+      tags: [Ventes]
+      summary: "Terminer une vente"
+      operationId: terminerVente
+      parameters:
+        - $ref: "#/components/parameters/VenteId"
+      responses:
+        "200":
+          description: "Vente terminee"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/ventes/{vente}/annuler:
+    post:
+      tags: [Ventes]
+      summary: "Annuler une vente"
+      operationId: annulerVente
+      parameters:
+        - $ref: "#/components/parameters/VenteId"
+      responses:
+        "200":
+          description: "Vente annulee"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/ventes/{vente}/facture:
+    get:
+      tags: [Ventes]
+      summary: "Obtenir la facture d'une vente"
+      operationId: getVenteFacture
+      parameters:
+        - $ref: "#/components/parameters/VenteId"
+      responses:
+        "200":
+          description: "Facture"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/ventes/{vente}/facture/pdf:
+    get:
+      tags: [Ventes]
+      summary: "Telecharger la facture PDF d'une vente"
+      operationId: getVenteFacturePdf
+      parameters:
+        - $ref: "#/components/parameters/VenteId"
+      responses:
+        "200":
+          description: "PDF de la facture"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/ventes/{vente}/facture/html:
+    get:
+      tags: [Ventes]
+      summary: "Afficher la facture HTML d'une vente"
+      operationId: getVenteFactureHtml
+      parameters:
+        - $ref: "#/components/parameters/VenteId"
+      responses:
+        "200":
+          description: "HTML de la facture"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/ventes/sync-offline-batch:
+    post:
+      tags: [Ventes]
+      summary: "Synchroniser les ventes hors ligne en lot"
+      operationId: syncOfflineBatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ventes]
+              properties:
+                ventes:
+                  type: array
+                  items:
+                    type: object
+      responses:
+        "200":
+          description: "Synchronisation effectuee"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/ventes:
+    get:
+      tags: [Ventes]
+      summary: "Lister les ventes"
+      operationId: listVentes
+      responses:
+        "200":
+          description: "Liste des ventes"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Vente"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Ventes]
+      summary: "Creer une vente"
+      operationId: createVente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lignes]
+              properties:
+                lignes:
+                  type: array
+                  items:
+                    type: object
+                    required: [produit_id, quantite]
+                    properties:
+                      produit_id:
+                        type: integer
+                      quantite:
+                        type: integer
+                client_id:
+                  type: integer
+                mode_paiement:
+                  type: string
+      responses:
+        "201":
+          description: "Vente creee"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/ventes/{vente}:
+    get:
+      tags: [Ventes]
+      summary: "Obtenir une vente"
+      operationId: getVente
+      parameters:
+        - $ref: "#/components/parameters/VenteId"
+      responses:
+        "200":
+          description: "Vente"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vente"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Ventes]
+      summary: "Modifier une vente"
+      operationId: updateVente
+      parameters:
+        - $ref: "#/components/parameters/VenteId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                statut:
+                  type: string
+                client_id:
+                  type: integer
+      responses:
+        "200":
+          description: "Vente mise a jour"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  # ──────────────────────────────────────
+  # CLIENTS
+  # ──────────────────────────────────────
+  /api/clients/statistiques/globales:
+    get:
+      tags: [Clients]
+      summary: "Statistiques globales des clients"
+      operationId: clientsStatsGlobales
+      responses:
+        "200":
+          description: "Statistiques"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/clients/export/data:
+    get:
+      tags: [Clients]
+      summary: "Exporter les donnees clients"
+      operationId: exportClientsData
+      responses:
+        "200":
+          description: "Fichier exporte"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/clients/search/advanced:
+    get:
+      tags: [Clients]
+      summary: "Recherche avancee de clients"
+      operationId: searchClientsAdvanced
+      responses:
+        "200":
+          description: "Resultats"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/clients:
+    get:
+      tags: [Clients]
+      summary: "Lister les clients"
+      operationId: listClients
+      responses:
+        "200":
+          description: "Liste des clients"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Client"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Clients]
+      summary: "Creer un client"
+      operationId: createClient
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nom]
+              properties:
+                nom:
+                  type: string
+                prenom:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                telephone:
+                  type: string
+                adresse:
+                  type: string
+      responses:
+        "201":
+          description: "Client cree"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Client"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/clients/{client}:
+    get:
+      tags: [Clients]
+      summary: "Obtenir un client"
+      operationId: getClient
+      parameters:
+        - $ref: "#/components/parameters/ClientId"
+      responses:
+        "200":
+          description: "Client"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Client"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Clients]
+      summary: "Modifier un client"
+      operationId: updateClient
+      parameters:
+        - $ref: "#/components/parameters/ClientId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nom:
+                  type: string
+                prenom:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                telephone:
+                  type: string
+                adresse:
+                  type: string
+      responses:
+        "200":
+          description: "Client mis a jour"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Validation"
+    delete:
+      tags: [Clients]
+      summary: "Supprimer un client"
+      operationId: deleteClient
+      parameters:
+        - $ref: "#/components/parameters/ClientId"
+      responses:
+        "200":
+          description: "Client supprime"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/clients/{client}/promouvoir-vip:
+    post:
+      tags: [Clients]
+      summary: "Promouvoir un client en VIP"
+      operationId: promouvoirClientVip
+      parameters:
+        - $ref: "#/components/parameters/ClientId"
+      responses:
+        "200":
+          description: "Client promu VIP"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/clients/{client}/retrograder-vip:
+    post:
+      tags: [Clients]
+      summary: "Retrograder un client VIP"
+      operationId: retrograderClientVip
+      parameters:
+        - $ref: "#/components/parameters/ClientId"
+      responses:
+        "200":
+          description: "Client retrograde"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/clients/{client}/commandes:
+    get:
+      tags: [Clients]
+      summary: "Lister les commandes d'un client"
+      operationId: clientCommandes
+      parameters:
+        - $ref: "#/components/parameters/ClientId"
+      responses:
+        "200":
+          description: "Commandes du client"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ──────────────────────────────────────
+  # FOURNISSEURS
+  # ──────────────────────────────────────
+  /api/fournisseurs:
+    get:
+      tags: [Fournisseurs]
+      summary: "Lister les fournisseurs"
+      operationId: listFournisseurs
+      responses:
+        "200":
+          description: "Liste des fournisseurs"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Fournisseur"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Fournisseurs]
+      summary: "Creer un fournisseur"
+      description: "Necessite le role gerant ou proprietaire."
+      operationId: createFournisseur
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nom]
+              properties:
+                nom:
+                  type: string
+                contact_nom:
+                  type: string
+                email:
+                  type: string
+                telephone:
+                  type: string
+                adresse:
+                  type: string
+      responses:
+        "201":
+          description: "Fournisseur cree"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Fournisseur"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/fournisseurs/statistiques:
+    get:
+      tags: [Fournisseurs]
+      summary: "Statistiques des fournisseurs"
+      operationId: fournisseursStats
+      responses:
+        "200":
+          description: "Statistiques"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/fournisseurs/{fournisseur}:
+    get:
+      tags: [Fournisseurs]
+      summary: "Obtenir un fournisseur"
+      operationId: getFournisseur
+      parameters:
+        - $ref: "#/components/parameters/FournisseurId"
+      responses:
+        "200":
+          description: "Fournisseur"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Fournisseur"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Fournisseurs]
+      summary: "Modifier un fournisseur"
+      description: "Necessite le role gerant ou proprietaire."
+      operationId: updateFournisseur
+      parameters:
+        - $ref: "#/components/parameters/FournisseurId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nom:
+                  type: string
+                contact_nom:
+                  type: string
+                email:
+                  type: string
+                telephone:
+                  type: string
+                adresse:
+                  type: string
+      responses:
+        "200":
+          description: "Fournisseur mis a jour"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Validation"
+    delete:
+      tags: [Fournisseurs]
+      summary: "Supprimer un fournisseur"
+      description: "Necessite le role gerant ou proprietaire."
+      operationId: deleteFournisseur
+      parameters:
+        - $ref: "#/components/parameters/FournisseurId"
+      responses:
+        "200":
+          description: "Fournisseur supprime"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ──────────────────────────────────────
+  # COMMANDES-FOURNISSEURS
+  # ──────────────────────────────────────
+  /api/commandes-fournisseurs/suggestions:
+    get:
+      tags: [Commandes]
+      summary: "Suggestions de commandes fournisseurs"
+      description: "Basee sur le stock et les historiques."
+      operationId: commandesFournisseursSuggestions
+      responses:
+        "200":
+          description: "Suggestions"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/commandes-fournisseurs:
+    get:
+      tags: [Commandes]
+      summary: "Lister les commandes fournisseurs"
+      operationId: listCommandesFournisseurs
+      responses:
+        "200":
+          description: "Liste des commandes"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CommandeFournisseur"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Commandes]
+      summary: "Creer une commande fournisseur"
+      description: "Necessite le role gerant ou proprietaire."
+      operationId: createCommandeFournisseur
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fournisseur_id, lignes]
+              properties:
+                fournisseur_id:
+                  type: integer
+                lignes:
+                  type: array
+                  items:
+                    type: object
+                    required: [produit_id, quantite]
+                    properties:
+                      produit_id:
+                        type: integer
+                      quantite:
+                        type: integer
+                      prix_unitaire:
+                        type: number
+                date_livraison_prevue:
+                  type: string
+                  format: date
+                notes:
+                  type: string
+      responses:
+        "201":
+          description: "Commande creee"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/commandes-fournisseurs/{commande}:
+    get:
+      tags: [Commandes]
+      summary: "Obtenir une commande fournisseur"
+      operationId: getCommandeFournisseur
+      parameters:
+        - $ref: "#/components/parameters/CommandeId"
+      responses:
+        "200":
+          description: "Commande"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommandeFournisseur"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Commandes]
+      summary: "Modifier une commande fournisseur"
+      operationId: updateCommandeFournisseur
+      parameters:
+        - $ref: "#/components/parameters/CommandeId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                date_livraison_prevue:
+                  type: string
+                  format: date
+                notes:
+                  type: string
+      responses:
+        "200":
+          description: "Commande mise a jour"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Validation"
+    delete:
+      tags: [Commandes]
+      summary: "Supprimer une commande fournisseur"
+      operationId: deleteCommandeFournisseur
+      parameters:
+        - $ref: "#/components/parameters/CommandeId"
+      responses:
+        "200":
+          description: "Commande supprimee"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/commandes-fournisseurs/{commande}/valider:
+    post:
+      tags: [Commandes]
+      summary: "Valider une commande fournisseur"
+      operationId: validerCommandeFournisseur
+      parameters:
+        - $ref: "#/components/parameters/CommandeId"
+      responses:
+        "200":
+          description: "Commande validee"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/commandes-fournisseurs/{commande}/receptionner:
+    post:
+      tags: [Commandes]
+      summary: "Receptionner une commande fournisseur"
+      operationId: receptionnerCommandeFournisseur
+      parameters:
+        - $ref: "#/components/parameters/CommandeId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                quantites_recues:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      produit_id:
+                        type: integer
+                      quantite:
+                        type: integer
+      responses:
+        "200":
+          description: "Commande recue"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/commandes-fournisseurs/{commande}/payer:
+    post:
+      tags: [Commandes]
+      summary: "Enregistrer le paiement d'une commande"
+      operationId: payerCommandeFournisseur
+      parameters:
+        - $ref: "#/components/parameters/CommandeId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [montant]
+              properties:
+                montant:
+                  type: number
+                  format: float
+                mode_paiement:
+                  type: string
+      responses:
+        "200":
+          description: "Paiement enregistre"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/commandes-fournisseurs/{commande}/annuler:
+    post:
+      tags: [Commandes]
+      summary: "Annuler une commande fournisseur"
+      operationId: annulerCommandeFournisseur
+      parameters:
+        - $ref: "#/components/parameters/CommandeId"
+      responses:
+        "200":
+          description: "Commande annulee"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ──────────────────────────────────────
+  # DEVIS
+  # ──────────────────────────────────────
+  /api/devis:
+    get:
+      tags: [Devis]
+      summary: "Lister les devis"
+      operationId: listDevis
+      responses:
+        "200":
+          description: "Liste des devis"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Devis"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Devis]
+      summary: "Creer un devis"
+      description: "Necessite le role gerant ou proprietaire."
+      operationId: createDevis
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [client_id, lignes]
+              properties:
+                client_id:
+                  type: integer
+                lignes:
+                  type: array
+                  items:
+                    type: object
+                    required: [produit_id, quantite, prix_unitaire]
+                    properties:
+                      produit_id:
+                        type: integer
+                      quantite:
+                        type: integer
+                      prix_unitaire:
+                        type: number
+                date_validite:
+                  type: string
+                  format: date
+                notes:
+                  type: string
+      responses:
+        "201":
+          description: "Devis cree"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/devis/{devis}:
+    get:
+      tags: [Devis]
+      summary: "Obtenir un devis"
+      operationId: getDevis
+      parameters:
+        - $ref: "#/components/parameters/DevisId"
+      responses:
+        "200":
+          description: "Devis"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Devis"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Devis]
+      summary: "Modifier un devis"
+      operationId: updateDevis
+      parameters:
+        - $ref: "#/components/parameters/DevisId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                lignes:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      produit_id:
+                        type: integer
+                      quantite:
+                        type: integer
+                      prix_unitaire:
+                        type: number
+                date_validite:
+                  type: string
+                  format: date
+                notes:
+                  type: string
+      responses:
+        "200":
+          description: "Devis mis a jour"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/devis/{devis}/accepter:
+    post:
+      tags: [Devis]
+      summary: "Accepter un devis"
+      operationId: accepterDevis
+      parameters:
+        - $ref: "#/components/parameters/DevisId"
+      responses:
+        "200":
+          description: "Devis accepte"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/devis/{devis}/refuser:
+    post:
+      tags: [Devis]
+      summary: "Refuser un devis"
+      operationId: refuserDevis
+      parameters:
+        - $ref: "#/components/parameters/DevisId"
+      responses:
+        "200":
+          description: "Devis refuse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/devis/{devis}/convertir-commande:
+    post:
+      tags: [Devis]
+      summary: "Convertir un devis en commande"
+      operationId: convertirDevisCommande
+      parameters:
+        - $ref: "#/components/parameters/DevisId"
+      responses:
+        "200":
+          description: "Commande creee a partir du devis"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/devis/{devis}/pdf:
+    get:
+      tags: [Devis]
+      summary: "Telecharger le PDF d'un devis"
+      operationId: getDevisPdf
+      parameters:
+        - $ref: "#/components/parameters/DevisId"
+      responses:
+        "200":
+          description: "PDF du devis"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ──────────────────────────────────────
+  # COMMANDES-CLIENTS
+  # ──────────────────────────────────────
+  /api/commandes-clients:
+    get:
+      tags: [Commandes]
+      summary: "Lister les commandes clients"
+      operationId: listCommandesClients
+      responses:
+        "200":
+          description: "Liste des commandes"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Commandes]
+      summary: "Creer une commande client"
+      description: "Necessite le role gerant ou proprietaire."
+      operationId: createCommandeClient
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [client_id, lignes]
+              properties:
+                client_id:
+                  type: integer
+                lignes:
+                  type: array
+                  items:
+                    type: object
+                    required: [produit_id, quantite]
+                    properties:
+                      produit_id:
+                        type: integer
+                      quantite:
+                        type: integer
+                date_livraison_prevue:
+                  type: string
+                  format: date
+                notes:
+                  type: string
+      responses:
+        "201":
+          description: "Commande creee"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/commandes-clients/{commande}:
+    get:
+      tags: [Commandes]
+      summary: "Obtenir une commande client"
+      operationId: getCommandeClient
+      parameters:
+        - name: commande
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: "Commande"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Commandes]
+      summary: "Modifier une commande client"
+      operationId: updateCommandeClient
+      parameters:
+        - name: commande
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                date_livraison_prevue:
+                  type: string
+                  format: date
+                notes:
+                  type: string
+      responses:
+        "200":
+          description: "Commande mise a jour"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/commandes-clients/{commande}/valider:
+    post:
+      tags: [Commandes]
+      summary: "Valider une commande client"
+      operationId: validerCommandeClient
+      parameters:
+        - name: commande
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: "Commande validee"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/commandes-clients/{commande}/annuler:
+    post:
+      tags: [Commandes]
+      summary: "Annuler une commande client"
+      operationId: annulerCommandeClient
+      parameters:
+        - name: commande
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: "Commande annulee"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/commandes-clients/{commande}/livrer:
+    post:
+      tags: [Commandes]
+      summary: "Marquer une commande client comme livree"
+      operationId: livrerCommandeClient
+      parameters:
+        - name: commande
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: "Commande livree"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ──────────────────────────────────────
+  # MOBILE MONEY
+  # ──────────────────────────────────────
+  /api/mobile-money/initiate:
+    post:
+      tags: [Mobile Money]
+      summary: "Initier un paiement mobile money"
+      operationId: initiateMobileMoney
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [montant, telephone, provider]
+              properties:
+                montant:
+                  type: number
+                  format: float
+                telephone:
+                  type: string
+                provider:
+                  type: string
+                  enum: [mtn, moov, Celtis]
+                description:
+                  type: string
+      responses:
+        "200":
+          description: "Paiement initie"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  payment_id:
+                    type: string
+                  statut:
+                    type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/mobile-money/status/{paymentId}:
+    get:
+      tags: [Mobile Money]
+      summary: "Verifier le statut d'un paiement"
+      operationId: mobileMoneyStatus
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: "Statut du paiement"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  payment_id:
+                    type: string
+                  statut:
+                    type: string
+                  montant:
+                    type: number
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/mobile-money/cancel/{paymentId}:
+    post:
+      tags: [Mobile Money]
+      summary: "Annuler un paiement mobile money"
+      operationId: cancelMobileMoney
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: "Paiement annule"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/mobile-money/detect-provider:
+    post:
+      tags: [Mobile Money]
+      summary: "Detecter le fournisseur mobile money"
+      description: "Identifie le provider (MTN, Moov) a partir du numero de telephone."
+      operationId: detectMobileMoneyProvider
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [telephone]
+              properties:
+                telephone:
+                  type: string
+      responses:
+        "200":
+          description: "Provider detecte"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  provider:
+                    type: string
+                  nom_complet:
+                    type: string
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/mobile-money/callback:
+    post:
+      tags: [Mobile Money]
+      summary: "Callback mobile money (externe)"
+      description: "Endpoint public appele par le provider mobile money apres traitement du paiement."
+      security: []
+      operationId: mobileMoneyCallback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: "Callback traite"
+
+  # ──────────────────────────────────────
+  # FACTURES
+  # ──────────────────────────────────────
+  /api/factures:
+    get:
+      tags: [Factures]
+      summary: "Lister les factures"
+      operationId: listFactures
+      responses:
+        "200":
+          description: "Liste des factures"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Facture"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/factures/generer-vente:
+    post:
+      tags: [Factures]
+      summary: "Generer une facture a partir d'une vente"
+      description: "Necessite le role gerant ou proprietaire."
+      operationId: genererFactureVente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [vente_id]
+              properties:
+                vente_id:
+                  type: integer
+      responses:
+        "201":
+          description: "Facture generee"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/factures/generer-commande:
+    post:
+      tags: [Factures]
+      summary: "Generer une facture a partir d'une commande"
+      description: "Necessite le role gerant ou proprietaire."
+      operationId: genererFactureCommande
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [commande_id]
+              properties:
+                commande_id:
+                  type: integer
+      responses:
+        "201":
+          description: "Facture generee"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/factures/{facture}:
+    get:
+      tags: [Factures]
+      summary: "Obtenir une facture"
+      operationId: getFacture
+      parameters:
+        - $ref: "#/components/parameters/FactureId"
+      responses:
+        "200":
+          description: "Facture"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Facture"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/factures/{facture}/envoyer-email:
+    post:
+      tags: [Factures]
+      summary: "Envoyer une facture par email"
+      operationId: envoyerFactureEmail
+      parameters:
+        - $ref: "#/components/parameters/FactureId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [destinataire]
+              properties:
+                destinataire:
+                  type: string
+                  format: email
+      responses:
+        "200":
+          description: "Email envoye"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/factures/{facture}/telecharger-pdf:
+    get:
+      tags: [Factures]
+      summary: "Telecharger le PDF d'une facture"
+      operationId: telechargerFacturePdf
+      parameters:
+        - $ref: "#/components/parameters/FactureId"
+      responses:
+        "200":
+          description: "PDF de la facture"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/factures/generer-du-jour:
+    post:
+      tags: [Factures]
+      summary: "Generer les factures du jour"
+      description: "Reserve au proprietaire. Genere automatiquement les factures pour les ventes du jour."
+      operationId: genererFacturesDuJour
+      responses:
+        "200":
+          description: "Factures generees"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  # ──────────────────────────────────────
+  # RETOURS
+  # ──────────────────────────────────────
+  /api/retours:
+    get:
+      tags: [Retours]
+      summary: "Lister les retours"
+      operationId: listRetours
+      responses:
+        "200":
+          description: "Liste des retours"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RetourVente"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Retours]
+      summary: "Creer un retour"
+      description: "Necessite le role gerant ou proprietaire."
+      operationId: createRetour
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [vente_id, lignes]
+              properties:
+                vente_id:
+                  type: integer
+                lignes:
+                  type: array
+                  items:
+                    type: object
+                    required: [produit_id, quantite]
+                    properties:
+                      produit_id:
+                        type: integer
+                      quantite:
+                        type: integer
+                motif:
+                  type: string
+      responses:
+        "201":
+          description: "Retour cree"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/retours/{retour}:
+    get:
+      tags: [Retours]
+      summary: "Obtenir un retour"
+      operationId: getRetour
+      parameters:
+        - $ref: "#/components/parameters/RetourId"
+      responses:
+        "200":
+          description: "Retour"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetourVente"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/retours/{retour}/valider:
+    post:
+      tags: [Retours]
+      summary: "Valider un retour"
+      description: "Necessite le role gerant ou proprietaire."
+      operationId: validerRetour
+      parameters:
+        - $ref: "#/components/parameters/RetourId"
+      responses:
+        "200":
+          description: "Retour valide"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/retours/{retour}/refuser:
+    post:
+      tags: [Retours]
+      summary: "Refuser un retour"
+      description: "Necessite le role gerant ou proprietaire."
+      operationId: refuserRetour
+      parameters:
+        - $ref: "#/components/parameters/RetourId"
+      responses:
+        "200":
+          description: "Retour refuse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ──────────────────────────────────────
+  # INVENTAIRES
+  # ──────────────────────────────────────
+  /api/inventaires:
+    get:
+      tags: [Inventaire]
+      summary: "Lister les inventaires"
+      operationId: listInventaires
+      responses:
+        "200":
+          description: "Liste des inventaires"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Inventaire]
+      summary: "Creer un inventaire"
+      description: "Necessite le role gerant ou proprietaire."
+      operationId: createInventaire
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                notes:
+                  type: string
+                categorie_id:
+                  type: integer
+      responses:
+        "201":
+          description: "Inventaire cree"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/inventaires/{inventaire}:
+    get:
+      tags: [Inventaire]
+      summary: "Obtenir un inventaire"
+      operationId: getInventaire
+      parameters:
+        - $ref: "#/components/parameters/InventaireId"
+      responses:
+        "200":
+          description: "Inventaire"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/inventaires/{inventaire}/compter:
+    post:
+      tags: [Inventaire]
+      summary: "Enregistrer un comptage pour un inventaire"
+      operationId: compterInventaire
+      parameters:
+        - $ref: "#/components/parameters/InventaireId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [produit_id, quantite_reelle]
+              properties:
+                produit_id:
+                  type: integer
+                quantite_reelle:
+                  type: integer
+      responses:
+        "200":
+          description: "Comptage enregistre"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/inventaires/{inventaire}/valider:
+    post:
+      tags: [Inventaire]
+      summary: "Valider un inventaire"
+      operationId: validerInventaire
+      parameters:
+        - $ref: "#/components/parameters/InventaireId"
+      responses:
+        "200":
+          description: "Inventaire valide"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/inventaires/{inventaire}/annuler:
+    post:
+      tags: [Inventaire]
+      summary: "Annuler un inventaire"
+      operationId: annulerInventaire
+      parameters:
+        - $ref: "#/components/parameters/InventaireId"
+      responses:
+        "200":
+          description: "Inventaire annule"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/inventaires/{inventaire}/ecarts:
+    get:
+      tags: [Inventaire]
+      summary: "Voir les ecarts d'un inventaire"
+      operationId: ecartsInventaire
+      parameters:
+        - $ref: "#/components/parameters/InventaireId"
+      responses:
+        "200":
+          description: "Ecarts"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ──────────────────────────────────────
+  # FIDELITE
+  # ──────────────────────────────────────
+  /api/fidelite:
+    get:
+      tags: [Fidelite]
+      summary: "Lister les programmes de fidelite"
+      operationId: listProgrammesFidelite
+      responses:
+        "200":
+          description: "Liste des programmes"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProgrammeFidelite"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Fidelite]
+      summary: "Creer un programme de fidelite"
+      description: "Necessite le role gerant ou proprietaire."
+      operationId: createProgrammeFidelite
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nom, taux_points]
+              properties:
+                nom:
+                  type: string
+                description:
+                  type: string
+                taux_points:
+                  type: number
+                  format: float
+                  description: "Points gagnes par montant depense"
+                points_min_retrait:
+                  type: integer
+      responses:
+        "201":
+          description: "Programme cree"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/fidelite/inscrire-client:
+    post:
+      tags: [Fidelite]
+      summary: "Inscrire un client au programme de fidelite"
+      operationId: inscrireClientFidelite
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [client_id, programme_id]
+              properties:
+                client_id:
+                  type: integer
+                programme_id:
+                  type: integer
+      responses:
+        "200":
+          description: "Client inscrit"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/fidelite/points-client:
+    get:
+      tags: [Fidelite]
+      summary: "Obtenir les points d'un client"
+      operationId: pointsClientFidelite
+      parameters:
+        - name: client_id
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: "Points du client"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  points:
+                    type: integer
+                  historique:
+                    type: array
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/fidelite/recompenses:
+    get:
+      tags: [Fidelite]
+      summary: "Lister les recompenses disponibles"
+      operationId: listRecompensesFidelite
+      responses:
+        "200":
+          description: "Liste des recompenses"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Fidelite]
+      summary: "Creer une recompense"
+      description: "Necessite le role gerant ou proprietaire."
+      operationId: createRecompenseFidelite
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nom, points_requis]
+              properties:
+                nom:
+                  type: string
+                description:
+                  type: string
+                points_requis:
+                  type: integer
+                valeur:
+                  type: number
+                  format: float
+      responses:
+        "201":
+          description: "Recompense creee"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/fidelite/reclamer-recompense:
+    post:
+      tags: [Fidelite]
+      summary: "Reclamer une recompense"
+      operationId: reclamerRecompense
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [client_id, recompense_id]
+              properties:
+                client_id:
+                  type: integer
+                recompense_id:
+                  type: integer
+      responses:
+        "200":
+          description: "Recompense reclamee"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/fidelite/statistiques:
+    get:
+      tags: [Fidelite]
+      summary: "Statistiques du programme de fidelite"
+      operationId: fideliteStatistiques
+      responses:
+        "200":
+          description: "Statistiques"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/fidelite/{programme}:
+    get:
+      tags: [Fidelite]
+      summary: "Obtenir un programme de fidelite"
+      operationId: getProgrammeFidelite
+      parameters:
+        - name: programme
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: "Programme"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProgrammeFidelite"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Fidelite]
+      summary: "Modifier un programme de fidelite"
+      operationId: updateProgrammeFidelite
+      parameters:
+        - name: programme
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nom:
+                  type: string
+                description:
+                  type: string
+                taux_points:
+                  type: number
+                  format: float
+      responses:
+        "200":
+          description: "Programme mis a jour"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Validation"
+    delete:
+      tags: [Fidelite]
+      summary: "Supprimer un programme de fidelite"
+      operationId: deleteProgrammeFidelite
+      parameters:
+        - name: programme
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: "Programme supprime"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ──────────────────────────────────────
+  # NOTIFICATIONS
+  # ──────────────────────────────────────
+  /api/notifications:
+    get:
+      tags: [Notifications]
+      summary: "Lister les notifications"
+      operationId: listNotifications
+      responses:
+        "200":
+          description: "Liste des notifications"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/notifications/unread-count:
+    get:
+      tags: [Notifications]
+      summary: "Nombre de notifications non lues"
+      operationId: notificationsUnreadCount
+      responses:
+        "200":
+          description: "Nombre de non-lues"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/notifications/mark-all-read:
+    post:
+      tags: [Notifications]
+      summary: "Marquer toutes les notifications comme lues"
+      operationId: markAllNotificationsRead
+      responses:
+        "200":
+          description: "Toutes marques comme lues"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/notifications/sync-stock-alerts:
+    post:
+      tags: [Notifications]
+      summary: "Synchroniser les alertes de stock dans les notifications"
+      operationId: syncStockAlertsNotifications
+      responses:
+        "200":
+          description: "Alertes synchronisees"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/notifications/{notification}/read:
+    post:
+      tags: [Notifications]
+      summary: "Marquer une notification comme lue"
+      operationId: readNotification
+      parameters:
+        - name: notification
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: "Notification lue"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ──────────────────────────────────────
+  # NOTIFICATIONS-CHANNELS
+  # ──────────────────────────────────────
+  /api/notification-channels/test-email:
+    post:
+      tags: [Notifications]
+      summary: "Tester l'envoi d'email"
+      operationId: testEmailNotification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [destinataire]
+              properties:
+                destinataire:
+                  type: string
+                  format: email
+      responses:
+        "200":
+          description: "Email teste"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/notification-channels/test-sms:
+    post:
+      tags: [Notifications]
+      summary: "Tester l'envoi de SMS"
+      operationId: testSmsNotification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [destinataire]
+              properties:
+                destinataire:
+                  type: string
+      responses:
+        "200":
+          description: "SMS teste"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/notification-channels/test-multi:
+    post:
+      tags: [Notifications]
+      summary: "Tester l'envoi multi-canal"
+      operationId: testMultiNotification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [destinataire]
+              properties:
+                destinataire:
+                  type: string
+      responses:
+        "200":
+          description: "Notification multi-canale teste"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/notification-channels/preferences:
+    get:
+      tags: [Notifications]
+      summary: "Obtenir les preferences de notification"
+      operationId: getNotificationPreferences
+      responses:
+        "200":
+          description: "Preferences"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    put:
+      tags: [Notifications]
+      summary: "Mettre a jour les preferences de notification"
+      operationId: updateNotificationPreferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email_enabled:
+                  type: boolean
+                sms_enabled:
+                  type: boolean
+                push_enabled:
+                  type: boolean
+      responses:
+        "200":
+          description: "Preferences mises a jour"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  # ──────────────────────────────────────
+  # MESSAGERIE (CHAT)
+  # ──────────────────────────────────────
+  /api/chat/conversations:
+    get:
+      tags: [Messagerie]
+      summary: "Lister les conversations"
+      operationId: listConversations
+      responses:
+        "200":
+          description: "Liste des conversations"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Messagerie]
+      summary: "Creer une conversation"
+      operationId: createConversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [titre]
+              properties:
+                titre:
+                  type: string
+                participants:
+                  type: array
+                  items:
+                    type: integer
+      responses:
+        "201":
+          description: "Conversation creee"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/chat/conversations/{conversation}:
+    get:
+      tags: [Messagerie]
+      summary: "Obtenir une conversation"
+      operationId: getConversation
+      parameters:
+        - name: conversation
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: "Conversation"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Messagerie]
+      summary: "Supprimer une conversation"
+      operationId: deleteConversation
+      parameters:
+        - name: conversation
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: "Conversation supprimee"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/chat/conversations/{conversation}/message:
+    post:
+      tags: [Messagerie]
+      summary: "Envoyer un message"
+      operationId: sendMessage
+      parameters:
+        - name: conversation
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [contenu]
+              properties:
+                contenu:
+                  type: string
+      responses:
+        "201":
+          description: "Message envoye"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/chat/conversations/{conversation}/message/{message}:
+    put:
+      tags: [Messagerie]
+      summary: "Modifier un message"
+      operationId: updateMessage
+      parameters:
+        - name: conversation
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: message
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [contenu]
+              properties:
+                contenu:
+                  type: string
+      responses:
+        "200":
+          description: "Message modifie"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Validation"
+    delete:
+      tags: [Messagerie]
+      summary: "Supprimer un message"
+      operationId: deleteMessage
+      parameters:
+        - name: conversation
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: message
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: "Message supprime"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/chat/conversations/{conversation}/participants:
+    post:
+      tags: [Messagerie]
+      summary: "Ajouter un participant"
+      operationId: addParticipant
+      parameters:
+        - name: conversation
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id]
+              properties:
+                user_id:
+                  type: integer
+      responses:
+        "200":
+          description: "Participant ajoute"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/chat/conversations/{conversation}/participants/{userId}:
+    delete:
+      tags: [Messagerie]
+      summary: "Retirer un participant"
+      operationId: removeParticipant
+      parameters:
+        - name: conversation
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: "Participant retire"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ──────────────────────────────────────
+  # FCM (push notifications)
+  # ──────────────────────────────────────
+  /api/fcm/register:
+    post:
+      tags: [Notifications]
+      summary: "Enregistrer un token FCM"
+      operationId: registerFcmToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+      responses:
+        "200":
+          description: "Token enregistre"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/Validation"
+
+  /api/fcm/unregister:
+    post:
+      tags: [Notifications]
+      summary: "Supprimer un token FCM"
+      operationId: unregisterFcmToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+      responses:
+        "200":
+          description: "Token supprime"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/fcm/my-tokens:
+    get:
+      tags: [Notifications]
+      summary: "Lister mes tokens FCM"
+      operationId: myFcmTokens
+      responses:
+        "200":
+          description: "Liste des tokens"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    token:
+                      type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/fcm/test:
+    post:
+      tags: [Notifications]
+      summary: "Envoyer une notification de test"
+      operationId: testFcmNotification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [titre, message]
+              properties:
+                titre:
+                  type: string
+                message:
+                  type: string
+      responses:
+        "200":
+          description: "Notification envoyee"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ──────────────────────────────────────
+  # ANALYTICS
+  # ──────────────────────────────────────
+  /api/analytics/stats-globales:
+    get:
+      tags: [Analytics]
+      summary: "Statistiques globales"
+      operationId: analyticsStatsGlobales
+      responses:
+        "200":
+          description: "Statistiques globales"
+          content:
+            application/json:
+              schema:
+                type: object
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/analytics/ventes-quotidiennes:
+    get:
+      tags: [Analytics]
+      summary: "Ventes quotidiennes"
+      operationId: analyticsVentesQuotidiennes
+      responses:
+        "200":
+          description: "Ventes quotidiennes"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/analytics/ventes-mensuelles:
+    get:
+      tags: [Analytics]
+      summary: "Ventes mensuelles"
+      operationId: analyticsVentesMensuelles
+      responses:
+        "200":
+          description: "Ventes mensuelles"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/analytics/produits-populaires:
+    get:
+      tags: [Analytics]
+      summary: "Produits les plus populaires"
+      operationId: analyticsProduitsPopulaires
+      responses:
+        "200":
+          description: "Produits populaires"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/analytics/chiffre-affaires:
+    get:
+      tags: [Analytics]
+      summary: "Chiffre d'affaires"
+      operationId: analyticsChiffreAffaires
+      responses:
+        "200":
+          description: "Chiffre d'affaires"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/analytics/repartition-categories:
+    get:
+      tags: [Analytics]
+      summary: "Repartition par categories"
+      operationId: analyticsRepartitionCategories
+      responses:
+        "200":
+          description: "Repartition"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/analytics/export:
+    get:
+      tags: [Analytics]
+      summary: "Exporter les analyses"
+      operationId: analyticsExport
+      responses:
+        "200":
+          description: "Fichier exporte"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/analytics/alertes-stock:
+    get:
+      tags: [Analytics]
+      summary: "Alertes de stock dans les analytics"
+      operationId: analyticsAlertesStock
+      responses:
+        "200":
+          description: "Alertes de stock"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ──────────────────────────────────────
+  # PREDICTIONS (IA)
+  # ──────────────────────────────────────
+  /api/predictions/demande:
+    get:
+      tags: [IA & Previsions]
+      summary: "Previsions de demande"
+      operationId: predictionsDemande
+      responses:
+        "200":
+          description: "Previsions"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/predictions/valider:
+    post:
+      tags: [IA & Previsions]
+      summary: "Valider les predictions"
+      operationId: validerPredictions
+      responses:
+        "200":
+          description: "Predictions validees"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/predictions/metrics-performance:
+    get:
+      tags: [IA & Previsions]
+      summary: "Metriques de performance des predictions"
+      operationId: predictionsMetricsPerformance
+      responses:
+        "200":
+          description: "Metriques"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/predictions/recommandations-promotions:
+    get:
+      tags: [IA & Previsions]
+      summary: "Recommandations de promotions"
+      operationId: predictionsRecommandationsPromotions
+      responses:
+        "200":
+          description: "Recommandations"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/predictions/reapprovisionnement:
+    get:
+      tags: [IA & Previsions]
+      summary: "Predictions de reapprovisionnement"
+      operationId: predictionsReapprovisionnement
+      responses:
+        "200":
+          description: "Predictions de reapprovisionnement"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/predictions/cross-selling:
+    post:
+      tags: [IA & Previsions]
+      summary: "Recommandations cross-selling"
+      operationId: predictionsCrossSelling
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [produit_id]
+              properties:
+                produit_id:
+                  type: integer
+      responses:
+        "200":
+          description: "Recommandations"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ──────────────────────────────────────
+  # IA
+  # ──────────────────────────────────────
+  /api/ia/predictions-demande:
+    get:
+      tags: [IA & Previsions]
+      summary: "Predictions de demande (IA)"
+      operationId: iaPredictionsDemande
+      responses:
+        "200":
+          description: "Predictions"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/ia/recommandations-promotions:
+    get:
+      tags: [IA & Previsions]
+      summary: "Recommandations de promotions (IA)"
+      operationId: iaRecommandationsPromotions
+      responses:
+        "200":
+          description: "Recommandations"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/ia/metrics-performance:
+    get:
+      tags: [IA & Previsions]
+      summary: "Metriques de performance IA"
+      operationId: iaMetricsPerformance
+      responses:
+        "200":
+          description: "Metriques"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/ia/entrainer-modele:
+    post:
+      tags: [IA & Previsions]
+      summary: "Lancer l'entrainement du modele IA"
+      operationId: iaEntrainerModele
+      responses:
+        "200":
+          description: "Entrainement lance"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/ia/recalculer-analyses:
+    post:
+      tags: [IA & Previsions]
+      summary: "Recalculer les analyses IA"
+      operationId: iaRecalculerAnalyses
+      responses:
+        "200":
+          description: "Analyses recalculees"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ──────────────────────────────────────
+  # AUDIT-LOGS
+  # ──────────────────────────────────────
+  /api/audit-logs:
+    get:
+      tags: [Audit]
+      summary: "Lister les journaux d'audit"
+      description: "Necessite le role gerant ou proprietaire."
+      operationId: listAuditLogs
+      responses:
+        "200":
+          description: "Liste des journaux"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/audit-logs/stats:
+    get:
+      tags: [Audit]
+      summary: "Statistiques des journaux d'audit"
+      description: "Necessite le role gerant ou proprietaire."
+      operationId: auditLogsStats
+      responses:
+        "200":
+          description: "Statistiques"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/audit-logs/export:
+    get:
+      tags: [Audit]
+      summary: "Exporter les journaux d'audit"
+      description: "Necessite le role gerant ou proprietaire."
+      operationId: exportAuditLogs
+      responses:
+        "200":
+          description: "Fichier exporte"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/audit-logs/{id}:
+    get:
+      tags: [Audit]
+      summary: "Obtenir un journal d'audit"
+      description: "Necessite le role gerant ou proprietaire."
+      operationId: getAuditLog
+      parameters:
+        - $ref: "#/components/parameters/AuditLogId"
+      responses:
+        "200":
+          description: "Journal d'audit"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+# ══════════════════════════════════════
+# COMPONENTS
+# ══════════════════════════════════════
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    BoutiqueId:
+      name: boutique
+      in: path
+      required: true
+      schema:
+        type: integer
+      description: "ID de la boutique"
+    UserId:
+      name: user
+      in: path
+      required: true
+      schema:
+        type: integer
+      description: "ID de l'utilisateur"
+    ProduitId:
+      name: produit
+      in: path
+      required: true
+      schema:
+        type: integer
+      description: "ID du produit"
+    CategorieId:
+      name: categorie
+      in: path
+      required: true
+      schema:
+        type: integer
+      description: "ID de la categorie"
+    VenteId:
+      name: vente
+      in: path
+      required: true
+      schema:
+        type: integer
+      description: "ID de la vente"
+    ClientId:
+      name: client
+      in: path
+      required: true
+      schema:
+        type: integer
+      description: "ID du client"
+    FournisseurId:
+      name: fournisseur
+      in: path
+      required: true
+      schema:
+        type: integer
+      description: "ID du fournisseur"
+    CommandeId:
+      name: commande
+      in: path
+      required: true
+      schema:
+        type: integer
+      description: "ID de la commande"
+    DevisId:
+      name: devis
+      in: path
+      required: true
+      schema:
+        type: integer
+      description: "ID du devis"
+    FactureId:
+      name: facture
+      in: path
+      required: true
+      schema:
+        type: integer
+      description: "ID de la facture"
+    RetourId:
+      name: retour
+      in: path
+      required: true
+      schema:
+        type: integer
+      description: "ID du retour"
+    InventaireId:
+      name: inventaire
+      in: path
+      required: true
+      schema:
+        type: integer
+      description: "ID de l'inventaire"
+    AuditLogId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+      description: "ID du journal d'audit"
+
+  responses:
+    Unauthorized:
+      description: "Non authentifie"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            message: "Unauthenticated."
+    Forbidden:
+      description: "Role insuffisant"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            message: "Forbidden."
+    NotFound:
+      description: "Ressource non trouvee (ou appartient a une autre boutique)"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            message: "Not found."
+    Validation:
+      description: "Erreur de validation"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error422"
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+
+    Error422:
+      type: object
+      properties:
+        message:
+          type: string
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        role:
+          type: string
+          enum: [proprietaire, gerant, caissier]
+        current_boutique_id:
+          type: integer
+        two_factor_enabled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    Boutique:
+      type: object
+      properties:
+        id:
+          type: integer
+        nom:
+          type: string
+        address:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    Produit:
+      type: object
+      properties:
+        id:
+          type: integer
+        nom:
+          type: string
+        description:
+          type: string
+        code_barres:
+          type: string
+        prix_vente:
+          type: number
+          format: float
+        prix_achat:
+          type: number
+          format: float
+        quantite_stock:
+          type: integer
+        stock_min:
+          type: integer
+        image:
+          type: string
+        categorie_id:
+          type: integer
+        boutique_id:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    Vente:
+      type: object
+      properties:
+        id:
+          type: integer
+        client_id:
+          type: integer
+        user_id:
+          type: integer
+        boutique_id:
+          type: integer
+        montant_total:
+          type: number
+          format: float
+        mode_paiement:
+          type: string
+        statut:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    Client:
+      type: object
+      properties:
+        id:
+          type: integer
+        nom:
+          type: string
+        prenom:
+          type: string
+        email:
+          type: string
+          format: email
+        telephone:
+          type: string
+        adresse:
+          type: string
+        is_vip:
+          type: boolean
+        boutique_id:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    Fournisseur:
+      type: object
+      properties:
+        id:
+          type: integer
+        nom:
+          type: string
+        contact_nom:
+          type: string
+        email:
+          type: string
+        telephone:
+          type: string
+        adresse:
+          type: string
+        boutique_id:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    CommandeFournisseur:
+      type: object
+      properties:
+        id:
+          type: integer
+        fournisseur_id:
+          type: integer
+        boutique_id:
+          type: integer
+        statut:
+          type: string
+        montant_total:
+          type: number
+          format: float
+        date_livraison_prevue:
+          type: string
+          format: date
+        notes:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    RetourVente:
+      type: object
+      properties:
+        id:
+          type: integer
+        vente_id:
+          type: integer
+        boutique_id:
+          type: integer
+        motif:
+          type: string
+        statut:
+          type: string
+        montant_total:
+          type: number
+          format: float
+        created_at:
+          type: string
+          format: date-time
+
+    Devis:
+      type: object
+      properties:
+        id:
+          type: integer
+        client_id:
+          type: integer
+        boutique_id:
+          type: integer
+        statut:
+          type: string
+        montant_total:
+          type: number
+          format: float
+        date_validite:
+          type: string
+          format: date
+        notes:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    Facture:
+      type: object
+      properties:
+        id:
+          type: integer
+        numero:
+          type: string
+        boutique_id:
+          type: integer
+        montant_total:
+          type: number
+          format: float
+        statut:
+          type: string
+        source_type:
+          type: string
+        source_id:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    TransfertStock:
+      type: object
+      properties:
+        id:
+          type: integer
+        produit_id:
+          type: integer
+        boutique_source_id:
+          type: integer
+        boutique_destination_id:
+          type: integer
+        quantite:
+          type: integer
+        statut:
+          type: string
+        motif:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    ProgrammeFidelite:
+      type: object
+      properties:
+        id:
+          type: integer
+        nom:
+          type: string
+        description:
+          type: string
+        taux_points:
+          type: number
+          format: float
+        points_min_retrait:
+          type: integer
+        boutique_id:
+          type: integer
+        actif:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time

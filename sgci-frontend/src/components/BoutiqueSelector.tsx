@@ -1,14 +1,29 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Boutique } from '@/types';
-import { Store, ChevronDown } from 'lucide-react';
+import { Store, ChevronDown, Loader2 } from 'lucide-react';
 
 export function BoutiqueSelector() {
   const { user, switchBoutique } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
 
   // Only show when the user has access to multiple boutiques
   if (!user || !user.boutiques || user.boutiques.length <= 1) {
@@ -19,25 +34,31 @@ export function BoutiqueSelector() {
   const boutiques = user.boutiques || [];
 
   const handleSwitchBoutique = async (boutiqueId: number) => {
+    if (boutiqueId === currentBoutique?.id) return;
     setIsLoading(true);
+    setIsOpen(false);
     try {
       await switchBoutique(boutiqueId);
-      setIsOpen(false);
+      // Recharger la page pour repartir sur un état propre avec la nouvelle boutique.
+      window.location.reload();
     } catch (error) {
       console.error('Erreur lors du changement de boutique:', error);
-    } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="relative">
+    <div className="relative" ref={containerRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
         disabled={isLoading}
         className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
       >
-        <Store className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+        {isLoading ? (
+          <Loader2 className="w-4 h-4 text-blue-600 dark:text-blue-400 animate-spin" />
+        ) : (
+          <Store className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+        )}
         <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
           {currentBoutique?.nom || 'Sélectionner une boutique'}
         </span>

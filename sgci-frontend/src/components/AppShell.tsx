@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useState } from 'react';
 import {
   BarChart3,
   Brain,
@@ -26,6 +27,8 @@ import {
   Award,
   PackagePlus,
   Smartphone,
+  Menu,
+  X,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { NotificationBell } from '@/components/NotificationBell';
@@ -60,14 +63,21 @@ const NAV = [
   { href: '/parametres/audit-logs', label: 'Journal d\'audit', icon: ScrollText, role: 'gerant' },
 ];
 
+type RoleCourant = 'proprietaire' | 'gerant' | 'caissier' | undefined;
+
+function isNavVisible(item: (typeof NAV)[number], roleCourant: RoleCourant): boolean {
+  if (item.role === 'proprietaire' && roleCourant !== 'proprietaire') return false;
+  if (item.role === 'gerant' && roleCourant !== 'gerant' && roleCourant !== 'proprietaire') return false;
+  return true;
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
-  const roleCourant = (user?.role_courant || user?.role) as
-    | 'proprietaire'
-    | 'gerant'
-    | 'caissier'
-    | undefined;
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const roleCourant = (user?.role_courant || user?.role) as RoleCourant;
+
+  const navItems = NAV.filter((item) => isNavVisible(item, roleCourant));
 
   return (
     <div className="min-h-screen flex bg-background text-foreground">
@@ -86,15 +96,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-          {NAV.map((item) => {
-            // Masquer les items réservés aux propriétaires si le rôle courant n'est pas propriétaire
-            if (item.role === 'proprietaire' && roleCourant !== 'proprietaire') {
-              return null;
-            }
-            if (item.role === 'gerant' && roleCourant !== 'gerant' && roleCourant !== 'proprietaire') {
-              return null;
-            }
-
+          {navItems.map((item) => {
             const active = pathname === item.href || pathname.startsWith(item.href + '/');
             const Icon = item.icon;
             return (
@@ -118,7 +120,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-14 border-b border-border flex items-center justify-between px-4 lg:px-6 bg-card/60 backdrop-blur sticky top-0 z-40">
-          <p className="text-sm font-medium text-muted-foreground lg:hidden">SGCI Bénin</p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setMobileOpen(true)}
+              className="lg:hidden inline-flex items-center justify-center w-10 h-10 rounded-lg text-muted-foreground hover:bg-muted transition-colors"
+              title="Menu"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <p className="text-sm font-medium text-muted-foreground">SGCI Bénin</p>
+          </div>
           <div className="flex items-center gap-2 ml-auto">
             <BoutiqueSelector />
             <ThemeToggle />
@@ -136,6 +147,69 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </header>
         <main className="flex-1 overflow-auto">{children}</main>
       </div>
+
+      {/* Navigation mobile (drawer) */}
+      {mobileOpen && (
+        <div className="lg:hidden fixed inset-0 z-50">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setMobileOpen(false)}
+          />
+          <aside className="absolute left-0 top-0 bottom-0 w-72 flex flex-col bg-card border-r border-border shadow-xl">
+            <div className="p-6 border-b border-border flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 flex items-center justify-center">
+                  <Store className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <p className="font-bold text-sm">SGCI Bénin</p>
+                  <p className="text-xs text-muted-foreground capitalize">
+                    {roleCourant}{user?.current_boutique?.nom ? ` · ${user.current_boutique.nom}` : ''}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setMobileOpen(false)}
+                className="inline-flex items-center justify-center w-9 h-9 rounded-lg text-muted-foreground hover:bg-muted transition-colors"
+                title="Fermer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+              {navItems.map((item) => {
+                const active = pathname === item.href || pathname.startsWith(item.href + '/');
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMobileOpen(false)}
+                    className={cn(
+                      'flex items-center gap-3 px-4 py-3 rounded-xl text-sm transition-colors',
+                      active
+                        ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white'
+                        : 'text-muted-foreground hover:bg-muted'
+                    )}
+                  >
+                    <Icon className="w-4 h-4" />
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </nav>
+            <div className="p-4 border-t border-border">
+              <button
+                onClick={() => logout()}
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-medium text-red-600 dark:text-red-400 border border-border hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+                Se déconnecter
+              </button>
+            </div>
+          </aside>
+        </div>
+      )}
     </div>
   );
 }

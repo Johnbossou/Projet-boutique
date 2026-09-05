@@ -163,4 +163,78 @@ class MultiTenantTest extends TestCase
         $this->deleteJson("/api/categories/{$categorieB->id}")->assertNotFound();
         $this->getJson("/api/categories/{$categorieB->id}/produits")->assertNotFound();
     }
+
+    public function test_switch_boutique_via_api_change_la_boutique_courante(): void
+    {
+        $proprietaire = User::where('email', 'proprio@sgci.bj')->firstOrFail();
+
+        // Le propriétaire possède les deux boutiques => accès aux deux.
+        Sanctum::actingAs($proprietaire);
+
+        $this->postJson('/api/switch-boutique', ['boutique_id' => $this->boutiqueB->id])
+            ->assertOk()
+            ->assertJsonPath('current_boutique_id', $this->boutiqueB->id);
+
+        $this->assertSame(
+            $this->boutiqueB->id,
+            $proprietaire->fresh()->current_boutique_id
+        );
+
+        // Retour vers la boutique A.
+        $this->postJson('/api/switch-boutique', ['boutique_id' => $this->boutiqueA->id])
+            ->assertOk()
+            ->assertJsonPath('current_boutique_id', $this->boutiqueA->id);
+    }
+
+    public function test_switch_boutique_refuse_une_boutique_non_accessible(): void
+    {
+        Sanctum::actingAs($this->gerantA);
+
+        // Le gérant A n'est rattaché qu'à la boutique A => boutique B interdite.
+        $this->postJson('/api/switch-boutique', ['boutique_id' => $this->boutiqueB->id])
+            ->assertStatus(403);
+
+        $this->assertSame(
+            $this->boutiqueA->id,
+            $this->gerantA->fresh()->current_boutique_id
+        );
+    }
+
+    public function test_switch_boutique_apres_bascule_les_donnees_sont_scopees(): void
+    {
+        $proprietaire = User::where('email', 'proprio@sgci.bj')->firstOrFail();
+        Sanctum::actingAs($proprietaire);
+
+        $this->createProduitDans($this->boutiqueA, 'SWA');
+        $this->createProduitDans($this->boutiqueB, 'SWB');
+
+        // Sur la boutique A, on ne voit que le produit A.
+        $this->postJson('/api/switch-boutique', ['boutique_id' => $this->boutiqueA->id]);
+        $idsA = collect($this->getJson('/api/produits')->json('data'))->pluck('id');
+        $this->assertCount(1, $idsA);
+        $this->assertSame(
+            Produit::where('boutique_id', $this->boutiqueA->id)->value('id'),
+            $idsA->first()
+        );
+
+        // Après bascule vers la boutique B, on ne voit que le produit B.
+        $this->postJson('/api/switch-boutique', ['boutique_id' => $this->boutiqueB->id]);
+        $idsB = collect($this->getJson('/api/produits')->json('data'))->pluck('id');
+        $this->assertCount(1, $idsB);
+        $this->assertSame(
+            Produit::where('boutique_id', $this->boutiqueB->id)->value('id'),
+            $idsB->first()
+        );
+    }
+
+    public function test_switch_boutique_validation_boutique_inexistante(): void
+    {
+        Sanctum::actingAs($this->gerantA);
+
+        $this->postJson('/api/switch-boutique', ['boutique_id' => 999999])
+            ->assertStatus(422);
+
+        $this->postJson('/api/switch-boutique', [])
+            ->assertStatus(422);
+    }
 }
