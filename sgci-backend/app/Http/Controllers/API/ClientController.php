@@ -12,6 +12,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log; // ✅ AJOUT DE L'IMPORT
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 class ClientController extends Controller
 {
@@ -106,7 +107,14 @@ class ClientController extends Controller
         try {
             $validator = Validator::make($request->all(), [
                 'nom' => 'required|string|max:255',
-                'email' => 'required|email|unique:clients,email',
+                'email' => [
+                    'required',
+                    'email',
+                    Rule::unique('clients', 'email')->where(
+                        'boutique_id',
+                        $request->user()->current_boutique_id
+                    ),
+                ],
                 'telephone' => 'nullable|string|max:20',
                 'adresse' => 'nullable|string|max:500',
                 'ville' => 'nullable|string|max:100',
@@ -232,7 +240,13 @@ class ClientController extends Controller
         try {
             $validator = Validator::make($request->all(), [
                 'nom' => 'sometimes|string|max:255',
-                'email' => 'sometimes|email|unique:clients,email,' . $client->id,
+                'email' => [
+                    'sometimes',
+                    'email',
+                    Rule::unique('clients', 'email')
+                        ->ignore($client->id)
+                        ->where('boutique_id', $request->user()->current_boutique_id),
+                ],
                 'telephone' => 'nullable|string|max:20',
                 'adresse' => 'nullable|string|max:500',
                 'ville' => 'nullable|string|max:100',
