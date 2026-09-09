@@ -1003,7 +1003,7 @@ export default function CaissePage() {
       </header>
 
       {/* Main Content - Layout Gaming */}
-      <main className="p-6 grid grid-cols-1 xl:grid-cols-3 gap-6 h-[calc(100vh-80px)]">
+      <main className="p-3 sm:p-6 grid grid-cols-1 xl:grid-cols-3 gap-3 sm:gap-6 h-[calc(100vh-80px)]">
         
         {/* Colonne Gauche - Liste des Produits */}
         <div className="xl:col-span-2 space-y-6">

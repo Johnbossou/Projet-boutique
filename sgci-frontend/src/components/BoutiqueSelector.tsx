@@ -52,14 +52,14 @@ export function BoutiqueSelector() {
       <button
         onClick={() => setIsOpen(!isOpen)}
         disabled={isLoading}
-        className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+        className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
       >
         {isLoading ? (
           <Loader2 className="w-4 h-4 text-blue-600 dark:text-blue-400 animate-spin" />
         ) : (
           <Store className="w-4 h-4 text-blue-600 dark:text-blue-400" />
         )}
-        <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+        <span className="hidden sm:inline text-sm font-medium text-gray-700 dark:text-gray-200 max-w-[140px] truncate">
           {currentBoutique?.nom || 'Sélectionner une boutique'}
         </span>
         <ChevronDown className="w-4 h-4 text-gray-500" />

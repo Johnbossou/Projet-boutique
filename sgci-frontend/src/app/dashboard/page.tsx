@@ -258,18 +258,18 @@ export default function Dashboard() {
             animate={{ y: 0, opacity: 1 }}
             className="mb-8"
           >
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mb-2">
                   Bonjour, {user.name} 👋
                 </h1>
-                <p className="text-slate-600 dark:text-slate-400">
+                <p className="text-sm sm:text-base text-slate-600 dark:text-slate-400">
                   {isLoading ? 'Chargement des données en temps réel...' : 'Voici les performances de votre business'}
                 </p>
               </div>
               
-              <div className="flex items-center space-x-4">
-                <div className="flex items-center space-x-2 text-sm text-slate-500 dark:text-slate-400">
+              <div className="flex items-center space-x-3 sm:space-x-4">
+                <div className="hidden sm:flex items-center space-x-2 text-sm text-slate-500 dark:text-slate-400">
                   <Zap className="w-4 h-4 text-green-500" />
                   <span>Données en temps réel</span>
                 </div>

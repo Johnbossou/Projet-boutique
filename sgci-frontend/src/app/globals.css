@@ -119,3 +119,13 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Empêche le zoom auto d'iOS lors de la saisie dans un champ
+   (règle : font-size < 16px déclenche le zoom) */
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}

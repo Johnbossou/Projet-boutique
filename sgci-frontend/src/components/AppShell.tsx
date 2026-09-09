@@ -80,7 +80,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const navItems = NAV.filter((item) => isNavVisible(item, roleCourant));
 
   return (
-    <div className="min-h-screen flex bg-background text-foreground">
+    <div className="min-h-screen flex bg-background text-foreground overflow-x-clip">
       <aside className="hidden lg:flex w-64 flex-col border-r border-border bg-card/80">
         <div className="p-6 border-b border-border">
           <div className="flex items-center gap-3">
@@ -119,18 +119,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-14 border-b border-border flex items-center justify-between px-4 lg:px-6 bg-card/60 backdrop-blur sticky top-0 z-40">
-          <div className="flex items-center gap-2">
+        <header className="h-14 border-b border-border flex items-center justify-between gap-2 px-3 sm:px-4 lg:px-6 bg-card/60 backdrop-blur sticky top-0 z-40">
+          <div className="flex items-center gap-2 min-w-0">
             <button
               onClick={() => setMobileOpen(true)}
-              className="lg:hidden inline-flex items-center justify-center w-10 h-10 rounded-lg text-muted-foreground hover:bg-muted transition-colors"
+              className="lg:hidden inline-flex items-center justify-center w-10 h-10 shrink-0 rounded-lg text-muted-foreground hover:bg-muted transition-colors"
               title="Menu"
             >
               <Menu className="w-5 h-5" />
             </button>
-            <p className="text-sm font-medium text-muted-foreground">SGCI Bénin</p>
+            <p className="hidden sm:block text-sm font-medium text-muted-foreground">SGCI Bénin</p>
           </div>
-          <div className="flex items-center gap-2 ml-auto">
+          <div className="flex items-center gap-1 sm:gap-2 ml-auto shrink-0 min-w-0">
             <BoutiqueSelector />
             <ThemeToggle />
             <NotificationBell />
