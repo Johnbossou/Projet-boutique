@@ -1,4 +1,4 @@
-import { BlurView } from "expo-blur";
+﻿import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -50,7 +50,7 @@ export default function ResetPasswordScreen() {
         toValue: 1,
         duration: 1000,
         easing: Easing.linear,
-        useNativeDriver: true,
+        useNativeDriver: false,
       })
     );
     spin.start();
@@ -62,19 +62,19 @@ export default function ResetPasswordScreen() {
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 700,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
       Animated.timing(scaleAnim, {
         toValue: 1,
         duration: 700,
         easing: Easing.out(Easing.back(1.7)),
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
       Animated.timing(slideRightAnim, {
         toValue: 0,
         duration: 700,
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
     ]).start();
   }, []);
@@ -88,11 +88,11 @@ export default function ResetPasswordScreen() {
     if (isLoading) return;
 
     if (!formData.token.trim()) {
-      Alert.alert("Champs requis", "Veuillez entrer le token de réinitialisation.");
+      Alert.alert("Champs requis", "Veuillez entrer le token de rÃ©initialisation.");
       return;
     }
     if (formData.password.length < 8) {
-      Alert.alert("Mot de passe trop court", "Le mot de passe doit contenir au moins 8 caractères.");
+      Alert.alert("Mot de passe trop court", "Le mot de passe doit contenir au moins 8 caractÃ¨res.");
       return;
     }
     if (formData.password !== formData.password_confirmation) {
@@ -113,18 +113,18 @@ export default function ResetPasswordScreen() {
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        Alert.alert("Succès", data.message || "Mot de passe réinitialisé avec succès.", [
+        Alert.alert("SuccÃ¨s", data.message || "Mot de passe rÃ©initialisÃ© avec succÃ¨s.", [
           { text: "OK", onPress: () => router.replace("/(auth)/login") },
         ]);
       } else {
         if (res.status === 422 && data.errors) {
-          Alert.alert("Erreur", (Object.values(data.errors)[0] as string[])[0] || "Données invalides.");
+          Alert.alert("Erreur", (Object.values(data.errors)[0] as string[])[0] || "DonnÃ©es invalides.");
         } else {
           Alert.alert("Erreur", data.message || "Une erreur est survenue.");
         }
       }
     } catch {
-      Alert.alert("Erreur", "Erreur réseau. Vérifiez votre connexion.");
+      Alert.alert("Erreur", "Erreur rÃ©seau. VÃ©rifiez votre connexion.");
     } finally {
       setIsLoading(false);
     }
@@ -195,14 +195,14 @@ export default function ResetPasswordScreen() {
                   </Animated.View>
                   <Text style={styles.formTitle}>Nouveau mot de passe</Text>
                   <Text style={styles.formSubtitle}>
-                    Choisissez un mot de passe sécurisé
+                    Choisissez un mot de passe sÃ©curisÃ©
                   </Text>
                 </View>
 
                 <View style={styles.formContent}>
                   {/* Token */}
                   <View style={styles.inputContainer}>
-                    <Text style={styles.inputLabel}>Token de réinitialisation</Text>
+                    <Text style={styles.inputLabel}>Token de rÃ©initialisation</Text>
                     <View style={styles.inputWrapper}>
                       <TextInput
                         style={styles.input}
@@ -224,7 +224,7 @@ export default function ResetPasswordScreen() {
                     <View style={styles.inputWrapper}>
                       <TextInput
                         style={[styles.input, styles.passwordInput]}
-                        placeholder="8 caractères min"
+                        placeholder="8 caractÃ¨res min"
                         placeholderTextColor="#94a3b8"
                         value={formData.password}
                         onChangeText={(text) =>
@@ -256,7 +256,7 @@ export default function ResetPasswordScreen() {
                     <View style={styles.inputWrapper}>
                       <TextInput
                         style={[styles.input, styles.passwordInput]}
-                        placeholder="8 caractères min"
+                        placeholder="8 caractÃ¨res min"
                         placeholderTextColor="#94a3b8"
                         value={formData.password_confirmation}
                         onChangeText={(text) =>
@@ -322,14 +322,14 @@ export default function ResetPasswordScreen() {
                             ]}
                           />
                           <Text style={styles.buttonText}>
-                            Réinitialisation...
+                            RÃ©initialisation...
                           </Text>
                         </View>
                       ) : (
                         <View style={styles.buttonContent}>
                           <CheckCircle2 size={20} color="#ffffff" />
                           <Text style={styles.buttonText}>
-                            Réinitialiser le mot de passe
+                            RÃ©initialiser le mot de passe
                           </Text>
                         </View>
                       )}
@@ -345,13 +345,13 @@ export default function ResetPasswordScreen() {
               disabled={isLoading}
             >
               <ChevronLeft size={16} color="#f97316" />
-              <Text style={styles.backLinkText}>Retour à la </Text>
+              <Text style={styles.backLinkText}>Retour Ã  la </Text>
               <Text style={styles.backLinkStrong}>connexion</Text>
             </TouchableOpacity>
 
             <View style={styles.footer}>
               <Text style={styles.footerText}>
-                © 2025 SGCI Bénin - Système Premium
+                Â© 2025 SGCI BÃ©nin - SystÃ¨me Premium
               </Text>
             </View>
           </Animated.View>
@@ -540,3 +540,4 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 });
+

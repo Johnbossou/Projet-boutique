@@ -1,4 +1,4 @@
-import { BlurView } from "expo-blur";
+﻿import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -40,7 +40,7 @@ export default function ForgotPasswordScreen() {
         toValue: 1,
         duration: 1000,
         easing: Easing.linear,
-        useNativeDriver: true,
+        useNativeDriver: false,
       })
     );
     spin.start();
@@ -52,19 +52,19 @@ export default function ForgotPasswordScreen() {
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 700,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
       Animated.timing(scaleAnim, {
         toValue: 1,
         duration: 700,
         easing: Easing.out(Easing.back(1.7)),
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
       Animated.timing(slideRightAnim, {
         toValue: 0,
         duration: 700,
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
     ]).start();
   }, []);
@@ -90,9 +90,9 @@ export default function ForgotPasswordScreen() {
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
         Alert.alert(
-          "Email envoyé",
+          "Email envoyÃ©",
           data.message ||
-            "Si cet email existe, un lien de réinitialisation a été envoyé.",
+            "Si cet email existe, un lien de rÃ©initialisation a Ã©tÃ© envoyÃ©.",
           [{ text: "OK", onPress: () => router.replace("/(auth)/login") }]
         );
         setFormData({ email: "" });
@@ -106,7 +106,7 @@ export default function ForgotPasswordScreen() {
         );
       }
     } catch {
-      Alert.alert("Erreur", "Erreur réseau. Vérifiez votre connexion.");
+      Alert.alert("Erreur", "Erreur rÃ©seau. VÃ©rifiez votre connexion.");
     } finally {
       setIsLoading(false);
     }
@@ -175,9 +175,9 @@ export default function ForgotPasswordScreen() {
                       <KeyRound size={28} color="#ffffff" />
                     </LinearGradient>
                   </Animated.View>
-                  <Text style={styles.formTitle}>Mot de passe oublié</Text>
+                  <Text style={styles.formTitle}>Mot de passe oubliÃ©</Text>
                   <Text style={styles.formSubtitle}>
-                    Entrez votre email pour recevoir un lien de réinitialisation
+                    Entrez votre email pour recevoir un lien de rÃ©initialisation
                   </Text>
                 </View>
 
@@ -263,13 +263,13 @@ export default function ForgotPasswordScreen() {
               disabled={isLoading}
             >
               <ChevronLeft size={16} color="#f97316" />
-              <Text style={styles.backLinkText}>Retour à la </Text>
+              <Text style={styles.backLinkText}>Retour Ã  la </Text>
               <Text style={styles.backLinkStrong}>connexion</Text>
             </TouchableOpacity>
 
             <View style={styles.footer}>
               <Text style={styles.footerText}>
-                © 2025 SGCI Bénin - Système Premium
+                Â© 2025 SGCI BÃ©nin - SystÃ¨me Premium
               </Text>
             </View>
           </Animated.View>
@@ -446,3 +446,4 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 });
+

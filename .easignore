@@ -1,0 +1,11 @@
+# Fichier lu par EAS Build (mobile) — permet d'archiver uniquement l'app mobile
+# et d'éviter d'envoyer les autres projets du monorepo.
+
+# Autres projets du monorepo (hors archive mobile)
+sgci-backend/
+sgci-frontend/
+
+# Artefacts Redundant
+node_modules/
+*.log
+.git/

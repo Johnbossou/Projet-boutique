@@ -1,4 +1,4 @@
-import { BlurView } from "expo-blur";
+﻿import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import {
@@ -55,7 +55,7 @@ export default function LoginScreen() {
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
-  // Particules animées
+  // Particules animÃ©es
   const particles = Array.from({ length: 15 }, (_, i) => ({
     id: i,
     left: useRef(new Animated.Value(Math.random() * width)).current,
@@ -65,30 +65,30 @@ export default function LoginScreen() {
   }));
 
   useEffect(() => {
-    // Animation d'entrée
+    // Animation d'entrÃ©e
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 800,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
       Animated.timing(slideLeftAnim, {
         toValue: 0,
         duration: 800,
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
       Animated.timing(slideRightAnim, {
         toValue: 0,
         duration: 800,
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
       Animated.spring(scaleAnim, {
         toValue: 1,
         tension: 50,
         friction: 7,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
     ]).start();
 
@@ -98,7 +98,7 @@ export default function LoginScreen() {
         toValue: 1,
         duration: 20000,
         easing: Easing.linear,
-        useNativeDriver: true,
+        useNativeDriver: false,
       })
     ).start();
 
@@ -109,13 +109,13 @@ export default function LoginScreen() {
           toValue: 1.1,
           duration: 2000,
           easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
         Animated.timing(pulseAnim, {
           toValue: 1,
           duration: 2000,
           easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
       ])
     ).start();
@@ -140,12 +140,12 @@ export default function LoginScreen() {
             Animated.timing(particle.opacity, {
               toValue: 0.5,
               duration: Math.random() * 2000 + 1000,
-              useNativeDriver: true,
+              useNativeDriver: false,
             }),
             Animated.timing(particle.opacity, {
               toValue: 0.1,
               duration: Math.random() * 2000 + 1000,
-              useNativeDriver: true,
+              useNativeDriver: false,
             }),
           ]),
         ])
@@ -164,7 +164,7 @@ export default function LoginScreen() {
       const result = await login(formData.email, formData.password, twoFactorCode || undefined);
       if ("requiresTwoFactor" in result) {
         setTwoFactorRequired(true);
-        Alert.alert("Code 2FA requis", "Entrez le code à 6 chiffres de votre application d'authentification.");
+        Alert.alert("Code 2FA requis", "Entrez le code Ã  6 chiffres de votre application d'authentification.");
       } else if (!result.success) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         Alert.alert("Erreur", result.message);
@@ -216,9 +216,9 @@ export default function LoginScreen() {
                 >
                   <Store size={32} color="#ffffff" />
                 </LinearGradient>
-                <Text style={styles.boutiqueSelectionTitle}>Sélectionnez votre boutique</Text>
+                <Text style={styles.boutiqueSelectionTitle}>SÃ©lectionnez votre boutique</Text>
                 <Text style={styles.boutiqueSelectionSubtitle}>
-                  Vous avez accès à {user.boutiques.length} boutique(s)
+                  Vous avez accÃ¨s Ã  {user.boutiques.length} boutique(s)
                 </Text>
               </View>
 
@@ -242,7 +242,7 @@ export default function LoginScreen() {
                     <View style={styles.boutiqueListItemInfo}>
                       <Text style={styles.boutiqueListItemName}>{boutique.nom}</Text>
                       <Text style={styles.boutiqueListItemAddress}>
-                        {boutique.adresse || 'Adresse non renseignée'}
+                        {boutique.adresse || 'Adresse non renseignÃ©e'}
                       </Text>
                     </View>
                     {boutique.id === user.current_boutique_id && (
@@ -268,7 +268,7 @@ export default function LoginScreen() {
         style={StyleSheet.absoluteFill}
       />
 
-      {/* Effets de lumière animés */}
+      {/* Effets de lumiÃ¨re animÃ©s */}
       <Animated.View
         style={[
           styles.lightEffect1,
@@ -302,7 +302,7 @@ export default function LoginScreen() {
         ]}
       />
 
-      {/* Particules animées */}
+      {/* Particules animÃ©es */}
       {particles.map((particle) => (
         <Animated.View
           key={particle.id}
@@ -328,7 +328,7 @@ export default function LoginScreen() {
           contentContainerStyle={styles.scrollContainer}
           showsVerticalScrollIndicator={false}
         >
-          {/* Section présentation (masquée sur mobile sauf tablette) */}
+          {/* Section prÃ©sentation (masquÃ©e sur mobile sauf tablette) */}
           {width > 768 && (
             <Animated.View
               style={[
@@ -360,8 +360,8 @@ export default function LoginScreen() {
                   </LinearGradient>
                 </Animated.View>
                 <View style={styles.titleContainer}>
-                  <Text style={styles.mainTitle}>SGCI BÉNIN</Text>
-                  <Text style={styles.subTitle}>Édition Premium</Text>
+                  <Text style={styles.mainTitle}>SGCI BÃ‰NIN</Text>
+                  <Text style={styles.subTitle}>Ã‰dition Premium</Text>
                 </View>
               </View>
 
@@ -372,10 +372,10 @@ export default function LoginScreen() {
                   {"\n"}
                   <Text style={styles.messageTitleGradient}>commerciale</Text>
                   {"\n"}
-                  <Text style={styles.messageTitleLight}>réinventée</Text>
+                  <Text style={styles.messageTitleLight}>rÃ©inventÃ©e</Text>
                 </Text>
                 <Text style={styles.messageText}>
-                  Système de Gestion Commerciale Intelligente conçu pour
+                  SystÃ¨me de Gestion Commerciale Intelligente conÃ§u pour
                   propulser votre business vers de nouveaux sommets.
                 </Text>
               </View>
@@ -385,17 +385,17 @@ export default function LoginScreen() {
                 {[
                   {
                     icon: MobileIcon,
-                    text: "Interface révolutionnaire mobile-first",
+                    text: "Interface rÃ©volutionnaire mobile-first",
                     color: "#60a5fa",
                   },
                   {
                     icon: BarChart3,
-                    text: "Analytics prédictifs en temps réel",
+                    text: "Analytics prÃ©dictifs en temps rÃ©el",
                     color: "#34d399",
                   },
                   {
                     icon: Sparkles,
-                    text: "Expérience utilisateur ultime",
+                    text: "ExpÃ©rience utilisateur ultime",
                     color: "#a78bfa",
                   },
                   {
@@ -465,7 +465,7 @@ export default function LoginScreen() {
                   style={StyleSheet.absoluteFill}
                 />
 
-                {/* En-tête du formulaire */}
+                {/* En-tÃªte du formulaire */}
                 <View style={styles.formHeader}>
                   <Animated.View
                     style={[
@@ -492,7 +492,7 @@ export default function LoginScreen() {
                   </Animated.View>
                   <Text style={styles.formTitle}>Connexion</Text>
                   <Text style={styles.formSubtitle}>
-                    Accédez à votre espace premium
+                    AccÃ©dez Ã  votre espace premium
                   </Text>
                 </View>
 
@@ -676,7 +676,7 @@ export default function LoginScreen() {
                           ) : (
                             <Sparkles size={20} color="#ffffff" />
                           )}
-                          <Text style={styles.buttonText}>{twoFactorRequired ? "Vérifier le code" : "Se connecter"}</Text>
+                          <Text style={styles.buttonText}>{twoFactorRequired ? "VÃ©rifier le code" : "Se connecter"}</Text>
                           <ChevronRight size={20} color="#ffffff" />
                         </View>
                       )}
@@ -698,7 +698,7 @@ export default function LoginScreen() {
                       </Text>
                       <View style={styles.testAccounts}>
                         <View style={styles.testAccount}>
-                          <Text style={styles.testAccountIcon}>📧</Text>
+                          <Text style={styles.testAccountIcon}>ðŸ“§</Text>
                           <Text style={styles.testAccountText}>
                             <Text style={styles.testAccountEmail}>
                               gerant@sgci.bj
@@ -710,7 +710,7 @@ export default function LoginScreen() {
                           </Text>
                         </View>
                         <View style={styles.testAccount}>
-                          <Text style={styles.testAccountIcon}>📱</Text>
+                          <Text style={styles.testAccountIcon}>ðŸ“±</Text>
                           <Text style={styles.testAccountText}>
                             <Text style={styles.testAccountEmail}>
                               caissier@sgci.bj
@@ -730,7 +730,7 @@ export default function LoginScreen() {
 
             <View style={styles.authLinks}>
               <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/(auth)/forgot-password"); }}>
-                <Text style={styles.authLinkForgot}>Mot de passe oublié ?</Text>
+                <Text style={styles.authLinkForgot}>Mot de passe oubliÃ© ?</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/(auth)/register"); }}>
                 <Text style={styles.authLink}>S'inscrire</Text>
@@ -747,10 +747,10 @@ export default function LoginScreen() {
               ]}
             >
               <Text style={styles.footerText}>
-                © 2025 SGCI Bénin - Système Premium
+                Â© 2025 SGCI BÃ©nin - SystÃ¨me Premium
               </Text>
               <Text style={styles.footerSubText}>
-                Optimisé pour l'excellence commerciale
+                OptimisÃ© pour l'excellence commerciale
               </Text>
             </Animated.View>
           </Animated.View>
@@ -773,7 +773,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: width > 768 ? 40 : 20,
     paddingVertical: 20,
   },
-  // Effets de lumière
+  // Effets de lumiÃ¨re
   lightEffect1: {
     position: "absolute",
     top: height * 0.25,
@@ -800,7 +800,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(249, 115, 22, 0.3)",
     borderRadius: 100,
   },
-  // Section présentation
+  // Section prÃ©sentation
   presentationSection: {
     flex: 1,
     marginBottom: 30,
@@ -1184,3 +1184,4 @@ const styles = StyleSheet.create({
     color: "#ffffff",
   },
 });
+
