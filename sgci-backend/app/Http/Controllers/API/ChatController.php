@@ -175,7 +175,7 @@ class ChatController extends Controller
         // Vérifier si l'utilisateur est admin
         $participant = $conversation->participants()
             ->where('user_id', $request->user()->id)
-            ->where('role', 'admin')
+            ->wherePivot('role', 'admin')
             ->first();
 
         if (!$participant) {
@@ -218,7 +218,7 @@ class ChatController extends Controller
         // Vérifier si l'utilisateur est admin ou si c'est lui-même
         $participant = $conversation->participants()
             ->where('user_id', $request->user()->id)
-            ->where('role', 'admin')
+            ->wherePivot('role', 'admin')
             ->first();
 
         if (!$participant && $request->user()->id !== $validated['user_id']) {
@@ -244,7 +244,7 @@ class ChatController extends Controller
         // Vérifier si l'utilisateur est admin
         $participant = $conversation->participants()
             ->where('user_id', $request->user()->id)
-            ->where('role', 'admin')
+            ->wherePivot('role', 'admin')
             ->first();
 
         if (!$participant) {
@@ -317,7 +317,7 @@ class ChatController extends Controller
         $estAuteur = $message->user_id === $request->user()->id;
         $estAdmin = $conversation->participants()
             ->where('user_id', $request->user()->id)
-            ->where('role', 'admin')
+            ->wherePivot('role', 'admin')
             ->exists();
 
         if (!$estAuteur && !$estAdmin) {
