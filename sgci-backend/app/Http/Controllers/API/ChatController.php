@@ -251,6 +251,8 @@ class ChatController extends Controller
             return response()->json(['message' => 'Seuls les administrateurs peuvent supprimer une conversation'], 403);
         }
 
+        $conversation->messages()->delete();
+        $conversation->participants()->detach();
         $conversation->delete();
 
         return response()->json([
