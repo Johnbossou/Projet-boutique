@@ -34,6 +34,21 @@ const TYPE_LABEL: Record<string, string> = {
   sortie: 'Sortie',
 };
 
+type StatutStock = 'normal' | 'alerte' | 'rupture';
+
+const STATUT_STOCK_LABEL: Record<StatutStock, string> = {
+  normal: 'OK',
+  alerte: 'En alerte',
+  rupture: 'Rupture',
+};
+
+// ⚠️ identique au mobile : ordre de priorité = rupture, alerte, puis normal
+const STATUT_STOCK_BADGE: Record<StatutStock, string> = {
+  normal: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200',
+  alerte: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200',
+  rupture: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200',
+};
+
 const TYPE_BADGE: Record<string, string> = {
   entree: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200',
   sortie: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200',
@@ -157,6 +172,26 @@ export default function StockHistoryPage() {
     }
   };
 
+  const statutStock = (produit: Produit): StatutStock => {
+    if (produit.quantite_stock <= 0) return 'rupture';
+    if (produit.quantite_stock <= produit.seuil_alerte) return 'alerte';
+    return 'normal';
+  };
+
+  // ⚠️ aligné sur le mobile : les ruptures/alertes remontent en premier
+  const produitsTries = useMemo(() => {
+    const order: Record<StatutStock, number> = { rupture: 0, alerte: 1, normal: 2 };
+    return [...produits].sort((a, b) => {
+      const diff = order[statutStock(a)] - order[statutStock(b)];
+      return diff !== 0 ? diff : a.nom.localeCompare(b.nom);
+    });
+  }, [produits]);
+
+  const enAlerteStock = produits.filter(
+    (p) => p.quantite_stock > 0 && p.quantite_stock <= p.seuil_alerte
+  ).length;
+  const enRuptureStock = produits.filter((p) => p.quantite_stock <= 0).length;
+
   const statutsSummary = useMemo(() => {
     return {
       total: mouvements.length,
@@ -182,6 +217,64 @@ export default function StockHistoryPage() {
           <Badge variant="secondary">{statutsSummary.rejetes} rejetés</Badge>
         </div>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>État du stock</CardTitle>
+          <CardDescription>
+            Niveaux actuels de chaque produit — les ruptures et alertes remontent en premier.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="mb-4 flex flex-wrap gap-2">
+            <Badge variant="default">{produits.length} produits</Badge>
+            <Badge variant="secondary">{enAlerteStock} en alerte</Badge>
+            <Badge variant="destructive">{enRuptureStock} en rupture</Badge>
+          </div>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Produit</TableHead>
+                  <TableHead>Catégorie</TableHead>
+                  <TableHead>Stock</TableHead>
+                  <TableHead>Seuil d&apos;alerte</TableHead>
+                  <TableHead>Statut</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {produitsTries.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8">
+                      <div className="flex flex-col items-center justify-center text-muted-foreground">
+                        <PackageSearch className="h-8 w-8 mb-2 opacity-50" />
+                        <p className="text-sm">Aucun produit enregistré.</p>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  produitsTries.map((produit) => {
+                    const st = statutStock(produit);
+                    return (
+                      <TableRow key={produit.id}>
+                        <TableCell>{produit.nom}</TableCell>
+                        <TableCell>{produit.categorie?.nom ?? '—'}</TableCell>
+                        <TableCell className="font-medium">{produit.quantite_stock}</TableCell>
+                        <TableCell>{produit.seuil_alerte}</TableCell>
+                        <TableCell>
+                          <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${STATUT_STOCK_BADGE[st]}`}>
+                            {STATUT_STOCK_LABEL[st]}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
