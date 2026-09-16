@@ -411,14 +411,14 @@ export default function ParametresScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
+      <StatusBar barStyle="light-content" backgroundColor="#0b1220" />
 
       {/* Header */}
       <BlurView intensity={30} style={styles.header}>
         <View style={styles.headerContent}>
           <View style={styles.headerLeft}>
             <LinearGradient
-              colors={["#f97316", "#ef4444"]}
+              colors={["#3b82f6", "#1e40af"]}
               style={styles.headerLogo}
             >
               <Settings size={24} color="#ffffff" />
@@ -442,7 +442,7 @@ export default function ParametresScreen() {
 
             <TouchableOpacity style={styles.userButton}>
               <LinearGradient
-                colors={["#3b82f6", "#8b5cf6"]}
+                colors={["#3b82f6", "#1e40af"]}
                 style={styles.userAvatar}
               >
                 <Text style={styles.userInitials}>{user.name[0]}</Text>
@@ -532,12 +532,12 @@ export default function ParametresScreen() {
               {/* Carte Profil */}
               <BlurView intensity={10} style={styles.profileCard}>
                 <LinearGradient
-                  colors={["#3b82f6", "#8b5cf6"]}
+                  colors={["#3b82f6", "#1e40af"]}
                   style={[StyleSheet.absoluteFill, { opacity: 0.2 }]}
                 />
                 <View style={styles.profileHeader}>
                   <LinearGradient
-                    colors={["#3b82f6", "#8b5cf6"]}
+                    colors={["#3b82f6", "#1e40af"]}
                     style={styles.profileAvatar}
                   >
                     <Text style={styles.profileInitials}>
@@ -647,7 +647,7 @@ export default function ParametresScreen() {
                     disabled={saving}
                   >
                     <LinearGradient
-                      colors={["#3b82f6", "#8b5cf6"]}
+                      colors={["#3b82f6", "#1e40af"]}
                       style={StyleSheet.absoluteFill}
                     />
                     {saving ? (
@@ -676,9 +676,9 @@ export default function ParametresScreen() {
               <BlurView intensity={10} style={styles.formCard}>
                 <View style={styles.formHeader}>
                   <View
-                    style={[styles.formIcon, { backgroundColor: "#10b98120" }]}
+                    style={[styles.formIcon, { backgroundColor: "#22c55e20" }]}
                   >
-                    <Store size={20} color="#10b981" />
+                    <Store size={20} color="#22c55e" />
                   </View>
                   <View>
                     <Text style={styles.formTitle}>
@@ -778,7 +778,7 @@ export default function ParametresScreen() {
                   </View>
 
                   <TouchableOpacity
-                    style={[styles.saveButton, { backgroundColor: "#10b981" }]}
+                    style={[styles.saveButton, { backgroundColor: "#22c55e" }]}
                     onPress={sauvegarderBoutique}
                     disabled={saving}
                   >
@@ -811,10 +811,10 @@ export default function ParametresScreen() {
                   <View
                     style={[
                       styles.sectionIcon,
-                      { backgroundColor: "#f9731620" },
+                      { backgroundColor: "#3b82f620" },
                     ]}
                   >
-                    <Bell size={20} color="#f97316" />
+                    <Bell size={20} color="#3b82f6" />
                   </View>
                   <Text style={styles.sectionTitle}>Notifications</Text>
                 </View>
@@ -830,7 +830,7 @@ export default function ParametresScreen() {
                       }))
                     }
                     icon={Mail}
-                    color="#f97316"
+                    color="#3b82f6"
                   />
                   <SwitchItem
                     label="Notifications SMS"
@@ -856,7 +856,7 @@ export default function ParametresScreen() {
                       }))
                     }
                     icon={Bell}
-                    color="#10b981"
+                    color="#22c55e"
                   />
                 </View>
               </BlurView>
@@ -867,10 +867,10 @@ export default function ParametresScreen() {
                   <View
                     style={[
                       styles.sectionIcon,
-                      { backgroundColor: "#8b5cf620" },
+                      { backgroundColor: "#3b82f620" },
                     ]}
                   >
-                    <Palette size={20} color="#8b5cf6" />
+                    <Palette size={20} color="#3b82f6" />
                   </View>
                   <Text style={styles.sectionTitle}>Interface & Système</Text>
                 </View>
@@ -882,7 +882,7 @@ export default function ParametresScreen() {
                     onValueChange={() => undefined}
                     disabled
                     icon={Palette}
-                    color="#8b5cf6"
+                    color="#3b82f6"
                   />
                   <SwitchItem
                     label="Sauvegarde automatique"
@@ -892,7 +892,7 @@ export default function ParametresScreen() {
                       setPreferences((prev) => ({ ...prev, autoBackup: value }))
                     }
                     icon={Database}
-                    color="#10b981"
+                    color="#22c55e"
                   />
                   <SwitchItem
                     label="Rapports automatiques"
@@ -913,7 +913,7 @@ export default function ParametresScreen() {
               <TouchableOpacity
                 style={[
                   styles.saveButton,
-                  { backgroundColor: "#8b5cf6", marginTop: 16 },
+                  { backgroundColor: "#3b82f6", marginTop: 16 },
                 ]}
                 onPress={sauvegarderPreferences}
                 disabled={saving}
@@ -1147,10 +1147,10 @@ export default function ParametresScreen() {
                   <View
                     style={[
                       styles.sectionIcon,
-                      { backgroundColor: "#10b98120" },
+                      { backgroundColor: "#22c55e20" },
                     ]}
                   >
-                    <Database size={20} color="#10b981" />
+                    <Database size={20} color="#22c55e" />
                   </View>
                   <Text style={styles.sectionTitle}>
                     Sauvegarde & Restauration
@@ -1208,10 +1208,10 @@ export default function ParametresScreen() {
                   <View
                     style={[
                       styles.sectionIcon,
-                      { backgroundColor: "#8b5cf620" },
+                      { backgroundColor: "#3b82f620" },
                     ]}
                   >
-                    <Globe size={20} color="#8b5cf6" />
+                    <Globe size={20} color="#3b82f6" />
                   </View>
                   <Text style={styles.sectionTitle}>Informations Système</Text>
                 </View>
@@ -1248,11 +1248,11 @@ export default function ParametresScreen() {
                     <View style={styles.systemDetailItem}>
                       <Text style={styles.systemDetailLabel}>Connectivité</Text>
                       <View style={styles.connectivity}>
-                        <Wifi size={16} color="#10b981" />
+                        <Wifi size={16} color="#22c55e" />
                         <Text
                           style={[
                             styles.systemDetailValue,
-                            { color: "#10b981" },
+                            { color: "#22c55e" },
                           ]}
                         >
                           En ligne
@@ -1294,10 +1294,10 @@ export default function ParametresScreen() {
                   <View
                     style={[
                       styles.sectionIcon,
-                      { backgroundColor: "#f9731620" },
+                      { backgroundColor: "#3b82f620" },
                     ]}
                   >
-                    <Store size={20} color="#f97316" />
+                    <Store size={20} color="#3b82f6" />
                   </View>
                   <Text style={styles.sectionTitle}>Mes Boutiques</Text>
                 </View>
@@ -1317,7 +1317,7 @@ export default function ParametresScreen() {
                           <View style={styles.boutiqueCardIcon}>
                             <Store 
                               size={24} 
-                              color={boutique.id === user.current_boutique_id ? "#3b82f6" : "#f97316"} 
+                              color={boutique.id === user.current_boutique_id ? "#3b82f6" : "#64748b"} 
                             />
                           </View>
                           <View style={styles.boutiqueCardInfo}>
@@ -1369,13 +1369,13 @@ export default function ParametresScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0f172a",
+    backgroundColor: "#0b1220",
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#0f172a",
+    backgroundColor: "#0b1220",
   },
   loadingText: {
     color: "#ffffff",
@@ -1956,7 +1956,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   createBoutiqueButton: {
-    backgroundColor: "#f97316",
+    backgroundColor: "#3b82f6",
     marginTop: 16,
   },
 });

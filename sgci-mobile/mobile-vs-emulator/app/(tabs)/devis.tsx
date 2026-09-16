@@ -310,7 +310,7 @@ export default function DevisScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0f172a" },
+  container: { flex: 1, backgroundColor: "#0b1220" },
   header: {
     flexDirection: "row",
     alignItems: "center",

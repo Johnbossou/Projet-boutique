@@ -475,7 +475,7 @@ export default function AnalyticsScreen() {
                             value={vente.chiffre_affaires}
                             max={maxChiffreAffaires}
                             label={label}
-                            color="#8b5cf6"
+                            color="#3b82f6"
                           />
                         );
                       })}
@@ -540,7 +540,7 @@ export default function AnalyticsScreen() {
                         const colors = [
                           "#3b82f6",
                           "#22c55e",
-                          "#8b5cf6",
+                          "#3b82f6",
                           "#f97316",
                           "#ef4444",
                         ];
@@ -626,7 +626,7 @@ export default function AnalyticsScreen() {
               <BlurView intensity={10} style={styles.produitsCardInner}>
                 <View style={styles.produitsHeader}>
                   <View style={styles.produitsTitleContainer}>
-                    <Zap size={22} color="#f97316" />
+                    <Zap size={22} color="#facc15" />
                     <Text style={styles.produitsTitle}>Top 5 Produits</Text>
                     <View
                       style={[
@@ -635,7 +635,7 @@ export default function AnalyticsScreen() {
                       ]}
                     >
                       <Text
-                        style={[styles.periodBadgeText, { color: "#f97316" }]}
+                        style={[styles.periodBadgeText, { color: "#3b82f6" }]}
                       >
                         {periode}
                       </Text>
@@ -684,7 +684,7 @@ export default function AnalyticsScreen() {
                       >
                         <View style={styles.produitItemLeft}>
                           <LinearGradient
-                            colors={["#8b5cf6", "#a78bfa"]}
+                            colors={["#3b82f6", "#a78bfa"]}
                             style={styles.produitRank}
                           >
                             <Text style={styles.produitRankText}>
@@ -774,7 +774,7 @@ export default function AnalyticsScreen() {
                       value: analyticsData
                         ? analyticsData.produits.total_stock.toString()
                         : "0",
-                      color: "#8b5cf6",
+                      color: "#3b82f6",
                       icon: ShoppingCart,
                     },
                     {
@@ -838,7 +838,7 @@ export default function AnalyticsScreen() {
               <BlurView intensity={10} style={styles.ventesCardInner}>
                 <View style={styles.ventesHeader}>
                   <View style={styles.ventesTitleContainer}>
-                    <Calendar size={22} color="#f97316" />
+                    <Calendar size={22} color="#facc15" />
                     <Text style={styles.ventesTitle}>
                       Historique des Ventes
                     </Text>
@@ -849,7 +849,7 @@ export default function AnalyticsScreen() {
                       ]}
                     >
                       <Text
-                        style={[styles.periodBadgeText, { color: "#f97316" }]}
+                        style={[styles.periodBadgeText, { color: "#3b82f6" }]}
                       >
                         {ventesQuotidiennes.length} jours
                       </Text>
@@ -973,7 +973,7 @@ export default function AnalyticsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
+      <StatusBar barStyle="light-content" backgroundColor="#0b1220" />
 
       {/* Header */}
       <Animated.View
@@ -1061,7 +1061,7 @@ export default function AnalyticsScreen() {
           onPress={handleRefresh}
           disabled={isRefreshing}
         >
-          <RefreshCw size={20} color={isRefreshing ? "#8b5cf6" : "#ffffff"} />
+          <RefreshCw size={20} color={isRefreshing ? "#3b82f6" : "#ffffff"} />
           <Text style={styles.actionButtonText}>
             {isRefreshing ? "Actualisation..." : "Actualiser"}
           </Text>
@@ -1118,7 +1118,7 @@ export default function AnalyticsScreen() {
             }
             trend={`+${calculerTendance(analyticsData?.ventes.panier_moyen || 0, 2)}%`}
             icon={Users}
-            color="#8b5cf6"
+            color="#3b82f6"
             delay={0.3}
             isPositive={true}
           />
@@ -1167,7 +1167,7 @@ export default function AnalyticsScreen() {
               >
                 <tab.icon
                   size={18}
-                  color={activeTab === tab.id ? "#8b5cf6" : "#64748b"}
+                  color={activeTab === tab.id ? "#3b82f6" : "#64748b"}
                 />
                 <Text
                   style={[
@@ -1210,13 +1210,13 @@ export default function AnalyticsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0f172a",
+    backgroundColor: "#0b1220",
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#0f172a",
+    backgroundColor: "#0b1220",
   },
   loadingText: {
     color: "#ffffff",
@@ -1449,14 +1449,14 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   tabButtonTextActive: {
-    color: "#8b5cf6",
+    color: "#3b82f6",
   },
   tabButtonIndicator: {
     position: "absolute",
     bottom: -4,
     width: 20,
     height: 3,
-    backgroundColor: "#8b5cf6",
+    backgroundColor: "#3b82f6",
     borderRadius: 2,
   },
   // Tab Content

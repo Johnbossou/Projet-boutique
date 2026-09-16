@@ -898,7 +898,7 @@ export default function ClientsScreen() {
     {
       label: "CA Total",
       value: statsClients.chiffre_affaires_total,
-      color: "#8b5cf6",
+      color: "#3b82f6",
       icon: DollarSign,
     },
     {
@@ -911,14 +911,14 @@ export default function ClientsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
+      <StatusBar barStyle="light-content" backgroundColor="#0b1220" />
 
       {/* Header */}
       <BlurView intensity={30} style={styles.header}>
         <View style={styles.headerContent}>
           <View style={styles.headerLeft}>
             <LinearGradient
-              colors={["#3b82f6", "#8b5cf6"]}
+              colors={["#3b82f6", "#1e40af"]}
               style={styles.headerLogo}
             >
               <Users size={24} color="#ffffff" />
@@ -1063,8 +1063,8 @@ export default function ClientsScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor="#f97316"
-              colors={["#f97316"]}
+              tintColor="#3b82f6"
+              colors={["#3b82f6"]}
             />
           }
         >
@@ -1721,7 +1721,7 @@ export default function ClientsScreen() {
                       </View>
 
                       <View style={styles.clientStatCard}>
-                        <TrendingUp size={24} color="#8b5cf6" />
+                        <TrendingUp size={24} color="#3b82f6" />
                         <Text style={styles.clientStatValue}>
                           {clientSelectionne.nombre_commandes > 0
                             ? formatPrix(
@@ -1874,13 +1874,13 @@ export default function ClientsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0f172a",
+    backgroundColor: "#0b1220",
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#0f172a",
+    backgroundColor: "#0b1220",
   },
   loadingText: {
     color: "#ffffff",
@@ -2335,7 +2335,7 @@ const styles = StyleSheet.create({
   // Modals
   modalContainer: {
     flex: 1,
-    backgroundColor: "#0f172a",
+    backgroundColor: "#0b1220",
   },
   modalHeader: {
     flexDirection: "row",

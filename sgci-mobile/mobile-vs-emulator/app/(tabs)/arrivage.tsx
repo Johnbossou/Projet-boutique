@@ -155,7 +155,7 @@ export default function ArrivageScreen() {
           <ArrowLeft color="#fff" size={24} />
         </TouchableOpacity>
         <Text style={styles.title}>Arrivage stock</Text>
-        <Package color="#f97316" size={24} />
+        <Package color="#3b82f6" size={24} />
       </View>
 
       <ScrollView style={styles.form}>
@@ -211,7 +211,7 @@ export default function ArrivageScreen() {
 
       <Text style={styles.sectionTitle}>En attente ({mouvements.length})</Text>
       {loading ? (
-        <ActivityIndicator color="#f97316" style={{ marginTop: 20 }} />
+        <ActivityIndicator color="#3b82f6" style={{ marginTop: 20 }} />
       ) : (
         <FlatList
           data={mouvements}
@@ -249,7 +249,7 @@ export default function ArrivageScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0f172a" },
+  container: { flex: 1, backgroundColor: "#0b1220" },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -287,14 +287,14 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     marginRight: 8,
   },
-  chipActive: { backgroundColor: "#f97316" },
+  chipActive: { backgroundColor: "#3b82f6" },
   chipText: { color: "#e2e8f0", fontSize: 12 },
   btnPrimary: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    backgroundColor: "#f97316",
+    backgroundColor: "#3b82f6",
     padding: 14,
     borderRadius: 12,
     marginTop: 8,

@@ -1,24 +1,36 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
+import { Platform } from 'react-native';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useAuth } from '@/contexts/AuthContext';
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
-  const { user } = useAuth();
-
-  // Modules de gestion réservés au gérant et au propriétaire :
-  // un caissier voit uniquement les outils de vente et de consultation.
-  const peutGerer = user?.role === 'gerant' || user?.role === 'proprietaire';
+  const tint = Colors.dark.tint;
 
   return (
     <Tabs
+      initialRouteName="index"
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+        tabBarActiveTintColor: tint,
+        tabBarInactiveTintColor: Colors.dark.tabIconDefault,
+        tabBarStyle: {
+          backgroundColor: Colors.dark.tabBackground,
+          borderTopColor: Colors.dark.border,
+          borderTopWidth: 1,
+          height: Platform.OS === 'ios' ? 88 : 68,
+          paddingTop: 8,
+          paddingBottom: Platform.OS === 'ios' ? 24 : 8,
+        },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '600',
+          marginTop: 2,
+        },
+        tabBarIconStyle: {
+          marginTop: 2,
+        },
         headerShown: false,
         tabBarButton: HapticTab,
       }}>
@@ -26,97 +38,45 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Accueil',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={26} name="house.fill" color={color} />,
         }}
       />
       <Tabs.Screen
         name="caisse"
         options={{
           title: 'Caisse',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="cart.fill" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={26} name="cart.fill" color={color} />,
         }}
       />
       <Tabs.Screen
         name="produits"
         options={{
           title: 'Produits',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="cube.fill" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={26} name="cube.fill" color={color} />,
         }}
       />
       <Tabs.Screen
         name="stock"
         options={{
           title: 'Stock',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="archivebox.fill" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={26} name="archivebox.fill" color={color} />,
         }}
       />
+      {/* Modules secondaires, regroupés dans l'écran Gestion */}
+      <Tabs.Screen name="clients" options={{ href: null }} />
+      <Tabs.Screen name="messages" options={{ href: null }} />
+      <Tabs.Screen name="analytics" options={{ href: null }} />
+      <Tabs.Screen name="ia" options={{ href: null }} />
+      <Tabs.Screen name="parametres" options={{ href: null }} />
+      <Tabs.Screen name="retours" options={{ href: null }} />
+      <Tabs.Screen name="inventaire" options={{ href: null }} />
+      <Tabs.Screen name="devis" options={{ href: null }} />
+      <Tabs.Screen name="arrivage" options={{ href: null }} />
       <Tabs.Screen
-        name="clients"
+        name="gestion"
         options={{
-          title: 'Clients',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.2.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="messages"
-        options={{
-          title: 'Messages',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="message.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="analytics"
-        options={{
-          title: 'Analytics',
-          href: peutGerer ? undefined : null,
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="chart.bar.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="ia"
-        options={{
-          title: 'IA',
-          href: peutGerer ? undefined : null,
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="brain.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="parametres"
-        options={{
-          title: 'Paramètres',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="gearshape.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="retours"
-        options={{
-          title: 'Retours',
-          href: peutGerer ? undefined : null,
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="arrow.triangle.2.circlepath" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="inventaire"
-        options={{
-          title: 'Inventaire',
-          href: peutGerer ? undefined : null,
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="clipboard.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="devis"
-        options={{
-          title: 'Devis',
-          href: peutGerer ? undefined : null,
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="doc.text.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="arrivage"
-        options={{
-          title: 'Arrivage',
-          href: peutGerer ? undefined : null,
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="box.truck.fill" color={color} />,
+          title: 'Gestion',
+          tabBarIcon: ({ color }) => <IconSymbol size={26} name="gearshape.fill" color={color} />,
         }}
       />
     </Tabs>

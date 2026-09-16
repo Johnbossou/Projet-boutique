@@ -42,12 +42,12 @@ interface Conversation {
 }
 
 const COLORS = {
-  bg: "#0f172a",
+  bg: "#0b1220",
   card: "#1e293b",
   border: "#334155",
   textPrimary: "#f8fafc",
   textSecondary: "#94a3b8",
-  accent: "#f97316",
+  accent: "#3b82f6",
 };
 
 export default function MessagesScreen() {

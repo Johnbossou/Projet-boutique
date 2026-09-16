@@ -1,4 +1,4 @@
-﻿import { BlurView } from "expo-blur";
+import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import {
@@ -55,7 +55,7 @@ export default function LoginScreen() {
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
-  // Particules animÃ©es
+  // Particules animées
   const particles = Array.from({ length: 15 }, (_, i) => ({
     id: i,
     left: useRef(new Animated.Value(Math.random() * width)).current,
@@ -65,7 +65,7 @@ export default function LoginScreen() {
   }));
 
   useEffect(() => {
-    // Animation d'entrÃ©e
+    // Animation d'entrée
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -164,7 +164,7 @@ export default function LoginScreen() {
       const result = await login(formData.email, formData.password, twoFactorCode || undefined);
       if ("requiresTwoFactor" in result) {
         setTwoFactorRequired(true);
-        Alert.alert("Code 2FA requis", "Entrez le code Ã  6 chiffres de votre application d'authentification.");
+        Alert.alert("Code 2FA requis", "Entrez le code à 6 chiffres de votre application d'authentification.");
       } else if (!result.success) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         Alert.alert("Erreur", result.message);
@@ -195,7 +195,7 @@ export default function LoginScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <LinearGradient
-          colors={["#0f172a", "#4c1d95", "#0f172a"]}
+          colors={["#0b1220", "#1e40af", "#0b1220"]}
           style={StyleSheet.absoluteFill}
         />
         <View style={styles.boutiqueSelectionContainer}>
@@ -211,14 +211,14 @@ export default function LoginScreen() {
             <BlurView intensity={20} style={styles.boutiqueSelectionBlur}>
               <View style={styles.boutiqueSelectionHeader}>
                 <LinearGradient
-                  colors={["#f97316", "#ef4444"]}
+                  colors={["#3b82f6", "#1e40af"]}
                   style={styles.boutiqueSelectionLogo}
                 >
                   <Store size={32} color="#ffffff" />
                 </LinearGradient>
-                <Text style={styles.boutiqueSelectionTitle}>SÃ©lectionnez votre boutique</Text>
+                <Text style={styles.boutiqueSelectionTitle}>Sélectionnez votre boutique</Text>
                 <Text style={styles.boutiqueSelectionSubtitle}>
-                  Vous avez accÃ¨s Ã  {user.boutiques.length} boutique(s)
+                  Vous avez accès à {user.boutiques.length} boutique(s)
                 </Text>
               </View>
 
@@ -236,13 +236,13 @@ export default function LoginScreen() {
                     <View style={styles.boutiqueListItemIcon}>
                       <Store 
                         size={24} 
-                        color={boutique.id === user.current_boutique_id ? "#3b82f6" : "#f97316"} 
+                        color={boutique.id === user.current_boutique_id ? "#3b82f6" : "#64748b"} 
                       />
                     </View>
                     <View style={styles.boutiqueListItemInfo}>
                       <Text style={styles.boutiqueListItemName}>{boutique.nom}</Text>
                       <Text style={styles.boutiqueListItemAddress}>
-                        {boutique.adresse || 'Adresse non renseignÃ©e'}
+                        {boutique.adresse || 'Adresse non renseignée'}
                       </Text>
                     </View>
                     {boutique.id === user.current_boutique_id && (
@@ -264,11 +264,11 @@ export default function LoginScreen() {
     <SafeAreaView style={styles.container}>
       {/* Background Gradient */}
       <LinearGradient
-        colors={["#0f172a", "#4c1d95", "#0f172a"]}
+        colors={["#0b1220", "#1e40af", "#0b1220"]}
         style={StyleSheet.absoluteFill}
       />
 
-      {/* Effets de lumiÃ¨re animÃ©s */}
+      {/* Effets de lumière animés */}
       <Animated.View
         style={[
           styles.lightEffect1,
@@ -302,7 +302,7 @@ export default function LoginScreen() {
         ]}
       />
 
-      {/* Particules animÃ©es */}
+      {/* Particules animées */}
       {particles.map((particle) => (
         <Animated.View
           key={particle.id}
@@ -328,7 +328,7 @@ export default function LoginScreen() {
           contentContainerStyle={styles.scrollContainer}
           showsVerticalScrollIndicator={false}
         >
-          {/* Section prÃ©sentation (masquÃ©e sur mobile sauf tablette) */}
+          {/* Section présentation (masquée sur mobile sauf tablette) */}
           {width > 768 && (
             <Animated.View
               style={[
@@ -353,15 +353,15 @@ export default function LoginScreen() {
                   ]}
                 >
                   <LinearGradient
-                    colors={["#f97316", "#ef4444"]}
+                    colors={["#3b82f6", "#1e40af"]}
                     style={styles.logoGradient}
                   >
                     <Store size={28} color="#ffffff" />
                   </LinearGradient>
                 </Animated.View>
                 <View style={styles.titleContainer}>
-                  <Text style={styles.mainTitle}>SGCI BÃ‰NIN</Text>
-                  <Text style={styles.subTitle}>Ã‰dition Premium</Text>
+                  <Text style={styles.mainTitle}>SGCI BÉNIN</Text>
+                  <Text style={styles.subTitle}>Édition Premium</Text>
                 </View>
               </View>
 
@@ -372,10 +372,10 @@ export default function LoginScreen() {
                   {"\n"}
                   <Text style={styles.messageTitleGradient}>commerciale</Text>
                   {"\n"}
-                  <Text style={styles.messageTitleLight}>rÃ©inventÃ©e</Text>
+                  <Text style={styles.messageTitleLight}>réinventée</Text>
                 </Text>
                 <Text style={styles.messageText}>
-                  SystÃ¨me de Gestion Commerciale Intelligente conÃ§u pour
+                  Système de Gestion Commerciale Intelligente conçu pour
                   propulser votre business vers de nouveaux sommets.
                 </Text>
               </View>
@@ -385,23 +385,23 @@ export default function LoginScreen() {
                 {[
                   {
                     icon: MobileIcon,
-                    text: "Interface rÃ©volutionnaire mobile-first",
+                    text: "Interface révolutionnaire mobile-first",
                     color: "#60a5fa",
                   },
                   {
                     icon: BarChart3,
-                    text: "Analytics prÃ©dictifs en temps rÃ©el",
+                    text: "Analytics prédictifs en temps réel",
                     color: "#34d399",
                   },
                   {
                     icon: Sparkles,
-                    text: "ExpÃ©rience utilisateur ultime",
+                    text: "Expérience utilisateur ultime",
                     color: "#a78bfa",
                   },
                   {
                     icon: Store,
                     text: "Gestion multi-boutiques intelligente",
-                    color: "#f97316",
+                    color: "#3b82f6",
                   },
                 ].map((item, index) => (
                   <Animated.View
@@ -465,7 +465,7 @@ export default function LoginScreen() {
                   style={StyleSheet.absoluteFill}
                 />
 
-                {/* En-tÃªte du formulaire */}
+                {/* En-tête du formulaire */}
                 <View style={styles.formHeader}>
                   <Animated.View
                     style={[
@@ -484,7 +484,7 @@ export default function LoginScreen() {
                     ]}
                   >
                     <LinearGradient
-                      colors={["#f97316", "#ef4444"]}
+                      colors={["#3b82f6", "#1e40af"]}
                       style={styles.formLogoGradient}
                     >
                       <LogIn size={28} color="#ffffff" />
@@ -492,7 +492,7 @@ export default function LoginScreen() {
                   </Animated.View>
                   <Text style={styles.formTitle}>Connexion</Text>
                   <Text style={styles.formSubtitle}>
-                    AccÃ©dez Ã  votre espace premium
+                    Accédez à votre espace premium
                   </Text>
                 </View>
 
@@ -625,7 +625,7 @@ export default function LoginScreen() {
                       activeOpacity={0.9}
                     >
                       <LinearGradient
-                        colors={["#f97316", "#ef4444"]}
+                        colors={["#3b82f6", "#1e40af"]}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 0 }}
                         style={StyleSheet.absoluteFill}
@@ -676,7 +676,7 @@ export default function LoginScreen() {
                           ) : (
                             <Sparkles size={20} color="#ffffff" />
                           )}
-                          <Text style={styles.buttonText}>{twoFactorRequired ? "VÃ©rifier le code" : "Se connecter"}</Text>
+                          <Text style={styles.buttonText}>{twoFactorRequired ? "Vérifier le code" : "Se connecter"}</Text>
                           <ChevronRight size={20} color="#ffffff" />
                         </View>
                       )}
@@ -698,7 +698,7 @@ export default function LoginScreen() {
                       </Text>
                       <View style={styles.testAccounts}>
                         <View style={styles.testAccount}>
-                          <Text style={styles.testAccountIcon}>ðŸ“§</Text>
+                          <Text style={styles.testAccountIcon}>📧</Text>
                           <Text style={styles.testAccountText}>
                             <Text style={styles.testAccountEmail}>
                               gerant@sgci.bj
@@ -710,7 +710,7 @@ export default function LoginScreen() {
                           </Text>
                         </View>
                         <View style={styles.testAccount}>
-                          <Text style={styles.testAccountIcon}>ðŸ“±</Text>
+                          <Text style={styles.testAccountIcon}>📱</Text>
                           <Text style={styles.testAccountText}>
                             <Text style={styles.testAccountEmail}>
                               caissier@sgci.bj
@@ -730,7 +730,7 @@ export default function LoginScreen() {
 
             <View style={styles.authLinks}>
               <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/(auth)/forgot-password"); }}>
-                <Text style={styles.authLinkForgot}>Mot de passe oubliÃ© ?</Text>
+                <Text style={styles.authLinkForgot}>Mot de passe oublié ?</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/(auth)/register"); }}>
                 <Text style={styles.authLink}>S'inscrire</Text>
@@ -747,10 +747,10 @@ export default function LoginScreen() {
               ]}
             >
               <Text style={styles.footerText}>
-                Â© 2025 SGCI BÃ©nin - SystÃ¨me Premium
+                © 2025 SGCI Bénin - Système Premium
               </Text>
               <Text style={styles.footerSubText}>
-                OptimisÃ© pour l'excellence commerciale
+                Optimisé pour l'excellence commerciale
               </Text>
             </Animated.View>
           </Animated.View>
@@ -763,7 +763,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0f172a",
+    backgroundColor: "#0b1220",
   },
   keyboardView: {
     flex: 1,
@@ -773,7 +773,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: width > 768 ? 40 : 20,
     paddingVertical: 20,
   },
-  // Effets de lumiÃ¨re
+  // Effets de lumière
   lightEffect1: {
     position: "absolute",
     top: height * 0.25,
@@ -800,7 +800,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(249, 115, 22, 0.3)",
     borderRadius: 100,
   },
-  // Section prÃ©sentation
+  // Section présentation
   presentationSection: {
     flex: 1,
     marginBottom: 30,
@@ -814,7 +814,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 16,
-    shadowColor: "#f97316",
+    shadowColor: "#3b82f6",
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.3,
     shadowRadius: 20,
@@ -854,7 +854,7 @@ const styles = StyleSheet.create({
     color: "#e2e8f0",
   },
   messageTitleGradient: {
-    color: "#f97316",
+    color: "#3b82f6",
   },
   messageText: {
     fontSize: 18,
@@ -914,7 +914,7 @@ const styles = StyleSheet.create({
     height: 80,
     borderRadius: 24,
     marginBottom: 20,
-    shadowColor: "#f97316",
+    shadowColor: "#3b82f6",
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.4,
     shadowRadius: 20,
@@ -984,7 +984,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#f97316",
+    shadowColor: "#3b82f6",
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.3,
     shadowRadius: 20,
@@ -1061,11 +1061,11 @@ const styles = StyleSheet.create({
     color: "#64748b",
   },
   testAccountPassword: {
-    color: "#f97316",
+    color: "#3b82f6",
   },
   authLinks: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", width: "100%", marginTop: 20 },
   authLinkForgot: { fontSize: 15, fontWeight: "600", color: "#94a3b8" },
-  authLink: { fontSize: 15, fontWeight: "700", color: "#f97316", padding: 8 },
+  authLink: { fontSize: 15, fontWeight: "700", color: "#3b82f6", padding: 8 },
   footer: {
     marginTop: 40,
     alignItems: "center",
@@ -1115,7 +1115,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 16,
-    shadowColor: "#f97316",
+    shadowColor: "#3b82f6",
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.4,
     shadowRadius: 20,

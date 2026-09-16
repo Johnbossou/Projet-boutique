@@ -1,4 +1,4 @@
-﻿import { BlurView } from "expo-blur";
+import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -90,9 +90,9 @@ export default function ForgotPasswordScreen() {
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
         Alert.alert(
-          "Email envoyÃ©",
+          "Email envoyé",
           data.message ||
-            "Si cet email existe, un lien de rÃ©initialisation a Ã©tÃ© envoyÃ©.",
+            "Si cet email existe, un lien de réinitialisation a été envoyé.",
           [{ text: "OK", onPress: () => router.replace("/(auth)/login") }]
         );
         setFormData({ email: "" });
@@ -106,7 +106,7 @@ export default function ForgotPasswordScreen() {
         );
       }
     } catch {
-      Alert.alert("Erreur", "Erreur rÃ©seau. VÃ©rifiez votre connexion.");
+      Alert.alert("Erreur", "Erreur réseau. Vérifiez votre connexion.");
     } finally {
       setIsLoading(false);
     }
@@ -115,7 +115,7 @@ export default function ForgotPasswordScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <LinearGradient
-        colors={["#0f172a", "#4c1d95", "#0f172a"]}
+        colors={["#0b1220", "#1e40af", "#0b1220"]}
         style={StyleSheet.absoluteFill}
       />
       <KeyboardAvoidingView
@@ -169,15 +169,15 @@ export default function ForgotPasswordScreen() {
                     ]}
                   >
                     <LinearGradient
-                      colors={["#f97316", "#ef4444"]}
+                      colors={["#3b82f6", "#1e40af"]}
                       style={styles.formLogoGradient}
                     >
                       <KeyRound size={28} color="#ffffff" />
                     </LinearGradient>
                   </Animated.View>
-                  <Text style={styles.formTitle}>Mot de passe oubliÃ©</Text>
+                  <Text style={styles.formTitle}>Mot de passe oublié</Text>
                   <Text style={styles.formSubtitle}>
-                    Entrez votre email pour recevoir un lien de rÃ©initialisation
+                    Entrez votre email pour recevoir un lien de réinitialisation
                   </Text>
                 </View>
 
@@ -209,7 +209,7 @@ export default function ForgotPasswordScreen() {
                       activeOpacity={0.9}
                     >
                       <LinearGradient
-                        colors={["#f97316", "#ef4444"]}
+                        colors={["#3b82f6", "#1e40af"]}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 0 }}
                         style={StyleSheet.absoluteFill}
@@ -262,14 +262,14 @@ export default function ForgotPasswordScreen() {
               onPress={() => router.replace("/(auth)/login")}
               disabled={isLoading}
             >
-              <ChevronLeft size={16} color="#f97316" />
-              <Text style={styles.backLinkText}>Retour Ã  la </Text>
+              <ChevronLeft size={16} color="#3b82f6" />
+              <Text style={styles.backLinkText}>Retour à la </Text>
               <Text style={styles.backLinkStrong}>connexion</Text>
             </TouchableOpacity>
 
             <View style={styles.footer}>
               <Text style={styles.footerText}>
-                Â© 2025 SGCI BÃ©nin - SystÃ¨me Premium
+                © 2025 SGCI Bénin - Système Premium
               </Text>
             </View>
           </Animated.View>
@@ -282,7 +282,7 @@ export default function ForgotPasswordScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0f172a",
+    backgroundColor: "#0b1220",
   },
   keyboardView: {
     flex: 1,
@@ -323,7 +323,7 @@ const styles = StyleSheet.create({
     height: 72,
     borderRadius: 20,
     marginBottom: 16,
-    shadowColor: "#f97316",
+    shadowColor: "#3b82f6",
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.4,
     shadowRadius: 20,
@@ -383,7 +383,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#f97316",
+    shadowColor: "#3b82f6",
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.3,
     shadowRadius: 20,
@@ -434,7 +434,7 @@ const styles = StyleSheet.create({
   backLinkStrong: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#f97316",
+    color: "#3b82f6",
   },
   footer: {
     marginTop: 32,

@@ -1,4 +1,4 @@
-﻿import { BlurView } from "expo-blur";
+import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { ChevronRight, Eye, EyeOff, UserPlus } from "lucide-react-native";
@@ -47,7 +47,7 @@ export default function RegisterScreen() {
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    // Animation d'entrÃ©e
+    // Animation d'entrée
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -78,7 +78,7 @@ export default function RegisterScreen() {
       })
     ).start();
 
-    // Animation pulse pour les effets de lumiÃ¨re
+    // Animation pulse pour les effets de lumière
     Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
@@ -109,7 +109,7 @@ export default function RegisterScreen() {
       return;
     }
     if (formData.password.length < 8) {
-      Alert.alert("Mot de passe", "Le mot de passe doit contenir au moins 8 caractÃ¨res.");
+      Alert.alert("Mot de passe", "Le mot de passe doit contenir au moins 8 caractères.");
       return;
     }
     if (formData.password !== formData.password_confirmation) {
@@ -125,7 +125,7 @@ export default function RegisterScreen() {
       });
       const data: any = await res.json().catch(() => ({}));
       if (res.ok) {
-        Alert.alert("Inscription rÃ©ussie", data.message || "Vous pouvez maintenant vous connecter.", [
+        Alert.alert("Inscription réussie", data.message || "Vous pouvez maintenant vous connecter.", [
           { text: "Se connecter", onPress: () => router.replace("/(auth)/login") },
         ]);
       } else {
@@ -134,7 +134,7 @@ export default function RegisterScreen() {
         Alert.alert("Erreur", firstError || "Une erreur est survenue");
       }
     } catch {
-      Alert.alert("Erreur", "Erreur rÃ©seau. VÃ©rifiez votre connexion.");
+      Alert.alert("Erreur", "Erreur réseau. Vérifiez votre connexion.");
     } finally {
       setIsLoading(false);
     }
@@ -148,11 +148,11 @@ export default function RegisterScreen() {
     <SafeAreaView style={styles.container}>
       {/* Background Gradient */}
       <LinearGradient
-        colors={["#0f172a", "#4c1d95", "#0f172a"]}
+        colors={["#0b1220", "#1e40af", "#0b1220"]}
         style={StyleSheet.absoluteFill}
       />
 
-      {/* Effets de lumiÃ¨re animÃ©s */}
+      {/* Effets de lumière animés */}
       <Animated.View
         style={[
           styles.lightEffect1,
@@ -223,7 +223,7 @@ export default function RegisterScreen() {
                   style={StyleSheet.absoluteFill}
                 />
 
-                {/* En-tÃªte du formulaire */}
+                {/* En-tête du formulaire */}
                 <View style={styles.formHeader}>
                   <Animated.View
                     style={[
@@ -242,14 +242,14 @@ export default function RegisterScreen() {
                     ]}
                   >
                     <LinearGradient
-                      colors={["#f97316", "#ef4444"]}
+                      colors={["#3b82f6", "#1e40af"]}
                       style={styles.formLogoGradient}
                     >
                       <UserPlus size={28} color="#ffffff" />
                     </LinearGradient>
                   </Animated.View>
                   <Text style={styles.formTitle}>Inscription</Text>
-                  <Text style={styles.formSubtitle}>CrÃ©ez votre boutique</Text>
+                  <Text style={styles.formSubtitle}>Créez votre boutique</Text>
                 </View>
 
                 {/* Champs du formulaire */}
@@ -289,9 +289,9 @@ export default function RegisterScreen() {
                     </View>
                   </View>
 
-                  {/* Champ TÃ©lÃ©phone */}
+                  {/* Champ Téléphone */}
                   <View style={styles.inputContainer}>
-                    <Text style={styles.inputLabel}>TÃ©lÃ©phone</Text>
+                    <Text style={styles.inputLabel}>Téléphone</Text>
                     <View style={styles.inputWrapper}>
                       <TextInput
                         style={styles.input}
@@ -337,9 +337,9 @@ export default function RegisterScreen() {
                     </View>
                   </View>
 
-                  {/* Champ TÃ©lÃ©phone de la boutique */}
+                  {/* Champ Téléphone de la boutique */}
                   <View style={styles.inputContainer}>
-                    <Text style={styles.inputLabel}>TÃ©lÃ©phone de la boutique (optionnel)</Text>
+                    <Text style={styles.inputLabel}>Téléphone de la boutique (optionnel)</Text>
                     <View style={styles.inputWrapper}>
                       <TextInput
                         style={styles.input}
@@ -359,7 +359,7 @@ export default function RegisterScreen() {
                     <View style={styles.inputWrapper}>
                       <TextInput
                         style={[styles.input, styles.passwordInput]}
-                        placeholder="8 caractÃ¨res min"
+                        placeholder="8 caractères min"
                         placeholderTextColor="#94a3b8"
                         value={formData.password}
                         onChangeText={(text) => updateField("password", text)}
@@ -424,7 +424,7 @@ export default function RegisterScreen() {
                       activeOpacity={0.9}
                     >
                       <LinearGradient
-                        colors={["#f97316", "#ef4444"]}
+                        colors={["#3b82f6", "#1e40af"]}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 0 }}
                         style={StyleSheet.absoluteFill}
@@ -470,7 +470,7 @@ export default function RegisterScreen() {
                         </View>
                       ) : (
                         <View style={styles.buttonContent}>
-                          <Text style={styles.buttonText}>CrÃ©er mon compte</Text>
+                          <Text style={styles.buttonText}>Créer mon compte</Text>
                           <ChevronRight size={20} color="#ffffff" />
                         </View>
                       )}
@@ -484,7 +484,7 @@ export default function RegisterScreen() {
                     disabled={isLoading}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.backLinkText}>DÃ©jÃ  un compte ?</Text>
+                    <Text style={styles.backLinkText}>Déjà un compte ?</Text>
                     <Text style={styles.backLinkStrong}>Se connecter</Text>
                   </TouchableOpacity>
                 </View>
@@ -500,7 +500,7 @@ export default function RegisterScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0f172a",
+    backgroundColor: "#0b1220",
   },
   keyboardView: {
     flex: 1,
@@ -510,7 +510,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: width > 768 ? 40 : 20,
     paddingVertical: 20,
   },
-  // Effets de lumiÃ¨re
+  // Effets de lumière
   lightEffect1: {
     position: "absolute",
     top: height * 0.25,
@@ -563,7 +563,7 @@ const styles = StyleSheet.create({
     height: 80,
     borderRadius: 24,
     marginBottom: 16,
-    shadowColor: "#f97316",
+    shadowColor: "#3b82f6",
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.4,
     shadowRadius: 20,
@@ -633,7 +633,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#f97316",
+    shadowColor: "#3b82f6",
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.3,
     shadowRadius: 20,
@@ -684,7 +684,7 @@ const styles = StyleSheet.create({
   backLinkStrong: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#f97316",
+    color: "#3b82f6",
   },
 });
 

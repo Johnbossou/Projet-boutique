@@ -630,7 +630,7 @@ export default function IAScreen() {
       value: predictions.length.toString(),
       subtext: `${performanceData?.donnees_temps_reel?.total_produits || 0} au total`,
       icon: PieChart,
-      gradient: ["#3b82f6", "#8b5cf6"],
+      gradient: ["#3b82f6", "#1e40af"],
       index: 1,
     },
     {
@@ -646,7 +646,7 @@ export default function IAScreen() {
       value: recommandations.length.toString(),
       subtext: "Opportunités détectées",
       icon: Lightbulb,
-      gradient: ["#8b5cf6", "#ec4899"],
+      gradient: ["#3b82f6", "#1e40af"],
       index: 3,
     },
   ];
@@ -661,14 +661,14 @@ export default function IAScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
+      <StatusBar barStyle="light-content" backgroundColor="#0b1220" />
 
       {/* Header */}
       <BlurView intensity={30} style={styles.header}>
         <View style={styles.headerContent}>
           <View style={styles.headerLeft}>
             <LinearGradient
-              colors={["#8b5cf6", "#ec4899"]}
+              colors={["#3b82f6", "#1e40af"]}
               style={styles.headerLogo}
             >
               <Brain size={24} color="#ffffff" />
@@ -699,7 +699,7 @@ export default function IAScreen() {
               >
                 <RefreshCw
                   size={20}
-                  color={isTraining ? "#8b5cf6" : "#ffffff"}
+                  color={isTraining ? "#3b82f6" : "#ffffff"}
                 />
               </Animated.View>
               <Text style={styles.trainButtonText}>
@@ -802,7 +802,7 @@ export default function IAScreen() {
           >
             <TrendingUpIcon
               size={20}
-              color={activeTab === "predictions" ? "#8b5cf6" : "#64748b"}
+              color={activeTab === "predictions" ? "#3b82f6" : "#64748b"}
             />
             <Text
               style={[
@@ -820,7 +820,7 @@ export default function IAScreen() {
           >
             <Zap
               size={20}
-              color={activeTab === "promotions" ? "#8b5cf6" : "#64748b"}
+              color={activeTab === "promotions" ? "#3b82f6" : "#64748b"}
             />
             <Text
               style={[
@@ -838,7 +838,7 @@ export default function IAScreen() {
           >
             <BarChartIcon
               size={20}
-              color={activeTab === "analytics" ? "#8b5cf6" : "#64748b"}
+              color={activeTab === "analytics" ? "#3b82f6" : "#64748b"}
             />
             <Text
               style={[
@@ -868,8 +868,8 @@ export default function IAScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor="#8b5cf6"
-              colors={["#8b5cf6"]}
+              tintColor="#3b82f6"
+              colors={["#3b82f6"]}
             />
           }
         >
@@ -1042,7 +1042,7 @@ export default function IAScreen() {
             <View style={styles.tabContent}>
               <View style={styles.analyticsHeader}>
                 <View style={styles.analyticsTitleContainer}>
-                  <BarChartIcon size={24} color="#8b5cf6" />
+                  <BarChartIcon size={24} color="#3b82f6" />
                   <Text style={styles.analyticsTitle}>
                     Performance du Modèle IA
                   </Text>
@@ -1080,13 +1080,13 @@ export default function IAScreen() {
                             value:
                               performanceData.precision.precision_demandes *
                               100,
-                            color: "#8b5cf6",
+                            color: "#3b82f6",
                           },
                           {
                             label: "Taux de Confiance",
                             value:
                               performanceData.precision.taux_confiance * 100,
-                            color: "#f97316",
+                            color: "#22c55e",
                           },
                         ].map((metric, index) => (
                           <Animated.View
@@ -1270,13 +1270,13 @@ export default function IAScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0f172a",
+    backgroundColor: "#0b1220",
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#0f172a",
+    backgroundColor: "#0b1220",
   },
   loadingText: {
     color: "#ffffff",
@@ -1324,7 +1324,7 @@ const styles = StyleSheet.create({
   trainButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#8b5cf6",
+    backgroundColor: "#3b82f6",
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
@@ -1437,7 +1437,7 @@ const styles = StyleSheet.create({
     marginLeft: 6,
   },
   activeTabText: {
-    color: "#8b5cf6",
+    color: "#3b82f6",
   },
   // Content
   contentContainer: {
@@ -1506,7 +1506,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(139, 92, 246, 0.2)",
   },
   modeBadgeText: {
-    color: "#8b5cf6",
+    color: "#3b82f6",
     fontSize: 12,
     fontWeight: "500",
   },
@@ -2058,7 +2058,7 @@ const styles = StyleSheet.create({
     height: 32,
     borderWidth: 3,
     borderColor: "rgba(139, 92, 246, 0.3)",
-    borderTopColor: "#8b5cf6",
+    borderTopColor: "#3b82f6",
     borderRadius: 16,
     marginBottom: 12,
   },

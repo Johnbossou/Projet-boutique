@@ -298,7 +298,7 @@ export default function InventaireScreen() {
           <ArrowLeft color="#fff" size={24} />
         </TouchableOpacity>
         <Text style={styles.title}>Inventaire physique</Text>
-        <ClipboardCheck color="#f97316" size={24} />
+        <ClipboardCheck color="#3b82f6" size={24} />
       </View>
 
       {isGerant && (
@@ -315,7 +315,7 @@ export default function InventaireScreen() {
       )}
 
       {loading ? (
-        <ActivityIndicator color="#f97316" style={{ marginTop: 40 }} />
+        <ActivityIndicator color="#3b82f6" style={{ marginTop: 40 }} />
       ) : (
         <FlatList
           data={inventaires}
@@ -354,7 +354,7 @@ export default function InventaireScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0f172a" },
+  container: { flex: 1, backgroundColor: "#0b1220" },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -392,7 +392,7 @@ const styles = StyleSheet.create({
   ecartText: { fontWeight: "700", fontSize: 13, marginTop: 4 },
   label: { color: "#94a3b8", marginBottom: 6, fontSize: 13 },
   input: {
-    backgroundColor: "#0f172a",
+    backgroundColor: "#0b1220",
     borderRadius: 10,
     padding: 12,
     color: "#fff",
@@ -402,7 +402,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    backgroundColor: "#f97316",
+    backgroundColor: "#3b82f6",
     padding: 14,
     borderRadius: 12,
     marginTop: 16,

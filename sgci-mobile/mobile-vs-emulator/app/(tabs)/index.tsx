@@ -214,8 +214,8 @@ export default function DashboardScreen() {
         : "0 FCFA",
       icon: DollarSign,
       trend: "+12.5%",
-      color: "#22c55e",
-      gradient: ["#22c55e", "#16a34a"],
+      color: "#facc15",
+      gradient: ["#facc15", "#f59e0b"],
       description: "Total des ventes",
     },
     {
@@ -232,8 +232,8 @@ export default function DashboardScreen() {
       value: stats ? stats.produits.total_produits.toString() : "0",
       icon: Package,
       trend: "Stable",
-      color: "#8b5cf6",
-      gradient: ["#8b5cf6", "#7c3aed"],
+      color: "#38bdf8",
+      gradient: ["#38bdf8", "#2563eb"],
       description: "Articles disponibles",
     },
     {
@@ -331,7 +331,7 @@ export default function DashboardScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
+      <StatusBar barStyle="light-content" backgroundColor="#0b1220" />
 
       {/* Sidebar pour tablette/desktop */}
       {width > 768 && (
@@ -355,7 +355,7 @@ export default function DashboardScreen() {
             {/* Logo */}
             <View style={styles.sidebarHeader}>
               <LinearGradient
-                colors={["#f97316", "#ef4444"]}
+                colors={["#3b82f6", "#1e40af"]}
                 style={styles.sidebarLogo}
               >
                 <Store size={24} color="#ffffff" />
@@ -436,7 +436,7 @@ export default function DashboardScreen() {
             <View style={styles.userSection}>
               <View style={styles.userInfo}>
                 <LinearGradient
-                  colors={["#3b82f6", "#8b5cf6"]}
+                  colors={["#3b82f6", "#1e40af"]}
                   style={styles.userAvatar}
                 >
                   <Text style={styles.userInitials}>
@@ -515,7 +515,7 @@ export default function DashboardScreen() {
                 >
                   <RefreshCw
                     size={22}
-                    color={isLoading ? "#f97316" : "#ffffff"}
+                    color={isLoading ? "#facc15" : "#ffffff"}
                   />
                 </Animated.View>
               </TouchableOpacity>
@@ -526,7 +526,7 @@ export default function DashboardScreen() {
 
               <TouchableOpacity style={styles.userButton}>
                 <LinearGradient
-                  colors={["#3b82f6", "#8b5cf6"]}
+                  colors={["#3b82f6", "#1e40af"]}
                   style={styles.userButtonAvatar}
                 >
                   <Text style={styles.userButtonInitials}>{user.name[0]}</Text>
@@ -544,8 +544,8 @@ export default function DashboardScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor="#f97316"
-              colors={["#f97316"]}
+              tintColor="#3b82f6"
+              colors={["#3b82f6"]}
             />
           }
         >
@@ -804,7 +804,7 @@ export default function DashboardScreen() {
                       >
                         <View style={styles.popularItemLeft}>
                           <LinearGradient
-                            colors={["#3b82f6", "#8b5cf6"]}
+                            colors={["#3b82f6", "#1e40af"]}
                             style={styles.popularRank}
                           >
                             <Text style={styles.popularRankText}>
@@ -889,13 +889,13 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0f172a",
+    backgroundColor: "#0b1220",
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#0f172a",
+    backgroundColor: "#0b1220",
   },
   loadingSpinner: {
     width: 60,

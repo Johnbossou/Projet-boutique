@@ -129,7 +129,7 @@ export default function RetoursScreen() {
           <ArrowLeft color="#fff" size={24} />
         </TouchableOpacity>
         <Text style={styles.title}>Retours / Remboursements</Text>
-        <RotateCcw color="#f97316" size={24} />
+        <RotateCcw color="#3b82f6" size={24} />
       </View>
 
       <View style={styles.filters}>
@@ -154,7 +154,7 @@ export default function RetoursScreen() {
       </View>
 
       {loading ? (
-        <ActivityIndicator color="#f97316" style={{ marginTop: 40 }} />
+        <ActivityIndicator color="#3b82f6" style={{ marginTop: 40 }} />
       ) : (
         <FlatList
           data={retours}
@@ -164,7 +164,7 @@ export default function RetoursScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={() => charger(true)}
-              tintColor="#f97316"
+              tintColor="#3b82f6"
             />
           }
           renderItem={({ item }) => (
@@ -196,7 +196,7 @@ export default function RetoursScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0f172a" },
+  container: { flex: 1, backgroundColor: "#0b1220" },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -213,7 +213,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: "#1e293b",
   },
-  filterActive: { backgroundColor: "#f97316" },
+  filterActive: { backgroundColor: "#3b82f6" },
   filterText: { color: "#e2e8f0", fontSize: 13 },
   card: {
     backgroundColor: "#1e293b",
@@ -244,7 +244,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 8,
   },
-  amount: { color: "#f97316", fontWeight: "700", fontSize: 15 },
+  amount: { color: "#3b82f6", fontWeight: "700", fontSize: 15 },
   date: { color: "#64748b", fontSize: 11 },
   empty: { color: "#64748b", textAlign: "center", marginTop: 40 },
 });

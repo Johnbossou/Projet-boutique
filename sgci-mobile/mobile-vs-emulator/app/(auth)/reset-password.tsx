@@ -1,4 +1,4 @@
-﻿import { BlurView } from "expo-blur";
+import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -88,11 +88,11 @@ export default function ResetPasswordScreen() {
     if (isLoading) return;
 
     if (!formData.token.trim()) {
-      Alert.alert("Champs requis", "Veuillez entrer le token de rÃ©initialisation.");
+      Alert.alert("Champs requis", "Veuillez entrer le token de réinitialisation.");
       return;
     }
     if (formData.password.length < 8) {
-      Alert.alert("Mot de passe trop court", "Le mot de passe doit contenir au moins 8 caractÃ¨res.");
+      Alert.alert("Mot de passe trop court", "Le mot de passe doit contenir au moins 8 caractères.");
       return;
     }
     if (formData.password !== formData.password_confirmation) {
@@ -113,18 +113,18 @@ export default function ResetPasswordScreen() {
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        Alert.alert("SuccÃ¨s", data.message || "Mot de passe rÃ©initialisÃ© avec succÃ¨s.", [
+        Alert.alert("Succès", data.message || "Mot de passe réinitialisé avec succès.", [
           { text: "OK", onPress: () => router.replace("/(auth)/login") },
         ]);
       } else {
         if (res.status === 422 && data.errors) {
-          Alert.alert("Erreur", (Object.values(data.errors)[0] as string[])[0] || "DonnÃ©es invalides.");
+          Alert.alert("Erreur", (Object.values(data.errors)[0] as string[])[0] || "Données invalides.");
         } else {
           Alert.alert("Erreur", data.message || "Une erreur est survenue.");
         }
       }
     } catch {
-      Alert.alert("Erreur", "Erreur rÃ©seau. VÃ©rifiez votre connexion.");
+      Alert.alert("Erreur", "Erreur réseau. Vérifiez votre connexion.");
     } finally {
       setIsLoading(false);
     }
@@ -133,7 +133,7 @@ export default function ResetPasswordScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <LinearGradient
-        colors={["#0f172a", "#4c1d95", "#0f172a"]}
+        colors={["#0b1220", "#1e40af", "#0b1220"]}
         style={StyleSheet.absoluteFill}
       />
       <KeyboardAvoidingView
@@ -187,7 +187,7 @@ export default function ResetPasswordScreen() {
                     ]}
                   >
                     <LinearGradient
-                      colors={["#f97316", "#ef4444"]}
+                      colors={["#3b82f6", "#1e40af"]}
                       style={styles.formLogoGradient}
                     >
                       <ShieldCheck size={28} color="#ffffff" />
@@ -195,14 +195,14 @@ export default function ResetPasswordScreen() {
                   </Animated.View>
                   <Text style={styles.formTitle}>Nouveau mot de passe</Text>
                   <Text style={styles.formSubtitle}>
-                    Choisissez un mot de passe sÃ©curisÃ©
+                    Choisissez un mot de passe sécurisé
                   </Text>
                 </View>
 
                 <View style={styles.formContent}>
                   {/* Token */}
                   <View style={styles.inputContainer}>
-                    <Text style={styles.inputLabel}>Token de rÃ©initialisation</Text>
+                    <Text style={styles.inputLabel}>Token de réinitialisation</Text>
                     <View style={styles.inputWrapper}>
                       <TextInput
                         style={styles.input}
@@ -224,7 +224,7 @@ export default function ResetPasswordScreen() {
                     <View style={styles.inputWrapper}>
                       <TextInput
                         style={[styles.input, styles.passwordInput]}
-                        placeholder="8 caractÃ¨res min"
+                        placeholder="8 caractères min"
                         placeholderTextColor="#94a3b8"
                         value={formData.password}
                         onChangeText={(text) =>
@@ -256,7 +256,7 @@ export default function ResetPasswordScreen() {
                     <View style={styles.inputWrapper}>
                       <TextInput
                         style={[styles.input, styles.passwordInput]}
-                        placeholder="8 caractÃ¨res min"
+                        placeholder="8 caractères min"
                         placeholderTextColor="#94a3b8"
                         value={formData.password_confirmation}
                         onChangeText={(text) =>
@@ -291,7 +291,7 @@ export default function ResetPasswordScreen() {
                       activeOpacity={0.9}
                     >
                       <LinearGradient
-                        colors={["#f97316", "#ef4444"]}
+                        colors={["#3b82f6", "#1e40af"]}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 0 }}
                         style={StyleSheet.absoluteFill}
@@ -322,14 +322,14 @@ export default function ResetPasswordScreen() {
                             ]}
                           />
                           <Text style={styles.buttonText}>
-                            RÃ©initialisation...
+                            Réinitialisation...
                           </Text>
                         </View>
                       ) : (
                         <View style={styles.buttonContent}>
                           <CheckCircle2 size={20} color="#ffffff" />
                           <Text style={styles.buttonText}>
-                            RÃ©initialiser le mot de passe
+                            Réinitialiser le mot de passe
                           </Text>
                         </View>
                       )}
@@ -344,14 +344,14 @@ export default function ResetPasswordScreen() {
               onPress={() => router.replace("/(auth)/login")}
               disabled={isLoading}
             >
-              <ChevronLeft size={16} color="#f97316" />
-              <Text style={styles.backLinkText}>Retour Ã  la </Text>
+              <ChevronLeft size={16} color="#3b82f6" />
+              <Text style={styles.backLinkText}>Retour à la </Text>
               <Text style={styles.backLinkStrong}>connexion</Text>
             </TouchableOpacity>
 
             <View style={styles.footer}>
               <Text style={styles.footerText}>
-                Â© 2025 SGCI BÃ©nin - SystÃ¨me Premium
+                © 2025 SGCI Bénin - Système Premium
               </Text>
             </View>
           </Animated.View>
@@ -364,7 +364,7 @@ export default function ResetPasswordScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0f172a",
+    backgroundColor: "#0b1220",
   },
   keyboardView: {
     flex: 1,
@@ -405,7 +405,7 @@ const styles = StyleSheet.create({
     height: 72,
     borderRadius: 20,
     marginBottom: 16,
-    shadowColor: "#f97316",
+    shadowColor: "#3b82f6",
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.4,
     shadowRadius: 20,
@@ -477,7 +477,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#f97316",
+    shadowColor: "#3b82f6",
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.3,
     shadowRadius: 20,
@@ -528,7 +528,7 @@ const styles = StyleSheet.create({
   backLinkStrong: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#f97316",
+    color: "#3b82f6",
   },
   footer: {
     marginTop: 32,

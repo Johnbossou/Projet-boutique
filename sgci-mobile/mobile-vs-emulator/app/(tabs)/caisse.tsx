@@ -60,6 +60,7 @@ import {
 import { syncOfflineQueue } from "@/lib/sync-offline-caisse";
 import { fetchBoutiqueSettings, getDelaiAnnulationMs } from "@/lib/boutique-settings";
 import { downloadFacturePdf } from "@/lib/facture-pdf";
+import { ProductImagePlaceholder } from "@/components/ProductImagePlaceholder";
 
 const { width, height } = Dimensions.get("window");
 
@@ -71,6 +72,7 @@ interface Produit {
   quantite_stock: number;
   categorie?: {
     nom: string;
+    couleur?: string;
   };
   image_url?: string;
 }
@@ -134,6 +136,7 @@ export default function CaisseScreen() {
   const [showHistorique, setShowHistorique] = useState(false);
   const [ventesJour, setVentesJour] = useState<VenteResponse[]>([]);
   const [offlineCount, setOfflineCount] = useState(0);
+  const [showMobileCheckout, setShowMobileCheckout] = useState(false);
 
   // États paiement
   const [modePaiement, setModePaiement] = useState<
@@ -777,9 +780,11 @@ export default function CaisseScreen() {
             resizeMode="cover"
           />
         ) : (
-          <View style={styles.productImagePlaceholder}>
-            <Barcode size={24} color="#94a3b8" />
-          </View>
+          <ProductImagePlaceholder
+            nom={produit.nom}
+            couleur={produit.categorie?.couleur || "#3b82f6"}
+            size={96}
+          />
         )}
 
         {/* Infos produit */}
@@ -925,6 +930,219 @@ export default function CaisseScreen() {
     </Animated.View>
   );
 
+  // Checkout mobile : panneau de paiement affiché dans la bottom sheet
+  const renderMobileCheckout = () => (
+    <View style={styles.mobileCheckout}>
+      {/* Modes paiement */}
+      <Text style={styles.paymentMethodsTitle}>Mode de paiement</Text>
+      <View style={styles.paymentGrid}>
+        {[
+          {
+            key: "especes",
+            icon: Wallet,
+            label: "Espèces",
+            color: "#22c55e",
+          },
+          {
+            key: "mtn",
+            icon: Smartphone,
+            label: "MTN",
+            color: "#fbbf24",
+          },
+          {
+            key: "moov",
+            icon: Smartphone,
+            label: "Moov",
+            color: "#3b82f6",
+          },
+          {
+            key: "carte",
+            icon: CreditCard,
+            label: "Carte",
+            color: "#8b5cf6",
+          },
+        ].map((method) => (
+          <TouchableOpacity
+            key={method.key}
+            style={[
+              styles.paymentMethod,
+              modePaiement === method.key && styles.paymentMethodActive,
+              { borderColor: method.color + "40" },
+            ]}
+            onPress={() => setModePaiement(method.key as any)}
+          >
+            <View
+              style={[
+                styles.paymentIcon,
+                { backgroundColor: method.color + "20" },
+              ]}
+            >
+              <method.icon size={20} color={method.color} />
+            </View>
+            <Text style={styles.paymentLabel}>{method.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Champs spécifiques */}
+      {modePaiement && (
+        <View style={styles.paymentFields}>
+          {(modePaiement === "mtn" || modePaiement === "moov") && (
+            <View style={styles.paymentField}>
+              <Text style={styles.paymentFieldLabel}>
+                Numéro {modePaiement === "mtn" ? "MTN" : "Moov"}
+              </Text>
+              <TextInput
+                style={styles.paymentInput}
+                placeholder="Ex: 67 12 34 56"
+                placeholderTextColor="#94a3b8"
+                value={numeroTransaction}
+                onChangeText={setNumeroTransaction}
+                keyboardType="phone-pad"
+              />
+            </View>
+          )}
+
+          {modePaiement === "carte" && (
+            <> 
+              <View style={styles.paymentField}>
+                <Text style={styles.paymentFieldLabel}>Référence carte</Text>
+                <TextInput
+                  style={styles.paymentInput}
+                  placeholder="Ref. transaction"
+                  placeholderTextColor="#94a3b8"
+                  value={referenceCarte}
+                  onChangeText={setReferenceCarte}
+                />
+              </View>
+              <View style={styles.paymentField}>
+                <Text style={styles.paymentFieldLabel}>Banque</Text>
+                <View style={styles.paymentSelect}>
+                  <Text style={styles.paymentSelectText}>
+                    {banqueSelectionnee || "Sélectionnez"}
+                  </Text>
+                  <ChevronDown size={16} color="#64748b" />
+                </View>
+              </View>
+            </>
+          )}
+
+          {modePaiement === "especes" && (
+            <View style={styles.paymentField}>
+              <Text style={styles.paymentFieldLabel}>Montant reçu</Text>
+              <TextInput
+                style={styles.paymentInput}
+                placeholder="Montant remis"
+                placeholderTextColor="#94a3b8"
+                value={montantRecu}
+                onChangeText={setMontantRecu}
+                keyboardType="decimal-pad"
+              />
+              {montantRecu &&
+                parseFloat(montantRecu) > calculs.total && (
+                  <Text style={styles.changeText}>
+                    Monnaie à rendre: {monnaieRendue.toLocaleString()} FCFA
+                  </Text>
+                )}
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* Remise */}
+      {showRemiseInput ? (
+        <View style={styles.discountContainer}>
+          <Text style={styles.discountLabel}>Remise (FCFA)</Text>
+          <View style={styles.discountInputRow}>
+            <TextInput
+              style={styles.discountInput}
+              value={remise.toString()}
+              placeholderTextColor="#94a3b8"
+              onChangeText={(text) =>
+                setRemise(Math.max(0, Number(text) || 0))
+              }
+              keyboardType="decimal-pad"
+            />
+            <TouchableOpacity
+              style={styles.discountClose}
+              onPress={() => setShowRemiseInput(false)}
+            >
+              <X size={16} color="#64748b" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : (
+        <TouchableOpacity
+          style={styles.discountButton}
+          onPress={() => setShowRemiseInput(true)}
+        >
+          <Percent size={16} color="#3b82f6" />
+          <Text style={styles.discountButtonText}>Remise</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Récapitulatif */}
+      <View style={styles.summary}>
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>Sous-total</Text>
+          <Text style={styles.summaryValue}>
+            {calculs.sousTotal.toLocaleString()} FCFA
+          </Text>
+        </View>
+        {remise > 0 && (
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Remise</Text>
+            <Text style={styles.summaryDiscount}>
+              -{remise.toLocaleString()} FCFA
+            </Text>
+          </View>
+        )}
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>TVA (18%)</Text>
+          <Text style={styles.summaryValue}>
+            {calculs.tva.toLocaleString()} FCFA
+          </Text>
+        </View>
+        <View style={[styles.summaryRow, styles.totalRow]}>
+          <Text style={styles.totalLabel}>Total</Text>
+          <Text style={styles.totalValue}>
+            {calculs.total.toLocaleString()} FCFA
+          </Text>
+        </View>
+      </View>
+
+      {/* Actions */}
+      <View style={styles.cartActions}>
+        <TouchableOpacity
+          style={styles.clearButton}
+          onPress={viderPanier}
+          disabled={isProcessing}
+        >
+          <Trash2 size={20} color="#ef4444" />
+          <Text style={styles.clearButtonText}>Vider</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.payButton,
+            (!modePaiement || isProcessing) && styles.payButtonDisabled,
+          ]}
+          onPress={procederPaiement}
+          disabled={!modePaiement || isProcessing}
+        >
+          {isProcessing ? (
+            <ActivityIndicator size="small" color="#ffffff" />
+          ) : (
+            <>
+              <Calculator size={20} color="#ffffff" />
+              <Text style={styles.payButtonText}>Payer</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
   if (!user) {
     return (
       <View style={styles.loadingContainer}>
@@ -936,21 +1154,28 @@ export default function CaisseScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
+      <StatusBar barStyle="light-content" backgroundColor="#0b1220" />
 
       {/* Header */}
       <BlurView intensity={30} style={styles.header}>
         <View style={styles.headerContent}>
           <View style={styles.headerLeft}>
             <LinearGradient
-              colors={["#22c55e", "#16a34a"]}
+              colors={["#3b82f6", "#1e40af"]}
               style={styles.headerLogo}
             >
               <ShoppingCart size={24} color="#ffffff" />
             </LinearGradient>
             <View>
-              <Text style={styles.headerTitle}>Caisse Gaming</Text>
-              <Text style={styles.headerSubtitle}>Interface ultra-rapide</Text>
+              <Text style={styles.headerTitle}>Caisse</Text>
+              <Text style={styles.headerSubtitle}>
+                Panier ·{" "}
+                {new Date().toLocaleDateString("fr-FR", {
+                  weekday: "long",
+                  day: "numeric",
+                  month: "long",
+                })}
+              </Text>
             </View>
           </View>
 
@@ -996,19 +1221,6 @@ export default function CaisseScreen() {
           />
         </View>
       </BlurView>
-
-      {/* Indicateur Gaming */}
-      <Animated.View
-        style={[
-          styles.gamingIndicator,
-          {
-            transform: [{ scale: pulseAnim }],
-          },
-        ]}
-      >
-        <Zap size={16} color="#22c55e" />
-        <Text style={styles.gamingText}>Mode Gaming Activé</Text>
-      </Animated.View>
 
       {/* Contenu principal */}
       <Animated.View
@@ -1389,6 +1601,7 @@ export default function CaisseScreen() {
           </View>
         ) : (
           // Mobile - Scroll vertical
+          <>
           <ScrollView
             style={styles.mobileScroll}
             showsVerticalScrollIndicator={false}
@@ -1425,6 +1638,7 @@ export default function CaisseScreen() {
                 keyExtractor={(item) => item.id.toString()}
                 horizontal
                 showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.productsHorizontalListContent}
                 style={styles.productsHorizontalList}
                 ListEmptyComponent={
                   <View style={styles.emptyState}>
@@ -1468,17 +1682,33 @@ export default function CaisseScreen() {
                         index={index}
                       />
                     ))}
-
-                    {/* Détails mobile */}
-                    <View style={styles.mobileCartDetails}>
-                      {/* (Contenu similaire à la version tablette mais adapté) */}
-                      {/* ... */}
-                    </View>
                   </>
                 )}
               </BlurView>
             </View>
           </ScrollView>
+
+          {/* Barre totale sticky mobile */}
+          {panier.length > 0 && (
+            <View style={styles.mobileStickyBar}>
+              <View style={styles.mobileStickyInfos}>
+                <Text style={styles.mobileStickyLabel}>
+                  {panier.length} article{panier.length > 1 ? "s" : ""}
+                </Text>
+                <Text style={styles.mobileStickyTotal}>
+                  {calculs.total.toLocaleString()} FCFA
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.payButton}
+                onPress={() => setShowMobileCheckout(true)}
+              >
+                <Calculator size={20} color="#ffffff" />
+                <Text style={styles.payButtonText}>Payer</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          </>
         )}
       </Animated.View>
 
@@ -1534,6 +1764,42 @@ export default function CaisseScreen() {
             ))}
           </ScrollView>
         </SafeAreaView>
+      </Modal>
+
+      {/* Checkout mobile : bottom sheet */}
+      <Modal
+        visible={showMobileCheckout}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowMobileCheckout(false)}
+      >
+        <View style={styles.sheetOverlay}>
+          <TouchableOpacity
+            style={styles.sheetBackdrop}
+            activeOpacity={1}
+            onPress={() => setShowMobileCheckout(false)}
+          />
+          <View style={styles.sheet}>
+            <View style={styles.sheetGrabber} />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Valider la vente</Text>
+              <TouchableOpacity
+                style={styles.sheetClose}
+                onPress={() => setShowMobileCheckout(false)}
+              >
+                <X size={22} color="#94a3b8" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 24 }}>
+              {panier.map((item, index) => (
+                <CartItem key={item.produit.id} item={item} index={index} />
+              ))}
+              {renderMobileCheckout()}
+            </ScrollView>
+          </View>
+        </View>
       </Modal>
 
       {/* Ticket Modal */}
@@ -1740,13 +2006,13 @@ export default function CaisseScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0f172a",
+    backgroundColor: "#0b1220",
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#0f172a",
+    backgroundColor: "#0b1220",
   },
   loadingText: {
     marginTop: 12,
@@ -1818,9 +2084,11 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.1)",
-    borderRadius: 12,
-    paddingHorizontal: 12,
+    backgroundColor: "rgba(255, 255, 255, 0.12)",
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    height: 48,
+    marginTop: 12,
   },
   searchIcon: {
     marginRight: 8,
@@ -1908,25 +2176,25 @@ const styles = StyleSheet.create({
   productCardInner: {
     flexDirection: "row",
     backgroundColor: "rgba(255, 255, 255, 0.05)",
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.1)",
     overflow: "hidden",
   },
   productImage: {
-    width: 80,
-    height: 80,
+    width: 96,
+    height: 96,
   },
   productImagePlaceholder: {
-    width: 80,
-    height: 80,
+    width: 96,
+    height: 96,
     backgroundColor: "rgba(255, 255, 255, 0.1)",
     justifyContent: "center",
     alignItems: "center",
   },
   productInfo: {
     flex: 1,
-    padding: 12,
+    padding: 14,
     justifyContent: "space-between",
   },
   productHeader: {
@@ -1937,7 +2205,7 @@ const styles = StyleSheet.create({
   },
   productName: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "600",
     color: "#ffffff",
     marginRight: 8,
@@ -1953,7 +2221,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   productPrice: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: "bold",
     color: "#22c55e",
   },
@@ -1973,9 +2241,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#22c55e",
+    minHeight: 42,
     paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
+    paddingHorizontal: 14,
+    borderRadius: 10,
   },
   addButtonDisabled: {
     backgroundColor: "rgba(148, 163, 184, 0.5)",
@@ -2041,10 +2310,10 @@ const styles = StyleSheet.create({
   cartItemContent: {
     flexDirection: "row",
     backgroundColor: "rgba(255, 255, 255, 0.05)",
-    borderRadius: 8,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.1)",
-    padding: 12,
+    padding: 14,
   },
   cartItemLeft: {
     flex: 1,
@@ -2181,10 +2450,12 @@ const styles = StyleSheet.create({
   paymentMethod: {
     width: "48%",
     margin: "1%",
-    padding: 12,
-    borderRadius: 8,
+    padding: 14,
+    borderRadius: 12,
     borderWidth: 2,
     alignItems: "center",
+    minHeight: 84,
+    justifyContent: "center",
   },
   paymentMethodActive: {
     backgroundColor: "rgba(255, 255, 255, 0.1)",
@@ -2344,8 +2615,9 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(239, 68, 68, 0.1)",
     borderWidth: 1,
     borderColor: "rgba(239, 68, 68, 0.2)",
-    borderRadius: 8,
+    borderRadius: 12,
     padding: 12,
+    minHeight: 52,
   },
   clearButtonText: {
     color: "#ef4444",
@@ -2358,8 +2630,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#22c55e",
-    borderRadius: 8,
+    borderRadius: 12,
     padding: 12,
+    minHeight: 52,
   },
   payButtonDisabled: {
     backgroundColor: "rgba(148, 163, 184, 0.5)",
@@ -2372,14 +2645,17 @@ const styles = StyleSheet.create({
   // Mobile layout
   mobileScroll: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingHorizontal: 16,
+    paddingTop: 14,
   },
   mobileSection: {
     marginBottom: 20,
   },
   productsHorizontalList: {
     flexGrow: 0,
+  },
+  productsHorizontalListContent: {
+    paddingHorizontal: 16,
   },
   mobileCart: {
     borderRadius: 16,
@@ -2390,6 +2666,88 @@ const styles = StyleSheet.create({
   },
   mobileCartDetails: {
     padding: 16,
+  },
+  // Mobile sticky bar
+  mobileStickyBar: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#0e1729",
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255, 255, 255, 0.12)",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingBottom: 16,
+    gap: 12,
+  },
+  mobileStickyInfos: {
+    flex: 1,
+  },
+  mobileStickyLabel: {
+    fontSize: 12,
+    color: "#94a3b8",
+  },
+  mobileStickyTotal: {
+    fontSize: 22,
+    fontWeight: "bold",
+    color: "#facc15",
+  },
+  // Bottom sheet (checkout mobile)
+  sheetOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+  },
+  sheetBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+  },
+  sheet: {
+    backgroundColor: "#0b1220",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    borderColor: "rgba(255, 255, 255, 0.12)",
+    maxHeight: "88%",
+  },
+  sheetGrabber: {
+    width: 40,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    alignSelf: "center",
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  sheetHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255, 255, 255, 0.1)",
+  },
+  sheetTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#ffffff",
+  },
+  sheetClose: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+  },
+  mobileCheckout: {
+    padding: 20,
+    paddingTop: 8,
   },
   // Empty states
   emptyState: {
@@ -2409,7 +2767,7 @@ const styles = StyleSheet.create({
   // Scanner modal
   scannerModal: {
     flex: 1,
-    backgroundColor: "#0f172a",
+    backgroundColor: "#0b1220",
   },
   scannerHeader: {
     flexDirection: "row",
@@ -2482,7 +2840,7 @@ const styles = StyleSheet.create({
   // Ticket modal
   ticketModal: {
     flex: 1,
-    backgroundColor: "#0f172a",
+    backgroundColor: "#0b1220",
   },
   ticketHeader: {
     flexDirection: "row",

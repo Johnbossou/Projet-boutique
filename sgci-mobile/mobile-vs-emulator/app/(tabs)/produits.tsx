@@ -50,6 +50,7 @@ import {
 import { useAuth } from "../../contexts/AuthContext";
 import { apiFetch } from "@/lib/api-client";
 import { uploadProduitImage } from "@/lib/upload-image";
+import { ProductImagePlaceholder } from "@/components/ProductImagePlaceholder";
 
 const { width, height } = Dimensions.get("window");
 
@@ -700,16 +701,17 @@ export default function ProduitsScreen() {
         ? produit.images
         : produit.image_url
           ? [produit.image_url]
-          : [getDefaultImage(produit)];
+          : [];
 
-    const imageUrl = images[0];
+    const imageUrl = images.length > 0 ? images[0] : null;
 
-    if (imageError) {
+    if (!imageUrl || imageError) {
       return (
-        <View style={[styles.imagePlaceholder, { width: size, height: size }]}>
-          <ImageIcon size={size * 0.3} color="#94a3b8" />
-          <Text style={styles.imagePlaceholderText}>Image non disponible</Text>
-        </View>
+        <ProductImagePlaceholder
+          nom={produit.nom}
+          couleur={produit.categorie?.couleur || "#3b82f6"}
+          size={size}
+        />
       );
     }
 
@@ -1035,7 +1037,7 @@ export default function ProduitsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
+      <StatusBar barStyle="light-content" backgroundColor="#0b1220" />
 
       {/* Header */}
       <BlurView intensity={30} style={styles.header}>
@@ -2223,13 +2225,13 @@ export default function ProduitsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0f172a",
+    backgroundColor: "#0b1220",
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#0f172a",
+    backgroundColor: "#0b1220",
   },
   loadingText: {
     color: "#ffffff",
@@ -2416,7 +2418,7 @@ const styles = StyleSheet.create({
   },
   // Vue Grid
   gridContainer: {
-    flex: 1,
+    paddingBottom: 16,
   },
   grid: {
     flexDirection: "row",
@@ -2549,7 +2551,7 @@ const styles = StyleSheet.create({
   },
   // Vue Liste
   listContainer: {
-    flex: 1,
+    paddingBottom: 16,
   },
   productRow: {
     backgroundColor: "rgba(255, 255, 255, 0.05)",
@@ -2759,7 +2761,7 @@ const styles = StyleSheet.create({
   // Modals
   modalContainer: {
     flex: 1,
-    backgroundColor: "#0f172a",
+    backgroundColor: "#0b1220",
   },
   modalHeader: {
     flexDirection: "row",
