@@ -22,6 +22,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
 
 interface LigneDevis {
   id: number;
@@ -128,16 +130,45 @@ export default function DevisScreen() {
 
   const telechargerPdf = async (d: Devis) => {
     try {
-      const res = await apiFetch(`/devis/${d.id}/pdf`);
-      if (res.ok) {
-        Alert.alert("PDF", "Le PDF a ete genere. Consultez vos telechargements.");
-      } else {
+      const res = await apiFetch(`/devis/${d.id}/pdf`, {
+        headers: { Accept: "application/pdf" },
+      });
+      if (!res.ok) {
         Alert.alert("Erreur", "Impossible de generer le PDF");
+        return;
+      }
+      const blob = await res.blob();
+      const base64 = await blobToBase64(blob);
+      const name = `${d.numero_devis}.pdf`.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const path = `${FileSystem.cacheDirectory}${name}`;
+      await FileSystem.writeAsStringAsync(path, base64, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(path, { mimeType: "application/pdf" });
+      } else {
+        Alert.alert("PDF", `Le PDF a ete enregistre dans le cache de l'app`);
       }
     } catch {
       Alert.alert("Erreur", "Impossible de generer le PDF");
     }
   };
+
+  const blobToBase64 = (blob: Blob) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = reader.result;
+        if (typeof result === "string") {
+          const idx = result.indexOf(",");
+          resolve(idx >= 0 ? result.slice(idx + 1) : result);
+        } else {
+          reject(new Error("Lecture impossible"));
+        }
+      };
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(blob);
+    });
 
   const badgeStyle = (statut: string) => {
     const c = STATUT_COLORS[statut] ?? STATUT_COLORS.en_attente;

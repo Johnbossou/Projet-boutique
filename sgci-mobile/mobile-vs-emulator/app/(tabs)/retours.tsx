@@ -104,7 +104,7 @@ export default function RetoursScreen() {
         `Vente : ${item.vente_numero}`,
         `Type : ${item.type}`,
         `Motif : ${item.motif}`,
-        `Montant : ${Number(item.montant_rembourse).toLocaleString("fr-FR")} FC`,
+        `Montant : ${Number(item.montant_rembourse).toLocaleString("fr-FR")} FCFA`,
         `Statut : ${item.statut.replace("_", " ")}`,
         `Date : ${new Date(item.created_at).toLocaleString("fr-FR")}`,
       ].join("\n"),
@@ -182,7 +182,7 @@ export default function RetoursScreen() {
               </Text>
               <View style={styles.cardBottom}>
                 <Text style={styles.amount}>
-                  {Number(item.montant_rembourse).toLocaleString("fr-FR")} FC
+                  {Number(item.montant_rembourse).toLocaleString("fr-FR")} FCFA
                 </Text>
                 <Text style={styles.date}>{new Date(item.created_at).toLocaleString("fr-FR")}</Text>
               </View>

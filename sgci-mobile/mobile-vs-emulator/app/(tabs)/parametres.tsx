@@ -23,7 +23,6 @@ import {
     ShieldCheck,
     Smartphone,
     Store,
-    Trash2,
     Upload,
     User,
     Wifi
@@ -46,6 +45,7 @@ import {
 } from "react-native";
 import { useAuth } from "../../contexts/AuthContext";
 import { apiFetch } from "@/lib/api-client";
+import Constants from "expo-constants";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   loadBoutiqueSettings,
@@ -64,6 +64,8 @@ import * as FileSystem from "expo-file-system/legacy";
 import { UsersManagement } from "@/components/UsersManagement";
 
 const { width, height } = Dimensions.get("window");
+
+const APP_VERSION = Constants.expoConfig?.version ?? "1.0.0";
 
 interface UserProfile {
   name: string;
@@ -189,8 +191,8 @@ export default function ParametresScreen() {
   };
 
   const sauvegarderBoutique = async () => {
-    if (user?.role !== "gerant") {
-      Alert.alert("Accès refusé", "Seul le gérant peut modifier les paramètres boutique");
+    if (user?.role !== "gerant" && user?.role !== "proprietaire") {
+      Alert.alert("Accès refusé", "Seul le gérant ou le propriétaire peut modifier les paramètres boutique");
       return;
     }
     setSaving(true);
@@ -298,30 +300,18 @@ export default function ParametresScreen() {
 
   const importerDonnees = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    Alert.alert("Import", "Fonctionnalité d'import en développement");
-  };
-
-  const supprimerCompte = () => {
     Alert.alert(
-      "Supprimer le compte",
-      "Êtes-vous sûr de vouloir supprimer votre compte ? Cette action est irréversible.",
-      [
-        { text: "Annuler", style: "cancel" },
-        {
-          text: "Supprimer",
-          style: "destructive",
-          onPress: () => {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-            Alert.alert("Compte supprimé", "Votre compte a été supprimé");
-          },
-        },
-      ]
+      "Import non disponible",
+      "L'import de données n'est pas encore disponible dans cette version."
     );
   };
 
   const verifierMisesAJour = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    Alert.alert("Mises à jour", "Votre système est à jour !");
+    Alert.alert(
+      "Version installée",
+      `Vous utilisez la version ${APP_VERSION}. Aucune mise à jour n'est requise.`
+    );
   };
 
   // 🎯 COMPOSANT BOUTON TAB
@@ -1124,16 +1114,6 @@ export default function ParametresScreen() {
                       Durée avant déconnexion automatique
                     </Text>
                   </View>
-
-                  <TouchableOpacity
-                    style={styles.deleteAccountButton}
-                    onPress={supprimerCompte}
-                  >
-                    <Trash2 size={20} color="#ef4444" />
-                    <Text style={styles.deleteAccountText}>
-                      Supprimer le compte
-                    </Text>
-                  </TouchableOpacity>
                 </View>
               </BlurView>
             </View>
@@ -1164,15 +1144,15 @@ export default function ParametresScreen() {
                         Dernière sauvegarde
                       </Text>
                       <Text style={styles.systemInfoValue}>
-                        15 Oct 2024, 14:30
+                        Non planifiée
                       </Text>
                     </View>
                     <View style={styles.systemInfoItem}>
                       <HardDrive size={16} color="#64748b" />
                       <Text style={styles.systemInfoLabel}>
-                        Taille des données
+                        Stockage local
                       </Text>
-                      <Text style={styles.systemInfoValue}>45.2 MB</Text>
+                      <Text style={styles.systemInfoValue}>Appareil</Text>
                     </View>
                   </View>
 
@@ -1220,7 +1200,7 @@ export default function ParametresScreen() {
                     <View style={styles.systemDetailItem}>
                       <Text style={styles.systemDetailLabel}>Version SGCI</Text>
                       <View style={styles.versionBadge}>
-                        <Text style={styles.versionText}>v2.1.0</Text>
+                        <Text style={styles.versionText}>v{APP_VERSION}</Text>
                       </View>
                     </View>
                     <View style={styles.systemDetailItem}>
@@ -1243,7 +1223,9 @@ export default function ParametresScreen() {
                       <Text style={styles.systemDetailLabel}>
                         Dernière mise à jour
                       </Text>
-                      <Text style={styles.systemDetailValue}>12 Oct 2024</Text>
+                      <Text style={styles.systemDetailValue}>
+                        À jour
+                      </Text>
                     </View>
                     <View style={styles.systemDetailItem}>
                       <Text style={styles.systemDetailLabel}>Connectivité</Text>
@@ -1738,24 +1720,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#94a3b8",
     marginTop: 2,
-  },
-  // Delete Account
-  deleteAccountButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(239, 68, 68, 0.1)",
-    borderWidth: 1,
-    borderColor: "rgba(239, 68, 68, 0.2)",
-    padding: 16,
-    borderRadius: 12,
-    marginTop: 8,
-    gap: 8,
-  },
-  deleteAccountText: {
-    color: "#ef4444",
-    fontSize: 16,
-    fontWeight: "600",
   },
   // System Info
   systemInfo: {
