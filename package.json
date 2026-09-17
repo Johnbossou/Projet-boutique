@@ -1,0 +1,8 @@
+{
+  "name": "projet-boutique",
+  "private": true,
+  "description": "Monorepo SGCI (backend Laravel, frontend Next.js, mobile Expo)",
+  "devDependencies": {
+    "railway": "latest"
+  }
+}

@@ -15,3 +15,4 @@ Thumbs.db
 # Yarn / npm misc
 *.tsbuildinfo
 npm-debug.log*
+node_modules/
