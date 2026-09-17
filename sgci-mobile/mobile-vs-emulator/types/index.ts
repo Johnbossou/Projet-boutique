@@ -29,6 +29,7 @@ export interface User {
   name: string;
   email: string;
   role: 'proprietaire' | 'gerant' | 'caissier';
+  role_courant?: 'proprietaire' | 'gerant' | 'caissier' | null;
   telephone?: string | null;
   derniere_connexion?: string;
   est_actif?: boolean;

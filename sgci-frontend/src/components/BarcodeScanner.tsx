@@ -105,7 +105,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
     
     // Récupérer le produit via l'API
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('sgci_token');
       const response = await fetch(`${apiBaseUrl}/produits/code/${encodeURIComponent(code)}`, {
         headers: {
           'Authorization': `Bearer ${token}`,

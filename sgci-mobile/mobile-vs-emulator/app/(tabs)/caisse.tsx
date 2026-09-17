@@ -706,7 +706,7 @@ export default function CaisseScreen() {
                   .map(
                     (ligne) => `
                   <tr>
-                    <td>${ligne.produit.nom}</td>
+                    <td>${ligne.produit?.nom ?? "Produit supprimé"}</td>
                     <td align="center">${ligne.quantite}</td>
                     <td align="right">${ligne.prix_unitaire.toLocaleString()}</td>
                     <td align="right">${(ligne.prix_unitaire * ligne.quantite).toLocaleString()}</td>
@@ -1893,7 +1893,7 @@ export default function CaisseScreen() {
                     <View key={index} style={styles.ticketItem}>
                       <View style={styles.ticketItemHeader}>
                         <Text style={styles.ticketItemName} numberOfLines={1}>
-                          {ligne.produit.nom}
+{ligne.produit?.nom ?? "Produit supprimé"}
                         </Text>
                         <Text style={styles.ticketItemTotal}>
                           {(

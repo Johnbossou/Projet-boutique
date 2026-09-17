@@ -693,7 +693,7 @@ export default function AnalyticsScreen() {
                           </LinearGradient>
                           <View style={styles.produitInfo}>
                             <Text style={styles.produitName} numberOfLines={1}>
-                              {item.produit.nom}
+                              {item.produit?.nom ?? "Produit supprimé"}
                             </Text>
                             <Text style={styles.produitSales}>
                               {item.total_vendus} unités vendues

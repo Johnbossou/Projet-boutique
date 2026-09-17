@@ -15,7 +15,7 @@ import { fetchBoutiqueSettings } from '@/lib/boutique-settings';
 import { User } from '@/types';
 
 export type LoginResult =
-  | { success: true }
+  | { success: true; needsBoutiqueSelection?: boolean }
   | { success: false; message: string }
   | { requiresTwoFactor: true };
 
@@ -30,6 +30,18 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+/**
+ * Le rôle global (User.role) est le rôle le plus élevé parmi les boutiques.
+ * Pour l'interface, on veut le rôle DANS la boutique courante (role_courant).
+ */
+function normalizeUser(dUser: User): User {
+  if (!dUser.role_courant) return dUser;
+  return {
+    ...dUser,
+    role: dUser.role_courant,
+  };
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -53,7 +65,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const response = await apiFetch('/me');
         if (response.ok) {
           const data = await response.json();
-          setUser(data.user);
+          setUser(normalizeUser(data.user));
           fetchBoutiqueSettings().catch(() => undefined);
         } else {
           await SecureStore.deleteItemAsync('auth_token');
@@ -98,9 +110,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         await SecureStore.setItemAsync('auth_token', data.token);
-        await AsyncStorage.setItem('user_data', JSON.stringify(data.user));
-        setUser(data.user);
+
+        // Recharger le profil complet (boutiques + role_courant + current_boutique_id)
+        // via /me, car /login ne renvoie qu'un user réduit.
+        let fullUser: User = data.user;
+        try {
+          const meResponse = await apiFetch('/me');
+          if (meResponse.ok) {
+            const meData = await meResponse.json();
+            fullUser = meData.user;
+          }
+        } catch {
+          // Non bloquant : on conserve le user réduit en cas de souci réseau.
+        }
+        fullUser = normalizeUser(fullUser);
+
+        await AsyncStorage.setItem('user_data', JSON.stringify(fullUser));
+        setUser(fullUser);
         fetchBoutiqueSettings().catch(() => undefined);
+
+        if ((fullUser.boutiques?.length ?? 0) > 1) {
+          // La page de connexion affiche le sélecteur de boutique
+          return { success: true, needsBoutiqueSelection: true };
+        }
+
         router.replace('/(tabs)');
         return { success: true };
       } catch {
@@ -136,14 +169,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       const data = await response.json();
-      // Update user data with new boutique info
       setUser((prevUser) => {
         if (!prevUser) return null;
-        return {
+        return normalizeUser({
           ...prevUser,
+          role_courant: data.role_courant,
           current_boutique_id: data.current_boutique_id,
           current_boutique: data.current_boutique,
-        };
+        });
       });
     } catch (error: unknown) {
       const message =

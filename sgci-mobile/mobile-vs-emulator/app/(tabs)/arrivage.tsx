@@ -34,7 +34,7 @@ interface Mouvement {
 export default function ArrivageScreen() {
   const { user } = useAuth();
   const router = useRouter();
-  const isGerant = user?.role === "gerant";
+  const isGerant = user?.role === "gerant" || user?.role === "proprietaire";
   const [produits, setProduits] = useState<Produit[]>([]);
   const [mouvements, setMouvements] = useState<Mouvement[]>([]);
   const [produitId, setProduitId] = useState("");
@@ -98,7 +98,7 @@ export default function ArrivageScreen() {
           produit_id: parseInt(produitId, 10),
           quantite: parseInt(quantite, 10),
           raison: "arrivage",
-          type: "entrée",
+          type: "entree",
           reference_bon: referenceBon || null,
           notes: notes || null,
         }),

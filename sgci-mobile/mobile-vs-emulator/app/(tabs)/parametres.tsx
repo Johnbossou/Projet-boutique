@@ -487,15 +487,15 @@ export default function ParametresScreen() {
             icon={Database}
             isActive={activeTab === "systeme"}
           />
-          {user?.role === "gerant" && (
+          {user?.role === "gerant" || user?.role === "proprietaire" ? (
             <TabButton
               value="equipe"
               label="Équipe"
               icon={User}
               isActive={activeTab === "equipe"}
             />
-          )}
-          {user?.role === "proprietaire" && (
+          ) : null}
+          {user?.boutiques && user.boutiques.length > 1 && (
             <TabButton
               value="mes-boutiques"
               label="Mes Boutiques"
@@ -1263,13 +1263,13 @@ export default function ParametresScreen() {
             </View>
           )}
 
-          {activeTab === "equipe" && user?.role === "gerant" && (
+          {activeTab === "equipe" && (user?.role === "gerant" || user?.role === "proprietaire") && (
             <View style={{ paddingBottom: 24 }}>
               <UsersManagement />
             </View>
           )}
 
-          {activeTab === "mes-boutiques" && user?.role === "proprietaire" && (
+          {activeTab === "mes-boutiques" && user?.boutiques && user.boutiques.length > 1 && (
             <View style={styles.tabContent}>
               <BlurView intensity={10} style={styles.sectionCard}>
                 <View style={styles.sectionHeader}>

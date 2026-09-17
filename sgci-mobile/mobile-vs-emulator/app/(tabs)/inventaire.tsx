@@ -26,6 +26,7 @@ import {
 interface LigneInventaire {
   id: number;
   produit_id: number;
+  produit?: { nom: string; code_qr?: string | null };
   produit_nom?: string;
   quantite_systeme: number;
   quantite_physique: number | null;
@@ -206,7 +207,7 @@ export default function InventaireScreen() {
             return (
               <View key={ligne.id} style={styles.card}>
                 <Text style={styles.cardTitle}>
-                  {ligne.produit_nom ?? `Produit #${ligne.produit_id}`}
+                  {ligne.produit?.nom ?? ligne.produit_nom ?? `Produit #${ligne.produit_id}`}
                 </Text>
                 <Text style={styles.cardSub}>
                   Quantité système : {ligne.quantite_systeme}

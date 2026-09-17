@@ -813,7 +813,7 @@ export default function DashboardScreen() {
                           </LinearGradient>
                           <View style={styles.popularItemInfo}>
                             <Text style={styles.popularItemTitle}>
-                              {item.produit.nom}
+                              {item.produit?.nom ?? "Produit supprimé"}
                             </Text>
                             <Text style={styles.popularItemSales}>
                               {item.total_vendus} ventes

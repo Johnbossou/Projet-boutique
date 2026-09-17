@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { Eye, EyeOff, Store, LogIn, Smartphone, TrendingUp, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { apiFetch } from '@/lib/api-client';
 import AnimatedParticles from '@/components/AnimatedParticles';
 import Link from 'next/link';
 
@@ -39,6 +40,7 @@ export default function LoginPage() {
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify({
               email: formData.email,
               password: formData.password,
@@ -53,14 +55,29 @@ export default function LoginPage() {
           throw new Error(data.message || 'Erreur de connexion');
         }
 
+        if (data.token) {
+          localStorage.setItem('sgci_token', data.token);
+        }
         localStorage.setItem('user_data', JSON.stringify(data.user));
         toast.success('Connexion réussie');
 
-        if (data.user.role === 'proprietaire') {
-          window.location.href = '/selection-boutique';
-        } else {
-          window.location.href = '/dashboard';
+        // Recharger le profil complet (boutiques + role_courant) via /me,
+        // car /login ne renvoie qu'un user réduit sans la liste des boutiques.
+        let boutiquesCount = data.user?.boutiques?.length ?? 0;
+        try {
+          const meResponse = await apiFetch('/me');
+          if (meResponse.ok) {
+            const meData = await meResponse.json();
+            localStorage.setItem('user_data', JSON.stringify(meData.user));
+            boutiquesCount = meData.user?.boutiques?.length ?? 0;
+          }
+        } catch {
+          // Non bloquant : le profil est rechargé via AuthProvider au prochain rendu.
         }
+
+        window.location.href = boutiquesCount > 1
+          ? '/selection-boutique'
+          : '/dashboard';
       } else {
         await login(formData.email, formData.password);
       }

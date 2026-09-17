@@ -168,6 +168,8 @@ export default function LoginScreen() {
       } else if (!result.success) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         Alert.alert("Erreur", result.message);
+      } else if (result.needsBoutiqueSelection) {
+        setShowBoutiqueSelection(true);
       }
     } catch {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -184,14 +186,14 @@ export default function LoginScreen() {
     try {
       await switchBoutique(boutiqueId);
       setShowBoutiqueSelection(false);
-      // Navigation will be handled by AuthContext
+      router.replace('/(tabs)');
     } catch (error: any) {
       Alert.alert("Erreur", error.message || "Erreur lors du changement de boutique");
     }
   };
 
-  // Show boutique selection modal for proprietaires with multiple boutiques
-  if (showBoutiqueSelection && user && user.role === 'proprietaire' && user.boutiques && user.boutiques.length > 1) {
+  // Selecteur de boutique pour tout utilisateur avec accès à plusieurs boutiques
+  if (showBoutiqueSelection && user && user.boutiques && user.boutiques.length > 1) {
     return (
       <SafeAreaView style={styles.container}>
         <LinearGradient

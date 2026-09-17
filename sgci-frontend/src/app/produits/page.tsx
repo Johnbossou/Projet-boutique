@@ -213,15 +213,16 @@ export default function ProduitsPage() {
       const produitsList = produitsData.data || produitsData;
       setProduits(Array.isArray(produitsList) ? produitsList : []);
       
-      // 📄 Pagination
-      if (produitsData.meta) {
+      // 📄 Pagination (paginateur brut : pas de `meta`)
+      const paginationMeta = produitsData.meta ?? produitsData;
+      if (paginationMeta && typeof paginationMeta.current_page === 'number') {
         setPagination({
-          current_page: produitsData.meta.current_page,
-          last_page: produitsData.meta.last_page,
-          per_page: produitsData.meta.per_page,
-          total: produitsData.meta.total,
-          from: produitsData.meta.from,
-          to: produitsData.meta.to
+          current_page: paginationMeta.current_page,
+          last_page: paginationMeta.last_page,
+          per_page: paginationMeta.per_page,
+          total: paginationMeta.total,
+          from: paginationMeta.from,
+          to: paginationMeta.to
         });
       }
 

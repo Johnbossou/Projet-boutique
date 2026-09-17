@@ -33,7 +33,10 @@ export function UsersManagement() {
     setLoading(true);
     try {
       const res = await apiFetch("/users?actifs_seulement=0");
-      if (res.ok) setUsers(await res.json());
+      if (res.ok) {
+        const payload = await res.json();
+        setUsers(Array.isArray(payload) ? payload : (payload.data ?? []));
+      }
     } finally {
       setLoading(false);
     }

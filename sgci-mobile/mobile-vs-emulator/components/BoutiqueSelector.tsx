@@ -8,14 +8,6 @@ const BoutiqueSelector = memo(function BoutiqueSelector() {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Only show for proprietaires with multiple boutiques
-  if (!user || user.role !== 'proprietaire' || !user.boutiques || user.boutiques.length <= 1) {
-    return null;
-  }
-
-  const currentBoutique = user.current_boutique;
-  const boutiques = user.boutiques || [];
-
   const handleSwitchBoutique = useCallback(async (boutiqueId: number) => {
     setIsLoading(true);
     try {
@@ -27,6 +19,14 @@ const BoutiqueSelector = memo(function BoutiqueSelector() {
       setIsLoading(false);
     }
   }, [switchBoutique]);
+
+  // Afficher pour tout utilisateur ayant plusieurs boutiques accessibles
+  if (!user || !user.boutiques || user.boutiques.length <= 1) {
+    return null;
+  }
+
+  const currentBoutique = user.current_boutique;
+  const boutiques = user.boutiques || [];
 
   return (
     <>

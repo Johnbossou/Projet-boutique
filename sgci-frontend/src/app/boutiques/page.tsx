@@ -35,6 +35,9 @@ interface Boutique {
   taux_tva?: number;
   created_at: string;
   proprietaire_id: number;
+  users_count?: number;
+  produits_count?: number;
+  ventes_count?: number;
   _count?: {
     users: number;
     produits: number;
@@ -197,7 +200,7 @@ export default function BoutiquesPage() {
                     Total Équipe
                   </p>
                   <p className="text-3xl font-bold text-slate-900 dark:text-white mt-1">
-                    {boutiques.reduce((sum, b) => sum + (b._count?.users || 0), 0)}
+                    {boutiques.reduce((sum, b) => sum + (b.users_count ?? b._count?.users ?? 0), 0)}
                   </p>
                 </div>
                 <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-500 rounded-2xl flex items-center justify-center">
@@ -215,7 +218,7 @@ export default function BoutiquesPage() {
                     Total Produits
                   </p>
                   <p className="text-3xl font-bold text-slate-900 dark:text-white mt-1">
-                    {boutiques.reduce((sum, b) => sum + (b._count?.produits || 0), 0)}
+                    {boutiques.reduce((sum, b) => sum + (b.produits_count ?? b._count?.produits ?? 0), 0)}
                   </p>
                 </div>
                 <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-500 rounded-2xl flex items-center justify-center">
@@ -275,11 +278,11 @@ export default function BoutiquesPage() {
                     <div className="grid grid-cols-2 gap-3">
                       <div className="flex items-center space-x-2 text-sm text-slate-600 dark:text-slate-400">
                         <Users className="w-4 h-4" />
-                        <span>{boutique._count?.users || 0} membres</span>
+                        <span>{boutique.users_count ?? boutique._count?.users ?? 0} membres</span>
                       </div>
                       <div className="flex items-center space-x-2 text-sm text-slate-600 dark:text-slate-400">
                         <Store className="w-4 h-4" />
-                        <span>{boutique._count?.produits || 0} produits</span>
+                        <span>{boutique.produits_count ?? boutique._count?.produits ?? 0} produits</span>
                       </div>
                       {boutique.telephone && (
                         <div className="flex items-center space-x-2 text-sm text-slate-600 dark:text-slate-400 col-span-2">

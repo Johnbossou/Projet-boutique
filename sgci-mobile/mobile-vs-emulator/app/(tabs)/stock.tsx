@@ -67,7 +67,7 @@ const STATUT_LABEL: Record<StatutStock, string> = {
 export default function StockScreen() {
   const { user } = useAuth();
   const router = useRouter();
-  const isGerant = user?.role === "gerant";
+  const isGerant = user?.role === "gerant" || user?.role === "proprietaire";
   const [produits, setProduits] = useState<ProduitStock[]>([]);
   const [mouvements, setMouvements] = useState<Mouvement[]>([]);
   const [loading, setLoading] = useState(true);
