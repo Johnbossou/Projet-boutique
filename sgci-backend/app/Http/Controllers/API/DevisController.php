@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\VerifieBoutique;
 use App\Models\CommandeClient;
 use App\Models\Devis;
 use App\Models\LigneCommandeClient;
@@ -16,6 +17,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 
 class DevisController extends Controller
 {
+    use VerifieBoutique;
     /**
      * Affiche la liste des devis de la boutique courante
      */
@@ -252,9 +254,7 @@ class DevisController extends Controller
      */
     public function pdf(Request $request, Devis $devis): Response
     {
-        if ($devis->boutique_id !== $request->user()->current_boutique_id) {
-            abort(403, 'Non autorisé');
-        }
+        $this->verifierBoutiqueDe($devis);
 
         $devis->load(['client', 'user', 'lignes.produit', 'boutique']);
 

@@ -113,14 +113,25 @@ class FacturationService
     private function genererPdfFacture(Facture $facture): void
     {
         try {
-            $data = [
-                'facture' => $facture,
-                'boutique' => $facture->boutique,
-                'client' => $facture->client,
-                'lignes' => $facture->vente ? $facture->vente->ligneVentes : $facture->commandeClient->lignes,
-            ];
+            if ($facture->commandeClient) {
+                $data = [
+                    'facture' => $facture,
+                    'boutique' => $facture->boutique,
+                    'client' => $facture->client,
+                    'commande' => $facture->commandeClient->load(['lignes.produit']),
+                ];
+                $vue = 'invoices.commande';
+            } else {
+                $data = [
+                    'facture' => $facture,
+                    'boutique' => $facture->boutique,
+                    'client' => $facture->client,
+                    'vente' => $facture->vente->load(['ligneVentes.produit']),
+                ];
+                $vue = 'invoices.vente';
+            }
 
-            $pdf = Pdf::loadView('invoices.vente', $data);
+            $pdf = Pdf::loadView($vue, $data);
 
             // Sauvegarder le PDF
             $filename = 'factures/' . $facture->numero_facture . '.pdf';

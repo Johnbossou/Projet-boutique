@@ -7,6 +7,7 @@ use App\Models\Inventaire;
 use App\Models\InventaireLigne;
 use App\Models\Produit;
 use App\Models\MouvementStock;
+use App\Http\Controllers\Concerns\VerifieBoutique;
 use App\Traits\Auditable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -14,7 +15,7 @@ use Illuminate\Support\Facades\DB;
 
 class InventaireController extends Controller
 {
-    use Auditable;
+    use VerifieBoutique, Auditable;
 
     public function index(Request $request): JsonResponse
     {
@@ -36,7 +37,7 @@ class InventaireController extends Controller
 
     public function show(Inventaire $inventaire): JsonResponse
     {
-        $this->verifierBoutique($inventaire);
+        $this->verifierBoutiqueDe($inventaire);
 
         $inventaire->load(['lignes.produit.categorie', 'user']);
 
@@ -44,8 +45,8 @@ class InventaireController extends Controller
     }
 
     /**
-     * Créer un inventaire physique.
-     * Snapshot instantané : chaque produit reçoit sa quantité système au moment de la création.
+     * CrÃ©er un inventaire physique.
+     * Snapshot instantanÃ© : chaque produit reÃ§oit sa quantitÃ© systÃ¨me au moment de la crÃ©ation.
      */
     public function store(Request $request): JsonResponse
     {
@@ -56,7 +57,7 @@ class InventaireController extends Controller
         $boutiqueId = $request->user()->current_boutique_id;
 
         if (!$boutiqueId) {
-            return response()->json(['message' => 'Boutique non définie'], 422);
+            return response()->json(['message' => 'Boutique non dÃ©finie'], 422);
         }
 
         return DB::transaction(function () use ($request, $validated, $boutiqueId) {
@@ -84,18 +85,18 @@ class InventaireController extends Controller
             $this->auditCreate($inventaire);
 
             return response()->json([
-                'message' => 'Inventaire créé avec succès',
+                'message' => 'Inventaire crÃ©Ã© avec succÃ¨s',
                 'data' => $inventaire->load('lignes.produit'),
             ], 201);
         });
     }
 
     /**
-     * Enregistrer les comptages physiques (quantités réelles).
+     * Enregistrer les comptages physiques (quantitÃ©s rÃ©elles).
      */
     public function compter(Request $request, Inventaire $inventaire): JsonResponse
     {
-        $this->verifierBoutique($inventaire);
+        $this->verifierBoutiqueDe($inventaire);
 
         if ($inventaire->statut !== 'en_cours') {
             return response()->json(['message' => 'Cet inventaire n\'est plus en cours de comptage'], 422);
@@ -138,7 +139,7 @@ class InventaireController extends Controller
         $inventaire->load('lignes.produit');
 
         return response()->json([
-            'message' => "Comptage terminé — {$ecarts} écart(s) détecté(s)",
+            'message' => "Comptage terminÃ© â€” {$ecarts} Ã©cart(s) dÃ©tectÃ©(s)",
             'data' => $inventaire,
         ]);
     }
@@ -148,10 +149,10 @@ class InventaireController extends Controller
      */
     public function valider(Request $request, Inventaire $inventaire): JsonResponse
     {
-        $this->verifierBoutique($inventaire);
+        $this->verifierBoutiqueDe($inventaire);
 
         if ($inventaire->statut !== 'termine') {
-            return response()->json(['message' => 'L\'inventaire doit être terminé avant validation'], 422);
+            return response()->json(['message' => 'L\'inventaire doit Ãªtre terminÃ© avant validation'], 422);
         }
 
         return DB::transaction(function () use ($inventaire, $request) {
@@ -171,7 +172,7 @@ class InventaireController extends Controller
                             'raison' => 'ajustement',
                             'type' => $ligne->ecart > 0 ? 'entree' : 'sortie',
                             'reference_bon' => (string) $inventaire->id,
-                            'notes' => 'Ajustement inventaire #' . $inventaire->reference . ' — écart de ' . $ligne->ecart,
+                            'notes' => 'Ajustement inventaire #' . $inventaire->reference . ' â€” Ã©cart de ' . $ligne->ecart,
                             'user_id' => $request->user()->id,
                             'statut' => 'accepte',
                             'quantite_avant' => $quantiteAvant,
@@ -187,7 +188,7 @@ class InventaireController extends Controller
             $this->auditUpdate($inventaire, ['statut' => $ancienStatut]);
 
             return response()->json([
-                'message' => 'Inventaire validé, stock ajusté',
+                'message' => 'Inventaire validÃ©, stock ajustÃ©',
                 'data' => $inventaire->load('lignes.produit'),
             ]);
         });
@@ -198,10 +199,10 @@ class InventaireController extends Controller
      */
     public function annuler(Request $request, Inventaire $inventaire): JsonResponse
     {
-        $this->verifierBoutique($inventaire);
+        $this->verifierBoutiqueDe($inventaire);
 
         if (!in_array($inventaire->statut, ['en_cours', 'termine'])) {
-            return response()->json(['message' => 'Cet inventaire ne peut plus être annulé'], 422);
+            return response()->json(['message' => 'Cet inventaire ne peut plus Ãªtre annulÃ©'], 422);
         }
 
         $ancienStatut = $inventaire->statut;
@@ -209,17 +210,17 @@ class InventaireController extends Controller
         $this->auditUpdate($inventaire, ['statut' => $ancienStatut]);
 
         return response()->json([
-            'message' => 'Inventaire annulé',
+            'message' => 'Inventaire annulÃ©',
             'data' => $inventaire,
         ]);
     }
 
     /**
-     * Résumé des écarts d'un inventaire validé.
+     * RÃ©sumÃ© des Ã©carts d'un inventaire validÃ©.
      */
     public function ecarts(Request $request, Inventaire $inventaire): JsonResponse
     {
-        $this->verifierBoutique($inventaire);
+        $this->verifierBoutiqueDe($inventaire);
 
         $lignes = $inventaire->lignes()
             ->with('produit')
@@ -232,21 +233,15 @@ class InventaireController extends Controller
             'inventaire' => $inventaire->only(['reference', 'statut', 'ecarts_detectes', 'created_at']),
             'ecarts' => $lignes->map(fn ($l) => [
                 'produit' => $l->produit->nom,
-                'categorie' => $l->produit->categorie?->nom ?? '—',
+                'categorie' => $l->produit->categorie?->nom ?? 'â€”',
                 'quantite_systeme' => $l->quantite_systeme,
                 'quantite_physique' => $l->quantite_physique,
                 'ecart' => $l->ecart,
                 'notes' => $l->notes,
             ]),
-            'ecarts_positifs' => $lignes->where('ecart', '>', 0)->count(),
+'ecarts_positifs' => $lignes->where('ecart', '>', 0)->count(),
             'ecarts_negatifs' => $lignes->where('ecart', '<', 0)->count(),
         ]);
     }
-
-    protected function verifierBoutique($model): void
-    {
-        if (auth()->user()->current_boutique_id && $model->boutique_id !== auth()->user()->current_boutique_id) {
-            abort(403, 'Non autorisé');
-        }
-    }
 }
+

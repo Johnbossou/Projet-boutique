@@ -82,6 +82,7 @@ Route::middleware(['auth:sanctum', 'user.active', 'boutique.scope'])->group(func
     // Paramètres de la boutique courante (multi-tenancy)
     Route::get('/boutique/settings', [BoutiqueController::class, 'settings']);
     Route::put('/boutique/settings', [BoutiqueController::class, 'updateSettings'])
+        ->middleware('role.gerant')
         ->middleware('throttle:20,1');
 
     // Boutiques (multi-tenancy) — CRUD réservé aux propriétaires
@@ -258,7 +259,7 @@ Route::middleware(['auth:sanctum', 'user.active', 'boutique.scope'])->group(func
         Route::get('/', [InventaireController::class, 'index']);
         Route::post('/', [InventaireController::class, 'store'])->middleware('role.gerant')->middleware('throttle:5,1');
         Route::get('/{inventaire}', [InventaireController::class, 'show']);
-        Route::post('/{inventaire}/compter', [InventaireController::class, 'compter'])->middleware('throttle:30,1');
+        Route::post('/{inventaire}/compter', [InventaireController::class, 'compter'])->middleware('role.gerant')->middleware('throttle:30,1');
         Route::post('/{inventaire}/valider', [InventaireController::class, 'valider'])->middleware('role.gerant')->middleware('throttle:5,1');
         Route::post('/{inventaire}/annuler', [InventaireController::class, 'annuler'])->middleware('role.gerant')->middleware('throttle:5,1');
         Route::get('/{inventaire}/ecarts', [InventaireController::class, 'ecarts']);
@@ -276,7 +277,7 @@ Route::middleware(['auth:sanctum', 'user.active', 'boutique.scope'])->group(func
     // Chat interne
     Route::prefix('chat')->group(function () {
         Route::get('/', [ChatController::class, 'index']);
-        Route::post('/', [ChatController::class, 'store'])->middleware('throttle:10,1');
+        Route::post('/', [ChatController::class, 'store'])->middleware('role.gerant')->middleware('throttle:10,1');
         Route::get('/{conversation}', [ChatController::class, 'show']);
         Route::post('/{conversation}/message', [ChatController::class, 'sendMessage'])->middleware('throttle:30,1');
         Route::put('/{conversation}/message/{message}', [ChatController::class, 'editMessage'])->middleware('throttle:10,1');

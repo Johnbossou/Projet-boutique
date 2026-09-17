@@ -16,6 +16,10 @@ if [ -n "$MYSQL_URL" ]; then
     export DB_PASSWORD="${DB_PASSWORD:-railway}"
 fi
 
+mkdir -p storage/framework/views storage/framework/cache/data storage/framework/sessions storage/logs
+chown -R www-data:www-data storage bootstrap/cache 2>/dev/null || true
+chmod -R 775 storage bootstrap/cache 2>/dev/null || true
+
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache 2>/dev/null || true

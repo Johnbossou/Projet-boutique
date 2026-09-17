@@ -8,6 +8,7 @@ use App\Models\RetourVenteLigne;
 use App\Models\Vente;
 use App\Models\MouvementStock;
 use App\Models\Produit;
+use App\Http\Controllers\Concerns\VerifieBoutique;
 use App\Traits\Auditable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,7 +17,7 @@ use Illuminate\Validation\Rule;
 
 class RetourVenteController extends Controller
 {
-    use Auditable;
+    use VerifieBoutique, Auditable;
 
     public function index(Request $request): JsonResponse
     {
@@ -42,7 +43,7 @@ class RetourVenteController extends Controller
 
     public function show(RetourVente $retour): JsonResponse
     {
-        $this->verifierBoutique($retour);
+        $this->verifierBoutiqueDe($retour);
 
         $retour->load(['vente.ligneVentes.produit', 'user', 'lignes.produit', 'lignes.ligneVente']);
 
@@ -50,9 +51,9 @@ class RetourVenteController extends Controller
     }
 
     /**
-     * Créer un retour sur une vente terminée.
-     * Retour partiel : quantités spécifiques par ligne.
-     * Retour total : toutes les lignes retournées en intégralité.
+     * CrÃ©er un retour sur une vente terminÃ©e.
+     * Retour partiel : quantitÃ©s spÃ©cifiques par ligne.
+     * Retour total : toutes les lignes retournÃ©es en intÃ©gralitÃ©.
      */
     public function store(Request $request): JsonResponse
     {
@@ -68,10 +69,10 @@ class RetourVenteController extends Controller
         ]);
 
         $vente = Vente::findOrFail($validated['vente_id']);
-        $this->verifierBoutique($vente);
+        $this->verifierBoutiqueDe($vente);
 
         if ($vente->statut !== 'termine') {
-            return response()->json(['message' => 'Seules les ventes terminées peuvent faire l\'objet d\'un retour'], 422);
+            return response()->json(['message' => 'Seules les ventes terminÃ©es peuvent faire l\'objet d\'un retour'], 422);
         }
 
         return DB::transaction(function () use ($validated, $vente, $request) {
@@ -110,7 +111,7 @@ class RetourVenteController extends Controller
 
                     if ($ligneData['quantite_retournee'] > $ligneVente->quantite) {
                         return response()->json([
-                            'message' => "Quantité retournée supérieure à la quantité vendue pour le produit #{$ligneVente->produit_id}",
+                            'message' => "QuantitÃ© retournÃ©e supÃ©rieure Ã  la quantitÃ© vendue pour le produit #{$ligneVente->produit_id}",
                         ], 422);
                     }
 
@@ -133,7 +134,7 @@ class RetourVenteController extends Controller
             $this->auditCreate($retour);
 
             return response()->json([
-                'message' => 'Retour enregistré avec succès',
+                'message' => 'Retour enregistrÃ© avec succÃ¨s',
                 'data' => $retour->load('lignes.produit'),
             ], 201);
         });
@@ -144,10 +145,10 @@ class RetourVenteController extends Controller
      */
     public function valider(Request $request, RetourVente $retour): JsonResponse
     {
-        $this->verifierBoutique($retour);
+        $this->verifierBoutiqueDe($retour);
 
         if ($retour->statut !== 'en_attente') {
-            return response()->json(['message' => 'Ce retour a déjà été traité'], 422);
+            return response()->json(['message' => 'Ce retour a dÃ©jÃ  Ã©tÃ© traitÃ©'], 422);
         }
 
         return DB::transaction(function () use ($retour, $request) {
@@ -166,7 +167,7 @@ class RetourVenteController extends Controller
                         'raison' => 'retour',
                         'type' => 'entree',
                         'reference_bon' => (string) $retour->id,
-                        'notes' => 'Retour vente #' . $retour->vente_id . ' — ' . $retour->motif,
+                        'notes' => 'Retour vente #' . $retour->vente_id . ' â€” ' . $retour->motif,
                         'user_id' => $request->user()->id,
                         'statut' => 'accepte',
                         'quantite_avant' => $quantiteAvant,
@@ -181,7 +182,7 @@ class RetourVenteController extends Controller
             $this->auditUpdate($retour, ['statut' => $ancienStatut]);
 
             return response()->json([
-                'message' => 'Retour validé, stock mis à jour',
+                'message' => 'Retour validÃ©, stock mis Ã  jour',
                 'data' => $retour->load('lignes.produit'),
             ]);
         });
@@ -192,26 +193,20 @@ class RetourVenteController extends Controller
      */
     public function refuser(Request $request, RetourVente $retour): JsonResponse
     {
-        $this->verifierBoutique($retour);
+        $this->verifierBoutiqueDe($retour);
 
         if ($retour->statut !== 'en_attente') {
-            return response()->json(['message' => 'Ce retour a déjà été traité'], 422);
+            return response()->json(['message' => 'Ce retour a dÃ©jÃ  Ã©tÃ© traitÃ©'], 422);
         }
 
         $ancienStatut = $retour->statut;
         $retour->update(['statut' => 'refuse']);
         $this->auditUpdate($retour, ['statut' => $ancienStatut]);
 
-        return response()->json([
+return response()->json([
             'message' => 'Retour refusé',
             'data' => $retour,
         ]);
     }
-
-    protected function verifierBoutique($model): void
-    {
-        if (auth()->user()->current_boutique_id && $model->boutique_id !== auth()->user()->current_boutique_id) {
-            abort(403, 'Non autorisé');
-        }
-    }
 }
+
