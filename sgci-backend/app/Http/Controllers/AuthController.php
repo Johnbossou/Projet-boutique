@@ -293,7 +293,7 @@ class AuthController extends Controller
         $user->password_reset_expires_at = now()->addHour();
         $user->save();
 
-        $resetUrl = config('app.url') . '/reset-password?token=' . $token;
+        $resetUrl = config('app.frontend_url') . '/reset-password?token=' . $token;
 
         $this->emailService->sendPasswordReset($user, $resetUrl);
 

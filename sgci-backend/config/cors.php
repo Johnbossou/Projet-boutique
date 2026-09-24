@@ -1,6 +1,6 @@
 <?php
 
-$frontendUrl = env('FRONTEND_URL', 'http://localhost:3000');
+$frontendUrl = rtrim(env('FRONTEND_URL', 'http://localhost:3000'), '/');
 
 return [
 

@@ -53,7 +53,7 @@
             </p>
 
             <div style="text-align: center; margin: 30px 0;">
-                <a href="{{ config('app.url') }}" style="background: #f97316; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">Accéder à la boutique</a>
+                <a href="{{ config('app.frontend_url') }}" style="background: #f97316; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">Accéder à la boutique</a>
             </div>
 
             <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
