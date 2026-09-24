@@ -41,7 +41,7 @@ Route::get('/health', function () {
     return response()->json([
         'status' => 'OK',
         'service' => 'SGCI Bénin API',
-        'version' => '1.2.0',
+        'version' => '1.3.0',
         'timestamp' => now(),
     ]);
 });
