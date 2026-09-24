@@ -46,13 +46,7 @@ class DevisController extends Controller
 
         $devis = $query->orderBy('date_devis', 'desc')->paginate(15);
 
-        return response()->json([
-            'data' => $devis->items(),
-            'total' => $devis->total(),
-            'per_page' => $devis->perPage(),
-            'current_page' => $devis->currentPage(),
-            'last_page' => $devis->lastPage(),
-        ]);
+        return response()->json($devis);
     }
 
     /**

@@ -43,13 +43,7 @@ class TransfertStockController extends Controller
 
         $transferts = $query->orderBy('date_transfert', 'desc')->paginate(15);
 
-        return response()->json([
-            'data' => $transferts->items(),
-            'total' => $transferts->total(),
-            'per_page' => $transferts->perPage(),
-            'current_page' => $transferts->currentPage(),
-            'last_page' => $transferts->lastPage(),
-        ]);
+        return response()->json($transferts);
     }
 
     /**

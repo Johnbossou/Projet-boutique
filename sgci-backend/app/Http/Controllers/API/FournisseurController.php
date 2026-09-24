@@ -32,13 +32,7 @@ class FournisseurController extends Controller
 
         $fournisseurs = $query->orderBy('nom')->paginate(15);
 
-        return response()->json([
-            'data' => $fournisseurs->items(),
-            'total' => $fournisseurs->total(),
-            'per_page' => $fournisseurs->perPage(),
-            'current_page' => $fournisseurs->currentPage(),
-            'last_page' => $fournisseurs->lastPage(),
-        ]);
+        return response()->json($fournisseurs);
     }
 
     /**

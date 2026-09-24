@@ -35,6 +35,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiFetch } from '@/lib/api-client';
+import { extractRows, normalizePagination } from '@/lib/pagination';
 import { toast } from 'sonner';
 
 // Types pour les données clients
@@ -233,8 +234,7 @@ export default function ClientsPage() {
       
       const data = await response.json();
       
-      // ✅ CORRECTION : Laravel paginate renvoie { data: [], meta: {} }
-      const clientsData = data.data || [];
+      const clientsData = extractRows<ClientApiRow>(data);
       
       const clientsTransformes: Client[] = clientsData.map((client: ClientApiRow) => ({
         id: client.id,
@@ -252,11 +252,13 @@ export default function ClientsPage() {
       }));
       
       setClients(clientsTransformes);
+
+      const pg = normalizePagination(data, { current_page: page, per_page: 20 });
       setPagination({
-        current_page: data.meta?.current_page || page,
-        last_page: data.meta?.last_page || 1,
-        per_page: data.meta?.per_page || 20,
-        total: data.meta?.total ?? clientsTransformes.length
+        current_page: pg.current_page,
+        last_page: pg.last_page,
+        per_page: pg.per_page,
+        total: pg.total || clientsTransformes.length
       });
       
     } catch (error) {

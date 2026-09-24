@@ -44,6 +44,7 @@ import {
 } from "react-native";
 import { useAuth } from "../../contexts/AuthContext";
 import { apiFetch } from "@/lib/api-client";
+import { extractRows, normalizePagination } from "@/lib/pagination";
 
 const { width, height } = Dimensions.get("window");
 
@@ -241,7 +242,7 @@ export default function ClientsScreen() {
       if (!response.ok) throw new Error(`Erreur API: ${response.status}`);
 
       const data = await response.json();
-      const clientsData = data.data || [];
+      const clientsData = extractRows<any>(data);
 
       const clientsTransformes: Client[] = clientsData.map((client: any) => ({
         id: client.id,
@@ -259,14 +260,7 @@ export default function ClientsScreen() {
       }));
 
       setClients(clientsTransformes);
-      setPagination(
-        data.meta || {
-          current_page: 1,
-          last_page: 1,
-          per_page: 20,
-          total: clientsTransformes.length,
-        }
-      );
+      setPagination(normalizePagination(data, { total: clientsTransformes.length }));
     } catch (error) {
       console.error("Erreur chargement clients:", error);
       Alert.alert("Erreur", "Erreur lors du chargement des clients");

@@ -45,13 +45,7 @@ class FactureController extends Controller
 
         $factures = $query->orderBy('date_facture', 'desc')->paginate(15);
 
-        return response()->json([
-            'data' => $factures->items(),
-            'total' => $factures->total(),
-            'per_page' => $factures->perPage(),
-            'current_page' => $factures->currentPage(),
-            'last_page' => $factures->lastPage(),
-        ]);
+        return response()->json($factures);
     }
 
     /**

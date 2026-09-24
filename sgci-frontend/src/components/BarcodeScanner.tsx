@@ -120,6 +120,10 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
       } else if (response.status === 404) {
         toast.warning(`Produit non trouvé pour code: ${code}`);
         onCodeDetected(code);
+      } else if (response.status === 401) {
+        toast.error('Session expirée. Veuillez vous reconnecter puis réessayer.');
+      } else {
+        toast.error(`Erreur serveur (${response.status}). Réessayez.`);
       }
     } catch (err) {
       console.error('Erreur lors de la récupération du produit:', err);

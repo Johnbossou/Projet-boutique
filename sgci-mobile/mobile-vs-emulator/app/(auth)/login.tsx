@@ -56,13 +56,16 @@ export default function LoginScreen() {
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   // Particules animées
-  const particles = Array.from({ length: 15 }, (_, i) => ({
-    id: i,
-    left: useRef(new Animated.Value(Math.random() * width)).current,
-    top: useRef(new Animated.Value(Math.random() * height)).current,
-    size: useRef(new Animated.Value(Math.random() * 20 + 10)).current,
-    opacity: useRef(new Animated.Value(Math.random() * 0.3 + 0.1)).current,
-  }));
+  const particlesRef = useRef(
+    Array.from({ length: 15 }, (_, i) => ({
+      id: i,
+      left: new Animated.Value(Math.random() * width),
+      top: new Animated.Value(Math.random() * height),
+      size: new Animated.Value(Math.random() * 20 + 10),
+      opacity: new Animated.Value(Math.random() * 0.3 + 0.1),
+    }))
+  );
+  const particles = particlesRef.current;
 
   useEffect(() => {
     // Animation d'entrée

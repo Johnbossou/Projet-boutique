@@ -73,23 +73,9 @@ class ClientController extends Controller
                 return $this->formatClientData($client);
             });
 
-            return response()->json([
-                'data' => $formattedClients,
-                'meta' => [
-                    'current_page' => $clients->currentPage(),
-                    'last_page' => $clients->lastPage(),
-                    'per_page' => $clients->perPage(),
-                    'total' => $clients->total(),
-                    'from' => $clients->firstItem(),
-                    'to' => $clients->lastItem(),
-                ],
-                'links' => [
-                    'first' => $clients->url(1),
-                    'last' => $clients->url($clients->lastPage()),
-                    'prev' => $clients->previousPageUrl(),
-                    'next' => $clients->nextPageUrl(),
-                ]
-            ]);
+            $clients->setCollection($formattedClients);
+
+            return response()->json($clients);
 
         } catch (\Exception $e) {
             return response()->json([
@@ -588,14 +574,9 @@ class ClientController extends Controller
                 ];
             });
 
-            return response()->json([
-                'data' => $data,
-                'meta' => [
-                    'current_page' => $commandes->currentPage(),
-                    'total' => $commandes->total(),
-                    'per_page' => $commandes->perPage(),
-                ]
-            ]);
+            $commandes->setCollection($data);
+
+            return response()->json($commandes);
 
         } catch (\Exception $e) {
             return response()->json([

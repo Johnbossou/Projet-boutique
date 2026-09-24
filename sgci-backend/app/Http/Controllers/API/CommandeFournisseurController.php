@@ -43,13 +43,7 @@ class CommandeFournisseurController extends Controller
 
         $commandes = $query->orderBy('date_commande', 'desc')->paginate(15);
 
-        return response()->json([
-            'data' => $commandes->items(),
-            'total' => $commandes->total(),
-            'per_page' => $commandes->perPage(),
-            'current_page' => $commandes->currentPage(),
-            'last_page' => $commandes->lastPage(),
-        ]);
+        return response()->json($commandes);
     }
 
     /**
