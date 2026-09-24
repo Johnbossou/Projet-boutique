@@ -5,6 +5,7 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -97,40 +98,11 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
-  deploy:
-    name: Deploy (Railway + Vercel)
-    needs: [backend-tests, frontend-tests, mobile-typecheck]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
-    environment: production
-
-    steps:
-      - uses: actions/checkout@v4
-
-      # --- Backend : Railway (service sgci-backend, déploiement via Dockerfile) ---
-      # Secret requis : RAILWAY_TOKEN (Service token Railway lié au projet sgci-backend).
-      # Projet/environnement/service passés directement en arguments (IDs non sensibles),
-      # sans 'railway link' (non fiable en CI) : la CLI déploie depuis le checkout.
-      - name: Deploy backend to Railway
-        working-directory: sgci-backend
-        continue-on-error: true
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_PROJECT_ID: eb16de27-bf75-4e60-9461-1b8f42bf4d8e
-          RAILWAY_ENVIRONMENT_ID: 243e1ee2-dfed-462d-b9fe-0b5a82c78e0b
-          RAILWAY_SERVICE_ID: 676a764d-630e-446a-84d5-8114c326825f
-        run: |
-          npm install -g @railway/cli
-          railway up --ci --detach --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT_ID" --service "$RAILWAY_SERVICE_ID"
-
-      # --- Frontend : Vercel (projet sgci-frontend) ---
-      # Secrets requis : VERCEL_TOKEN (token d'accès Vercel).
-      # orgId / projectId proviennent de .vercel/project.json (non sensibles).
-      - name: Deploy frontend to Vercel
-        uses: amondnet/vercel-action@v42
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: team_IzRvIr1v8ia6AOS0AYmy7hgM
-          vercel-project-id: prj_REE1OCr3uCbODSQxKDShJtGZiKD2
-          working-directory: sgci-frontend
-          vercel-args: --prod --yes
+  # Déploiement : natif aux plateformes (aucun job CI).
+  #  - Vercel : Git integration — déploie automatiquement au push sur main.
+  #  - Railway : GitHub App — le service sgci-backend est connecté au repo
+  #    branch main et auto-déploie au push (si "Wait for CI" est actif, il
+  #    attend la réussite de CE workflow, qui est désormais vert).
+  # Ne PAS réintroduire de job deploy basé sur railway up / vercel-action
+  # ici : railway up est cassé sur un service avec volume attaché, et les
+  # deux plateformes déploient nativement depuis GitHub.
