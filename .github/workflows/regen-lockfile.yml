@@ -46,7 +46,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add package-lock.json
+          git add sgci-frontend/package-lock.json
           git commit -m "chore(frontend): regen package-lock.json (binaires natifs Linux)" || echo "no changes"
           git push origin HEAD:main
         working-directory: .
