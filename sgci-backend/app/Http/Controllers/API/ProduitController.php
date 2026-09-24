@@ -242,7 +242,7 @@ class ProduitController extends Controller
 
         $file = $request->file('image');
         $path = $file->store('produits/' . $produit->id, 'public');
-        $url = rtrim(config('app.url'), '/') . Storage::disk('public')->url($path);
+        $url = Storage::disk('public')->url($path);
 
         $produit->update(['image_url' => $url]);
 

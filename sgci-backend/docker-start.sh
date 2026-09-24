@@ -19,6 +19,7 @@ fi
 mkdir -p storage/framework/views storage/framework/cache/data storage/framework/sessions storage/logs
 chown -R www-data:www-data storage bootstrap/cache 2>/dev/null || true
 chmod -R 775 storage bootstrap/cache 2>/dev/null || true
+php artisan storage:link
 
 php artisan config:cache
 php artisan route:cache
