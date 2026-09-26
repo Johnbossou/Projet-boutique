@@ -1,0 +1,49 @@
+# Recipe Render Blueprint pour SGCI Backend
+# Option "New + Blueprint" dans le dashboard Render, ou via CLI `render blueprint`.
+#
+# Contraintes au plan Free (0 €, sans carte) :
+#   - s'endort après 15 min d'inactivité, se réveille à la prochaine requête (~1 min)
+#   - 750 h/mois par workspace
+#   - pas de disque persistant : les fichiers uploadés dans storage/ sont perdus
+#     à chaque redéploiement (images produits à re-uploader).
+
+services:
+  - type: web
+    name: sgci-backend
+    runtime: docker
+    repo: https://github.com/Johnbossou/Projet-boutique
+    branch: main
+    rootDir: sgci-backend
+    dockerfilePath: Dockerfile
+    dockerContext: .
+    plan: free
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: false
+      - key: APP_URL
+        value: https://sgci-backend.onrender.com
+      - key: FRONTEND_URL
+        value: https://sgci-frontend.vercel.app
+      - key: APP_KEY
+        generateValue: true
+      - key: DB_CONNECTION
+        value: mysql
+      - key: LOG_CHANNEL
+        value: stack
+      - key: SESSION_DRIVER
+        value: database
+      - key: CACHE_STORE
+        value: database
+      - key: QUEUE_CONNECTION
+        value: database
+      - key: FILESYSTEM_DISK
+        value: local
+      - key: SANCTUM_STATEFUL_DOMAINS
+        value: sgci-frontend.vercel.app
+      # URL complète MySQL (du proxy TCP public Railway), format :
+      #   mysql://USER:PASS@HOST:PORT/DBNAME
+      # à renseigner dans le dashboard Render (variable d'environnement).
+      - key: MYSQL_URL
+        sync: false
