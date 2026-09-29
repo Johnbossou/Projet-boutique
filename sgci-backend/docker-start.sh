@@ -14,6 +14,12 @@ if [ -n "$MYSQL_URL" ]; then
     export DB_DATABASE="${DB_DATABASE:-railway}"
     export DB_USERNAME="${DB_USERNAME:-railway}"
     export DB_PASSWORD="${DB_PASSWORD:-railway}"
+
+    # TLS obligatoire pour TiDB Cloud : le backend passe par le CA racine système
+    # (certificats Let's Encrypt déjà présents dans /etc/ssl/certs/ca-certificates.crt).
+    if [ -z "$MYSQL_ATTR_SSL_CA" ]; then
+        export MYSQL_ATTR_SSL_CA="/etc/ssl/certs/ca-certificates.crt"
+    fi
 fi
 
 mkdir -p storage/framework/views storage/framework/cache/data storage/framework/sessions storage/logs
