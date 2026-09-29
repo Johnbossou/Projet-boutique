@@ -30,6 +30,12 @@ php artisan storage:link
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache 2>/dev/null || true
+
+# Démarre le serveur IMMÉDIATEMENT en arrière-plan : le port est ouvert dès le
+# début pour que Render le détecte pendant le scan (sinon "Port scan timeout").
+php artisan serve --host=0.0.0.0 --port=${PORT:-8000} &
+SERVER_PID=$!
+
 php artisan migrate --force
 
 # Seed uniquement sur une base de données fraîche (aucune table remplie),
@@ -39,4 +45,4 @@ if [ "$SEEDED" = "0" ] || [ "$SEEDED" = "-1" ]; then
     php artisan db:seed --force 2>/dev/null || true
 fi
 
-php artisan serve --host=0.0.0.0 --port=${PORT:-8000}
+wait $SERVER_PID
