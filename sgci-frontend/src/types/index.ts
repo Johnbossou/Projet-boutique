@@ -134,6 +134,20 @@ export interface MouvementStock {
   user?: User;
   created_at: string;
   updated_at: string;
+  // Workflow d'arrivage
+  quantite_recue?: number | null;
+  quantite_effective?: number;
+  quantite_restante?: number;
+  est_partiel?: boolean;
+  libelle_statut?: string;
+  motif_rejet?: string | null;
+  date_fabrication?: string | null;
+  date_peremption?: string | null;
+  valide_par?: number | null;
+  valide_le?: string | null;
+  validePar?: User | null;
+  commande_fournisseur_id?: number | null;
+  commandeFournisseur?: { id: number; numero_commande: string } | null;
 }
 
 export interface Fournisseur {

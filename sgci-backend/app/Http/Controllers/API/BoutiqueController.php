@@ -15,12 +15,10 @@ class BoutiqueController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = Auth::user();
-        
-        $query = $user->estProprietaire() 
-            ? Boutique::forProprietaire($user->id)
-            : $user->boutiques();
 
-        $boutiques = $query->withCount(['users', 'produits', 'ventes'])->get();
+        // Source de vérité : possessions + pivot (pas le rôle global).
+        $boutiques = $user->boutiquesAccessibles()
+            ->loadCount(['users', 'produits', 'ventes']);
 
         return response()->json($boutiques);
     }
@@ -32,13 +30,9 @@ class BoutiqueController extends Controller
      */
     public function mesBoutiques(Request $request): JsonResponse
     {
-        $user = Auth::user();
+        $boutiques = Auth::user()->boutiquesAccessibles();
 
-        $boutiques = $user->estProprietaire()
-            ? Boutique::forProprietaire($user->id)
-            : $user->boutiques();
-
-        return response()->json($boutiques->with(['proprietaire'])->get());
+        return response()->json($boutiques->load('proprietaire'));
     }
 
     public function store(Request $request): JsonResponse
@@ -73,8 +67,8 @@ class BoutiqueController extends Controller
     public function show(Boutique $boutique): JsonResponse
     {
         $user = Auth::user();
-        
-        if (!$boutique->aAcces($user)) {
+
+        if (! $boutique->aAcces($user)) {
             return response()->json(['message' => 'Accès non autorisé'], 403);
         }
 
@@ -84,12 +78,12 @@ class BoutiqueController extends Controller
     public function update(Request $request, Boutique $boutique): JsonResponse
     {
         $user = Auth::user();
-        
-        if (!$boutique->estProprietaire($user)) {
+
+        if (! $boutique->estProprietaire($user)) {
             return response()->json(['message' => 'Accès non autorisé'], 403);
         }
 
-        $request->validate([
+        $validated = $request->validate([
             'nom' => 'sometimes|string|max:255',
             'adresse' => 'nullable|string|max:500',
             'telephone' => 'nullable|string|max:30',
@@ -99,9 +93,11 @@ class BoutiqueController extends Controller
             'delai_annulation_vente_minutes' => 'sometimes|integer|min:0|max:1440',
         ]);
 
-        $boutique->update($request->only([
-            'nom', 'adresse', 'telephone', 'email', 'devise', 'taux_tva', 'delai_annulation_vente_minutes'
-        ]));
+        // $validated et non $request->only() : only() remonte tout ce qui est
+        // présent dans le corps, y compris une clé qu'on aurait ajoutée à la
+        // liste sans la déclarer dans les règles — elle passerait en base
+        // sans validation.
+        $boutique->update($validated);
 
         return response()->json([
             'message' => 'Boutique mise à jour',
@@ -112,8 +108,8 @@ class BoutiqueController extends Controller
     public function destroy(Boutique $boutique): JsonResponse
     {
         $user = Auth::user();
-        
-        if (!$boutique->estProprietaire($user)) {
+
+        if (! $boutique->estProprietaire($user)) {
             return response()->json(['message' => 'Accès non autorisé'], 403);
         }
 
@@ -133,7 +129,7 @@ class BoutiqueController extends Controller
 
         // Règle métier : un seul gérant par boutique
         $verif = $boutique->gererPromotionGerant((int) $request->user_id, (string) $request->role_dans_boutique, (bool) $request->boolean('confirmer'));
-        if (!$verif['ok'] && $verif['code'] === 'gerant_existant') {
+        if (! $verif['ok'] && $verif['code'] === 'gerant_existant') {
             return response()->json([
                 'message' => $verif['message'],
                 'code' => 'gerant_existant',
@@ -148,9 +144,8 @@ class BoutiqueController extends Controller
 
     public function removeUser(Request $request, Boutique $boutique, User $user): JsonResponse
     {
-        $currentUser = Auth::user();
-
         $boutique->users()->detach($user->id);
+        $this->revoquerAccesReste($user, $boutique->id);
 
         return response()->json(['message' => 'Utilisateur retiré de la boutique']);
     }
@@ -183,9 +178,11 @@ class BoutiqueController extends Controller
             'delai_annulation_vente_minutes' => 'sometimes|integer|min:0|max:1440',
         ]);
 
-        $boutique->update($request->only([
-            'nom', 'adresse', 'telephone', 'email', 'devise', 'taux_tva', 'delai_annulation_vente_minutes'
-        ]));
+        // $validated et non $request->only() : only() remonte tout ce qui est
+        // présent dans le corps, y compris une clé qu'on aurait ajoutée à la
+        // liste sans la déclarer dans les règles — elle passerait en base
+        // sans validation.
+        $boutique->update($validated);
 
         return response()->json([
             'message' => 'Paramètres de la boutique mis à jour',
@@ -241,7 +238,7 @@ class BoutiqueController extends Controller
 
         // Règle métier : un seul gérant par boutique
         $verif = $boutique->gererPromotionGerant(0, $role, (bool) $request->boolean('confirmer'));
-        if (!$verif['ok'] && $verif['code'] === 'gerant_existant') {
+        if (! $verif['ok'] && $verif['code'] === 'gerant_existant') {
             return response()->json([
                 'message' => $verif['message'],
                 'code' => 'gerant_existant',
@@ -281,19 +278,23 @@ class BoutiqueController extends Controller
     }
 
     /**
-     * Retire un utilisateur d'une boutique (par son id).
+     * Conséquence obligatoire d'un retrait d'accès : le membre ne doit
+     * conserver ni la boutique en cours ni une session valide.
+     *
+     * Sans cela, current_boutique_id continue de pointer sur la boutique
+     * retirée et l'utilisateur lit encore ses données (fuite inter-boutiques).
      */
-    public function removeUserById(Request $request, Boutique $boutique, int $userId): JsonResponse
+    private function revoquerAccesReste(User $membre, int $boutiqueId): void
     {
-        $user = Auth::user();
-
-        if (!User::whereKey($userId)->exists()) {
-            return response()->json(['message' => 'Utilisateur introuvable'], 404);
+        if ((int) $membre->current_boutique_id === $boutiqueId) {
+            $repli = $membre->fresh()->boutiquesAccessibles()->first();
+            $membre->forceFill(['current_boutique_id' => $repli?->id])->save();
         }
 
-        $boutique->users()->detach($userId);
-
-        return response()->json(['message' => 'Membre retiré de l\'équipe']);
+        // Plus aucun accès à cette boutique : les sessions sont caduques.
+        if (! $membre->fresh()->aAccesBoutique($boutiqueId)) {
+            $membre->tokens()->delete();
+        }
     }
 
     /**
@@ -310,11 +311,11 @@ class BoutiqueController extends Controller
             }
         }
 
-        $boutique = $user->estProprietaire()
-            ? Boutique::forProprietaire($user->id)->first()
-            : $user->boutiques()->first();
+        // Repli sur la première boutique réellement accessible (possession
+        // ou pivot) : ne dépend plus du rôle global.
+        $boutique = $user->boutiquesAccessibles()->first();
 
-        if (!$boutique) {
+        if (! $boutique) {
             abort(404, 'Aucune boutique pour cet utilisateur');
         }
 

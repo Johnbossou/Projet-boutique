@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Sequenceur;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -70,6 +71,10 @@ class Devis extends Model
 
     /**
      * Générer automatiquement le numéro de devis
+     *
+     * Compteur en base sous verrou (App\Services\Sequenceur). Le timestamp
+     * à la seconde précédent violait l'index UNIQUE de la migration
+     * 2026_08_25_150000 dès deux devis créés dans la même seconde.
      */
     protected static function boot()
     {
@@ -77,7 +82,7 @@ class Devis extends Model
 
         static::creating(function ($devis) {
             if (empty($devis->numero_devis)) {
-                $devis->numero_devis = 'DEV-' . date('Ymd-His');
+                $devis->numero_devis = Sequenceur::prochain('DEV');
             }
         });
     }
@@ -128,6 +133,6 @@ class Devis extends Model
      */
     public function peutEtreConverti(): bool
     {
-        return $this->statut === 'accepte' && !$this->commandeClient;
+        return $this->statut === 'accepte' && ! $this->commandeClient;
     }
 }

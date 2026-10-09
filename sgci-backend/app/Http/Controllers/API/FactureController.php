@@ -3,10 +3,13 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
+use App\Models\CommandeClient;
 use App\Models\Facture;
+use App\Models\Vente;
 use App\Services\FacturationService;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class FactureController extends Controller
 {
@@ -68,10 +71,17 @@ class FactureController extends Controller
     public function genererPourVente(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'vente_id' => 'required|exists:ventes,id',
+            'vente_id' => [
+                'required',
+                // Règle scopée : la version non scopée renvoyait 422 avant le
+                // garde 403, ce qui permettait à un gérant de deviner
+                // l'existence d'une vente d'un autre tenant.
+                Rule::exists('ventes', 'id')
+                    ->where('boutique_id', $request->user()->current_boutique_id),
+            ],
         ]);
 
-        $vente = \App\Models\Vente::find($validated['vente_id']);
+        $vente = Vente::find($validated['vente_id']);
 
         if ($vente->boutique_id !== $request->user()->current_boutique_id) {
             return response()->json(['message' => 'Non autorisé'], 403);
@@ -98,10 +108,17 @@ class FactureController extends Controller
     public function genererPourCommande(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'commande_client_id' => 'required|exists:commande_clients,id',
+            'commande_client_id' => [
+                'required',
+                // Le contrôle boutique_id ligne 106 existait déjà, mais la règle
+                // non scopée laissait deviner l'existence d'une commande d'un
+                // autre tenant (422 vs 403). On scopé pour ne pas divulguer.
+                Rule::exists('commande_clients', 'id')
+                    ->where('boutique_id', $request->user()->current_boutique_id),
+            ],
         ]);
 
-        $commande = \App\Models\CommandeClient::find($validated['commande_client_id']);
+        $commande = CommandeClient::find($validated['commande_client_id']);
 
         if ($commande->boutique_id !== $request->user()->current_boutique_id) {
             return response()->json(['message' => 'Non autorisé'], 403);
@@ -153,13 +170,13 @@ class FactureController extends Controller
             return response()->json(['message' => 'Non autorisé'], 403);
         }
 
-        if (!$facture->chemin_pdf) {
+        if (! $facture->chemin_pdf) {
             return response()->json(['message' => 'PDF non disponible'], 404);
         }
 
         return response()->download(
-            storage_path('app/public/' . $facture->chemin_pdf),
-            'facture-' . $facture->numero_facture . '.pdf'
+            storage_path('app/public/'.$facture->chemin_pdf),
+            'facture-'.$facture->numero_facture.'.pdf'
         );
     }
 
@@ -173,7 +190,11 @@ class FactureController extends Controller
         }
 
         try {
-            $resultats = $this->facturationService->genererEtEnvoyerFacturesDuJour();
+            // La boutique courante borne le périmètre : sans cet argument la
+            // génération balayait tous les tenants du propriétaire.
+            $resultats = $this->facturationService->genererEtEnvoyerFacturesDuJour(
+                $request->user()->current_boutique_id
+            );
 
             return response()->json([
                 'message' => 'Génération automatique terminée',

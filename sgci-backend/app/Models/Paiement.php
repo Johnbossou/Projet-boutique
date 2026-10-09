@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Sequenceur;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -11,10 +12,12 @@ class Paiement extends Model
 
     protected $fillable = [
         'numero_paiement',
+        'idempotency_key',
         'commande_client_id',
         'boutique_id',
         'montant',
         'mode_paiement',
+        'telephone',
         'reference_transaction',
         'date_paiement',
         'statut',
@@ -53,8 +56,13 @@ class Paiement extends Model
 
     /**
      * Générer automatiquement un numéro de paiement unique.
-     * Basé sur le max existant (et non count) pour rester robuste
-     * même après suppressions : PAY-20260821-0001, -0002, ...
+     * PAY-20260821-0001, -0002, ...
+     *
+     * Allocation par App\Services\Sequenceur : compteur en base sous verrou.
+     * Le max() puis INSERT précédent n'était pas atomique — deux caisses
+     * simultanées calculaient le même max, et l'index UNIQUE
+     * (migration 2026_06_02_000015) rejetait l'un des deux en SQLSTATE
+     * 23000. Le compteur reste GLOBAL, jamais par boutique.
      */
     protected static function boot()
     {
@@ -62,18 +70,7 @@ class Paiement extends Model
 
         static::creating(function ($paiement) {
             if (empty($paiement->numero_paiement)) {
-                $prefix = 'PAY-' . now()->format('Ymd');
-
-                $query = self::where('numero_paiement', 'like', $prefix . '-%');
-
-                if ($paiement->boutique_id) {
-                    $query->where('boutique_id', $paiement->boutique_id);
-                }
-
-                $last = $query->max('numero_paiement');
-
-                $suffix = $last ? ((int) substr($last, strlen($prefix) + 1)) + 1 : 1;
-                $paiement->numero_paiement = $prefix . '-' . str_pad((string) $suffix, 4, '0', STR_PAD_LEFT);
+                $paiement->numero_paiement = Sequenceur::prochain('PAY');
             }
         });
     }

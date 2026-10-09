@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\User;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Crypt;
 use RuntimeException;
 
@@ -22,6 +23,20 @@ class TwoFactorAuthService
     private const WINDOW = 1; // fenêtre de tolérance : ±1 période
 
     /**
+     * Horloge du service.
+     *
+     * Volontairement Carbon et non time() brut : la fenêtre de tolérance est
+     * exactement d'une période, donc zéro marge. Un test qui évalue une
+     * frontière de période avec une vraie horloge est fatal dès qu'il tombe
+     * à cheval sur un changement de période (~3 % des exécutions). Carbon
+     * permet de geler l'instant en test et rend la vérification déterministe.
+     */
+    private function maintenant(): int
+    {
+        return Carbon::now()->getTimestamp();
+    }
+
+    /**
      * Génère un nouveau secret pour l'utilisateur.
      * Retourne le secret EN CLAIR (à afficher une seule fois pour le QR code) ;
      * seule sa version chiffrée est persistée.
@@ -39,7 +54,7 @@ class TwoFactorAuthService
      */
     public function enableTwoFactor(User $user, string $code): bool
     {
-        if (!$this->verifyCode($user, $code)) {
+        if (! $this->verifyCode($user, $code)) {
             return false;
         }
 
@@ -72,11 +87,11 @@ class TwoFactorAuthService
     {
         $plainSecret = $this->getPlainSecret($user);
 
-        if ($plainSecret === null || !preg_match('/^\d{' . self::DIGITS . '}$/', $code)) {
+        if ($plainSecret === null || ! preg_match('/^\d{'.self::DIGITS.'}$/', $code)) {
             return false;
         }
 
-        $currentTime = floor(time() / self::PERIOD);
+        $currentTime = floor($this->maintenant() / self::PERIOD);
 
         for ($i = -self::WINDOW; $i <= self::WINDOW; $i++) {
             if (hash_equals($this->generateTOTP($plainSecret, (int) ($currentTime + $i)), $code)) {
@@ -92,7 +107,7 @@ class TwoFactorAuthService
      */
     public function getPlainSecret(User $user): ?string
     {
-        if (!$user->two_factor_secret) {
+        if (! $user->two_factor_secret) {
             return null;
         }
 
@@ -110,7 +125,7 @@ class TwoFactorAuthService
      */
     public function getCurrentCode(string $plainSecret): string
     {
-        return $this->generateTOTP($plainSecret, (int) floor(time() / self::PERIOD));
+        return $this->generateTOTP($plainSecret, (int) floor($this->maintenant() / self::PERIOD));
     }
 
     private function saveEncryptedSecret(User $user, string $plainSecret): void

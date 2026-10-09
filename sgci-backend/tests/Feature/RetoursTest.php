@@ -4,10 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\Boutique;
 use App\Models\Categorie;
-use App\Models\Client;
 use App\Models\Produit;
 use App\Models\RetourVente;
-use App\Models\RetourVenteLigne;
 use App\Models\User;
 use App\Models\Vente;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -20,6 +18,7 @@ class RetoursTest extends TestCase
     use RefreshDatabase;
 
     private Boutique $boutique;
+
     private User $gerant;
 
     protected function setUp(): void
@@ -40,7 +39,7 @@ class RetoursTest extends TestCase
             'proprietaire_id' => $this->gerant->id,
         ]);
 
-        $this->gerant->boutiques()->attach($this->boutique->id);
+        $this->gerant->boutiques()->attach($this->boutique->id, ['role_dans_boutique' => 'gerant']);
         $this->gerant->update(['current_boutique_id' => $this->boutique->id]);
     }
 
@@ -189,6 +188,114 @@ class RetoursTest extends TestCase
 
         $this->postJson("/api/retours/{$retour->id}/valider")->assertStatus(422);
         $this->postJson("/api/retours/{$retour->id}/refuser")->assertStatus(422);
+    }
+
+    /**
+     * BUG : store() comparait la quantité demandée à la quantité VENDUE, sans
+     * jamais déduire les retours déjà VALIDÉS. La vente est de 2 unités ;
+     * après avoir retourné et validé 2 unités (stock crédité), une seconde
+     * demande de 2 unités était acceptée : le stock recevait 4 unités
+     * rendues pour 2 vendues.
+     */
+    public function test_le_cumul_des_retours_valides_ne_peut_pas_depasser_la_vente(): void
+    {
+        Sanctum::actingAs($this->gerant);
+        $vente = $this->seedVenteTerminee();
+        $ligne = $vente->ligneVentes->first();
+        $produit = Produit::where('boutique_id', $this->boutique->id)->first();
+
+        // 1er retour : les 2 unités vendues, puis validation (stock crédité).
+        $this->postJson('/api/retours', [
+            'vente_id' => $vente->id,
+            'type' => 'partiel',
+            'motif' => 'defectueux',
+            'lignes' => [['ligne_vente_id' => $ligne->id, 'quantite_retournee' => 2]],
+        ])->assertCreated();
+
+        $premier = RetourVente::firstOrFail();
+        $this->postJson("/api/retours/{$premier->id}/valider")->assertOk();
+
+        // Le stock a bien été crédité des 2 unités retournées.
+        $this->assertEquals(22, $produit->fresh()->quantite_stock);
+
+        // 2e retour des MÊMES 2 unités : doit être refusé, le reliquat est nul.
+        $this->postJson('/api/retours', [
+            'vente_id' => $vente->id,
+            'type' => 'partiel',
+            'motif' => 'defectueux',
+            'lignes' => [['ligne_vente_id' => $ligne->id, 'quantite_retournee' => 2]],
+        ])->assertStatus(422);
+
+        // Aucun retour supplémentaire ne doit exister.
+        $this->assertSame(1, RetourVente::count());
+
+        // Le stock ne doit pas avoir bougé lors de la tentative refusée.
+        $this->assertEquals(22, $produit->fresh()->quantite_stock);
+    }
+
+    /**
+     * Le reliquat doit autoriser un retour PARTIEL après un retour partiel
+     * validé : vendu 2, retourné 1 validé, il doit rester 1.
+     */
+    public function test_le_reliquat_autorise_un_retour_partiel_complementaire(): void
+    {
+        Sanctum::actingAs($this->gerant);
+        $vente = $this->seedVenteTerminee();
+        $ligne = $vente->ligneVentes->first();
+        $produit = Produit::where('boutique_id', $this->boutique->id)->first();
+
+        $this->postJson('/api/retours', [
+            'vente_id' => $vente->id,
+            'type' => 'partiel',
+            'motif' => 'defectueux',
+            'lignes' => [['ligne_vente_id' => $ligne->id, 'quantite_retournee' => 1]],
+        ])->assertCreated();
+
+        $premier = RetourVente::firstOrFail();
+        $this->postJson("/api/retours/{$premier->id}/valider")->assertOk();
+
+        // Le reliquat de 1 doit être encore retournable.
+        $this->postJson('/api/retours', [
+            'vente_id' => $vente->id,
+            'type' => 'partiel',
+            'motif' => 'defectueux',
+            'lignes' => [['ligne_vente_id' => $ligne->id, 'quantite_retournee' => 1]],
+        ])->assertCreated();
+
+        $second = RetourVente::orderByDesc('id')->first();
+        $this->postJson("/api/retours/{$second->id}/valider")->assertOk();
+
+        // 20 + 1 + 1 = 22, jamais 23.
+        $this->assertEquals(22, $produit->fresh()->quantite_stock);
+    }
+
+    /**
+     * Un retour refusé ne doit PAS consommer le reliquat : il n'a jamais été
+     * validé, donc le stock n'a pas été crédité.
+     */
+    public function test_un_retour_refuse_ne_consomme_pas_le_reliquat(): void
+    {
+        Sanctum::actingAs($this->gerant);
+        $vente = $this->seedVenteTerminee();
+        $ligne = $vente->ligneVentes->first();
+
+        $this->postJson('/api/retours', [
+            'vente_id' => $vente->id,
+            'type' => 'partiel',
+            'motif' => 'defectueux',
+            'lignes' => [['ligne_vente_id' => $ligne->id, 'quantite_retournee' => 1]],
+        ])->assertCreated();
+
+        $refuse = RetourVente::firstOrFail();
+        $this->postJson("/api/retours/{$refuse->id}/refuser")->assertOk();
+
+        // Le reliquat des 2 unités doit rester entièrement disponible.
+        $this->postJson('/api/retours', [
+            'vente_id' => $vente->id,
+            'type' => 'partiel',
+            'motif' => 'defectueux',
+            'lignes' => [['ligne_vente_id' => $ligne->id, 'quantite_retournee' => 2]],
+        ])->assertCreated();
     }
 
     public function test_retour_requiert_vente_terminee(): void

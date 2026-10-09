@@ -18,7 +18,9 @@ class FideliteTest extends TestCase
     use RefreshDatabase;
 
     private Boutique $boutique;
+
     private User $gerant;
+
     private Client $client;
 
     protected function setUp(): void
@@ -39,7 +41,7 @@ class FideliteTest extends TestCase
             'proprietaire_id' => $this->gerant->id,
         ]);
 
-        $this->gerant->boutiques()->attach($this->boutique->id);
+        $this->gerant->boutiques()->attach($this->boutique->id, ['role_dans_boutique' => 'gerant']);
         $this->gerant->update(['current_boutique_id' => $this->boutique->id]);
 
         $this->client = Client::create([
@@ -168,7 +170,7 @@ class FideliteTest extends TestCase
             'date_inscription' => now(),
         ]);
 
-        $this->getJson('/api/fidelite/points-client?client_id=' . $this->client->id)
+        $this->getJson('/api/fidelite/points-client?client_id='.$this->client->id)
             ->assertOk()
             ->assertJsonPath('client_id', $this->client->id)
             ->assertJsonPath('points', 0);

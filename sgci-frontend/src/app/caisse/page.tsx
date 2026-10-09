@@ -2,10 +2,10 @@
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect, useRef, useCallback, useMemo, useLayoutEffect } from 'react';
-import { 
-  ShoppingCart, 
-  Trash2, 
-  Plus, 
+import {
+  ShoppingCart,
+  Trash2,
+  Plus,
   Minus,
   Calculator,
   Receipt,
@@ -33,7 +33,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiFetch } from '@/lib/api-client';
-import { fetchBoutiqueSettings, getDelaiAnnulationMs } from '@/lib/boutique-settings';
+import { fetchBoutiqueSettings, getDelaiAnnulationMs, getTauxTva } from '@/lib/boutique-settings';
+import { lireErreurApi } from '@/lib/api-errors';
+import { syncOfflineQueue } from '@/lib/sync-offline-caisse';
 import { BarcodeScanField } from '@/components/BarcodeScanField';
 import { downloadFacturePdf } from '@/lib/media';
 import { toast } from 'sonner';
@@ -132,6 +134,10 @@ export default function CaissePage() {
   
   // 🎯 AMÉLIORATION 9: Mode hors-ligne
   const [offlineQueue, setOfflineQueue] = useState<OfflineQueue[]>([]);
+  // Taux de TVA de la boutique courante (ratio : 0.18 = 18 %).
+  // Doit être un état : chargé de façon asynchrone, un useMemo sur
+  // [panier, remise] garderait un montant calculé avec l'ancien taux.
+  const [tauxTva, setTauxTva] = useState(0.18);
   const [isOnline, setIsOnline] = useState(typeof window !== 'undefined' ? navigator.onLine : true);
   
   // 🎯 AMÉLIORATION 8: Sync prix en temps réel
@@ -207,7 +213,9 @@ export default function CaissePage() {
   }, [panier, modePaiement, isProcessing]);
 
   useEffect(() => {
-    fetchBoutiqueSettings().catch(() => undefined);
+    fetchBoutiqueSettings()
+      .then(() => setTauxTva(getTauxTva()))
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -221,30 +229,26 @@ export default function CaissePage() {
   const syncerOfflineQueue = useCallback(async () => {
     if (offlineQueue.length === 0) return;
 
-    let synced = 0;
-    for (const item of offlineQueue) {
-      try {
-        const response = await apiFetch('/ventes', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          },
-          body: JSON.stringify(item.vente)
-        });
+    const resultat = await syncOfflineQueue(offlineQueue, apiFetch);
 
-        if (response.ok) {
-          synced++;
-          setOfflineQueue(prev => prev.filter(q => q.id !== item.id));
-        }
-      } catch (error) {
-        console.error('Erreur sync vente:', error);
-      }
+    // On retire en un seul setState les ventes sorties de la file, pour éviter
+    // un setOfflineQueue par item et les rendus intermédiaires incohérents.
+    const sorties = new Set([
+      ...resultat.synchronisees,
+      ...resultat.rejetees.map((r) => r.id),
+    ]);
+
+    if (sorties.size > 0) {
+      setOfflineQueue((prev) => prev.filter((q) => !sorties.has(q.id)));
     }
 
-    if (synced > 0) {
-      toast.success(`${synced} vente(s) synchronisée(s)`);
+    if (resultat.synchronisees.length > 0) {
+      toast.success(`${resultat.synchronisees.length} vente(s) synchronisée(s)`);
     }
+
+    resultat.rejetees.forEach(({ raison }) => {
+      toast.error(`Vente hors-ligne perdue : ${raison}`);
+    });
   }, [offlineQueue]);
 
   useEffect(() => {
@@ -343,8 +347,8 @@ export default function CaissePage() {
         // Recharger les produits pour mettre à jour les stocks
         await chargerProduits();
       } else {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Erreur lors de l\'annulation');
+        const errorData = await response.json().catch(() => null);
+        throw new Error(lireErreurApi(errorData) ?? 'Erreur lors de l\'annulation');
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Erreur lors de l\'annulation');
@@ -563,6 +567,8 @@ export default function CaissePage() {
   }, []);
 
   // 🎯 CALCULS OPTIMISÉS ET SÉCURISÉS
+  const tauxTvaLibelle = `${(tauxTva * 100).toLocaleString('fr-FR', { maximumFractionDigits: 2 })}%`;
+
   const calculs = useMemo(() => {
     // 🔥 CORRECTION : Conversion sécurisée en nombres
     const sousTotal = panier.reduce((total, item) => {
@@ -572,7 +578,9 @@ export default function CaissePage() {
 
     const remiseNumerique = Number(remise) || 0;
     const montantApresRemise = Math.max(0, sousTotal - remiseNumerique);
-    const tva = montantApresRemise * 0.18;
+    // Taux de la boutique courante, pas une constante : une boutique à 0 % ou
+    // à 9 % verrait sinon la caisse afficher un montant que le serveur n'encaisse pas.
+    const tva = montantApresRemise * tauxTva;
     const total = montantApresRemise + tva;
 
     // 🔥 VALIDATION : Vérifier que tous les calculs sont valides
@@ -596,7 +604,7 @@ export default function CaissePage() {
     }
 
     return result;
-  }, [panier, remise]);
+  }, [panier, remise, tauxTva]);
   // 🎯 CALCUL MONNAIE RENDUE
   const monnaieRendue = useMemo(() => {
     if (modePaiement === 'especes' && montantRecu) {
@@ -800,7 +808,14 @@ export default function CaissePage() {
       }
 
       // 🔥 NOUVEAU FORMAT AVEC MODES DE PAIEMENT
+      // La clé d'idempotence est générée UNE fois par tentative de vente et
+      // réutilisée lors des rejeux hors-ligne. Sans elle, une vente rejouée
+      // après une coupure réseau (réponse perdue côté serveur) est encaissée
+      // une seconde fois : le backend déduplique sur cette clé.
+      const idempotencyKey = `web_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+
       const donneesVente = {
+        idempotency_key: idempotencyKey,
         ligne_ventes: panier.map(item => ({
           produit_id: item.produit.id,
           quantite: item.quantite
@@ -873,8 +888,8 @@ export default function CaissePage() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || errorData.errors?.ligne_ventes?.[0] || `Erreur HTTP ${response.status}`);
+        const errorData = await response.json().catch(() => null);
+        throw new Error(lireErreurApi(errorData) ?? `Erreur HTTP ${response.status}`);
       }
 
       const venteConfirmee: VenteResponse = await response.json();
@@ -1511,7 +1526,7 @@ export default function CaissePage() {
                     )}
                     
                     <div className="flex justify-between text-sm">
-                      <span className="text-slate-600 dark:text-slate-400">TVA (18%)</span>
+                      <span className="text-slate-600 dark:text-slate-400">TVA ({tauxTvaLibelle})</span>
                       <span className="font-medium">{calculs.tva.toLocaleString()} FCFA</span>
                     </div>
 
@@ -1983,7 +1998,7 @@ export default function CaissePage() {
                       )}
                       
                       <div className="flex justify-between">
-                        <span>TVA (18%):</span>
+                        <span>TVA ({tauxTvaLibelle}):</span>
                         <span>{lastVente.tva.toLocaleString()} FCFA</span>
                       </div>
 
@@ -2146,7 +2161,7 @@ export default function CaissePage() {
                                     </div>
                                   ` : ''}
                                   <div class="summary-row">
-                                    <span>TVA (18%)</span>
+                                    <span>TVA ({tauxTvaLibelle})</span>
                                     <span>${lastVente.tva.toLocaleString()} FCFA</span>
                                   </div>
                                   ${lastVente.monnaie_rendue && lastVente.monnaie_rendue > 0 ? `

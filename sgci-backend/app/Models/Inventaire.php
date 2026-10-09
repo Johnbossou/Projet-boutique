@@ -30,7 +30,10 @@ class Inventaire extends Model
 
         static::creating(function ($inventaire) {
             if (empty($inventaire->reference)) {
-                $inventaire->reference = 'INV-' . date('Ymd-His');
+                // Suffixe aleatoire : deux inventaires lances dans la meme
+                // seconde se heurtaient sur reference, qui est unique.
+                $inventaire->reference = 'INV-'.date('Ymd-His').'-'
+                    .strtoupper(bin2hex(random_bytes(3)));
             }
         });
     }

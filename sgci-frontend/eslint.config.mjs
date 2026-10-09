@@ -18,6 +18,12 @@ const eslintConfig = [
       "out/**",
       "build/**",
       "next-env.d.ts",
+      // Fichiers de configuration CommonJS générés par create-next-app.
+      // La règle no-require-imports est pertinente pour le code applicatif,
+      // pas pour un jest.config.js dont le format CommonJS est imposé par Jest.
+      "jest.config.js",
+      "jest.setup.js",
+      "postcss.config.js",
     ],
   },
 ];

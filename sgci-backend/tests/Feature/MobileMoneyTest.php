@@ -17,7 +17,9 @@ class MobileMoneyTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+
     private Boutique $boutique;
+
     private User $proprietaire;
 
     private const SECRET = 'secret-callback-test';
@@ -25,6 +27,8 @@ class MobileMoneyTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        $this->sansProvisionnerBoutique();
 
         config()->set('services.mobile_money.callback_secret', self::SECRET);
 
@@ -52,6 +56,7 @@ class MobileMoneyTest extends TestCase
             'est_actif' => true,
         ]);
         $this->user->forceFill(['current_boutique_id' => $this->boutique->id])->save();
+        $this->boutique->users()->attach($this->user->id, ['role_dans_boutique' => 'gerant']);
     }
 
     private function createCommande(float $montantTotal = 10000): CommandeClient
@@ -73,7 +78,7 @@ class MobileMoneyTest extends TestCase
             'boutique_id' => $this->boutique->id,
             'montant' => 4000,
             'mode_paiement' => 'mobile_money_orange',
-            'reference_transaction' => 'TX-' . uniqid(),
+            'reference_transaction' => 'TX-'.uniqid(),
             'date_paiement' => now(),
             'statut' => 'en_attente',
             'user_id' => $this->user->id,
@@ -210,6 +215,136 @@ class MobileMoneyTest extends TestCase
             ->assertOk();
 
         $this->assertEquals(4000, (float) $commande->fresh()->montant_paye);
+    }
+
+    /**
+     * BUG : le compteur de numero_paiement était scope par boutique alors que
+     * la migration pose un index UNIQUE GLOBAL sur la colonne. Deux boutiques
+     * prenant un paiement le même jour calculent toutes deux « -0001 » et la
+     * seconde INSERT viole l'index : l'initiation échoue en production.
+     * Aucun test ne le voyait, les fixtures n'ayant qu'une seule boutique.
+     */
+    public function test_numero_paiement_ne_rentre_pas_en_collision_entre_boutiques(): void
+    {
+        $autreBoutique = Boutique::create([
+            'nom' => 'Boutique Collide',
+            'devise' => 'XOF',
+            'proprietaire_id' => $this->proprietaire->id,
+        ]);
+
+        $paiementA = Paiement::create([
+            'commande_client_id' => null,
+            'boutique_id' => $this->boutique->id,
+            'montant' => 4000,
+            'mode_paiement' => 'mobile_money_orange',
+            'date_paiement' => now(),
+            'statut' => 'en_attente',
+            'user_id' => $this->user->id,
+        ]);
+
+        $paiementB = Paiement::create([
+            'commande_client_id' => null,
+            'boutique_id' => $autreBoutique->id,
+            'montant' => 4000,
+            'mode_paiement' => 'mobile_money_orange',
+            'date_paiement' => now(),
+            'statut' => 'en_attente',
+            'user_id' => $this->user->id,
+        ]);
+
+        $this->assertNotSame($paiementA->numero_paiement, $paiementB->numero_paiement);
+        $this->assertMatchesRegularExpression('/^PAY-\d{8}-\d{4}$/', $paiementB->numero_paiement);
+    }
+
+    /**
+     * BUG : la règle de validation 'exists:commande_clients,id' n'était pas
+     * scopée à la boutique. Un gérant pouvait rattacher son paiement à la
+     * commande d'une autre boutique, dont le montant_paye était ensuite
+     * incrémenté par applyTransition().
+     */
+    public function test_initiate_refuse_une_commande_client_d_autre_boutique(): void
+    {
+        Http::fake([
+            '*/oauth/token' => Http::response(['access_token' => 'token-test'], 200),
+            '*' => Http::response(['transaction_id' => 'TX-XTEN'], 200),
+        ]);
+        Sanctum::actingAs($this->user);
+
+        $autreBoutique = Boutique::create([
+            'nom' => 'Boutique Victime',
+            'devise' => 'XOF',
+            'proprietaire_id' => $this->proprietaire->id,
+        ]);
+
+        $commandeEtrangere = CommandeClient::create([
+            'client_id' => null,
+            'boutique_id' => $autreBoutique->id,
+            'date_commande' => now(),
+            'statut' => 'en_attente',
+            'montant_total' => 10000,
+            'montant_paye' => 0,
+        ]);
+
+        $this->postJson('/api/mobile-money/initiate', [
+            'amount' => 5000,
+            'phone_number' => '97000000',
+            'provider' => 'orange',
+            'commande_client_id' => $commandeEtrangere->id,
+        ])->assertStatus(422);
+
+        $this->assertSame(0, Paiement::count());
+        $this->assertEquals(0, (float) $commandeEtrangere->fresh()->montant_paye);
+    }
+
+    /**
+     * BUG : applyTransition() incrémmentait la commande via whereKey() sans
+     * vérifier qu'elle appartient à la boutique du paiement. Même avec la règle
+     * de validation scopée, une ligne Paiement incohérente (import, callback
+     * antérieur) pouvait créditer une commande d'un autre tenant.
+     *
+     * Le paiement reste volontairement « reussi » : l'argent est encaissé chez
+     * le prestataire. Seule l'écriture cross-tenant doit être bloquée.
+     */
+    public function test_callback_ne_credite_pas_une_commande_d_autre_boutique(): void
+    {
+        $autreBoutique = Boutique::create([
+            'nom' => 'Boutique Creditee',
+            'devise' => 'XOF',
+            'proprietaire_id' => $this->proprietaire->id,
+        ]);
+
+        $commandeEtrangere = CommandeClient::create([
+            'client_id' => null,
+            'boutique_id' => $autreBoutique->id,
+            'date_commande' => now(),
+            'statut' => 'en_attente',
+            'montant_total' => 10000,
+            'montant_paye' => 0,
+        ]);
+
+        $paiement = Paiement::create([
+            'commande_client_id' => $commandeEtrangere->id,
+            'boutique_id' => $this->boutique->id,
+            'montant' => 4000,
+            'mode_paiement' => 'mobile_money_orange',
+            'reference_transaction' => 'TX-XBOUTIQUE',
+            'date_paiement' => now(),
+            'statut' => 'en_attente',
+            'user_id' => $this->user->id,
+        ]);
+
+        $body = json_encode(['transaction_id' => 'TX-XBOUTIQUE', 'status' => 'successful']);
+        $this->postCallback($body, hash_hmac('sha256', $body, self::SECRET))->assertOk();
+
+        // L'invariant de sécurité : AUCUN argent ne doit arriver sur la commande
+        // d'un autre tenant.
+        $this->assertEquals(0, (float) $commandeEtrangere->fresh()->montant_paye);
+
+        // En revanche le paiement reste « reussi » : l'argent a bien été encaissé
+        // chez le prestataire, et le marquer « echoue » ferait perdre la
+        // traçabilité d'une recette réellement reçue. Le refus porte sur
+        // l'écriture cross-tenant, pas sur le statut du paiement.
+        $this->assertSame('reussi', $paiement->fresh()->statut);
     }
 
     public function test_check_status_scoped_to_current_boutique(): void

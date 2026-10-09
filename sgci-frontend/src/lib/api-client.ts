@@ -24,6 +24,13 @@ async function tryRefreshToken(): Promise<boolean> {
       if (!res.ok) return false;
 
       const data = await res.json();
+
+      // /refresh SUPPRIME le token courant côté serveur : le nouveau token
+      // doit impérativement remplacer l'ancien dans localStorage, sinon le
+      // retry repart avec un token révoqué et l'utilisateur est déconnecté.
+      if (data.token) {
+        localStorage.setItem('sgci_token', data.token);
+      }
       if (data.user) {
         localStorage.setItem('user_data', JSON.stringify(data.user));
       }

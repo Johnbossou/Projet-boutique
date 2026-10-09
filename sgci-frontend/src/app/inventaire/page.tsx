@@ -7,6 +7,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { apiFetch } from '@/lib/api-client';
+import {
+  construirePayloadComptage,
+  compterLignesRestantes,
+  type SaisieLigne,
+  valeurSaisie,
+} from '@/lib/inventaire-comptage';
 import { toast } from 'sonner';
 
 interface InventaireLigne {
@@ -48,8 +54,12 @@ export default function InventairePage() {
   const [inventaires, setInventaires] = useState<Inventaire[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [detail, setDetail] = useState<Inventaire | null>(null);
-  const [comptages, setComptages] = useState<Record<string, number>>({});
+  // null = ligne non relevée. Ne pas confondre avec 0 : effacer un champ pour
+  // corriger une saisie ne doit pas enregistrer une rupture de stock.
+  const [comptages, setComptages] = useState<Record<string, SaisieLigne>>({});
   const [actionEnCours, setActionEnCours] = useState(false);
+
+  const lignesRestantes = detail ? compterLignesRestantes(detail.lignes) : 0;
 
   const chargerInventaires = useCallback(async () => {
     setIsLoading(true);
@@ -97,12 +107,7 @@ export default function InventairePage() {
 
   const soumettreComptage = async () => {
     if (!detail) return;
-    const lignesPayload = Object.entries(comptages)
-      .filter(([, val]) => val !== undefined && val !== null && val !== 0)
-      .map(([ligneId, quantite]) => ({
-        inventaire_ligne_id: Number(ligneId),
-        quantite_physique: Number(quantite),
-      }));
+    const lignesPayload = construirePayloadComptage(comptages);
 
     if (lignesPayload.length === 0) {
       toast.error('Aucune quantité saisie');
@@ -252,14 +257,8 @@ export default function InventairePage() {
                   <TableRow>
                     <TableHead>Produit</TableHead>
                     <TableHead className="text-right">Système</TableHead>
-                    {detail.statut === 'en_cours' ? (
-                      <TableHead className="text-right">Physique</TableHead>
-                    ) : (
-                      <>
-                        <TableHead className="text-right">Physique</TableHead>
-                        <TableHead className="text-right">Écart</TableHead>
-                      </>
-                    )}
+                    <TableHead className="text-right">Physique</TableHead>
+                    <TableHead className="text-right">Écart</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -267,41 +266,53 @@ export default function InventairePage() {
                     <TableRow key={ligne.id}>
                       <TableCell>{ligne.produit?.nom ?? '—'}</TableCell>
                       <TableCell className="text-right">{ligne.quantite_systeme}</TableCell>
-                      {detail.statut === 'en_cours' ? (
-                        <TableCell className="text-right">
+                      <TableCell className="text-right">
+                        {detail.statut === 'en_cours' ? (
                           <Input
                             type="number"
                             min={0}
                             className="w-20 text-right ml-auto"
                             placeholder="—"
-                            value={comptages[String(ligne.id)] ?? ''}
-                            onChange={(e) => setComptages({ ...comptages, [String(ligne.id)]: Number(e.target.value) })}
+                            value={comptages[String(ligne.id)] ?? ligne.quantite_physique ?? ''}
+                            onChange={(e) => setComptages({
+                                ...comptages,
+                                [String(ligne.id)]: valeurSaisie(e.target.value),
+                              })}
                           />
-                        </TableCell>
-                      ) : (
-                        <>
-                          <TableCell className="text-right">{ligne.quantite_physique ?? '—'}</TableCell>
-                          <TableCell className="text-right">
-                            {ligne.ecart !== null && ligne.ecart !== 0 ? (
-                              <span className={ligne.ecart > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
-                                {ligne.ecart > 0 ? '+' : ''}{ligne.ecart}
-                              </span>
-                            ) : '0'}
-                          </TableCell>
-                        </>
-                      )}
+                        ) : (
+                          (ligne.quantite_physique ?? '—')
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {ligne.ecart !== null && ligne.ecart !== 0 ? (
+                          <span className={ligne.ecart > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                            {ligne.ecart > 0 ? '+' : ''}{ligne.ecart}
+                          </span>
+                        ) : '0'}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
 
               {detail.statut === 'en_cours' && (
-                <Button onClick={soumettreComptage} disabled={actionEnCours} className="w-full bg-gradient-to-r from-orange-500 to-red-500">
-                  {actionEnCours ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-1" />} Soumettre le comptage
-                </Button>
+                <div className="space-y-2">
+                  {lignesRestantes > 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      {lignesRestantes} produit(s) restant(s) à compter. La validation n&apos;est possible que lorsque toutes les lignes sont relevées.
+                    </p>
+                  )}
+                  <Button onClick={soumettreComptage} disabled={actionEnCours} className="w-full bg-gradient-to-r from-orange-500 to-red-500">
+                    {actionEnCours ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-1" />} Soumettre le comptage
+                  </Button>
+                </div>
               )}
 
-              {detail.statut === 'termine' && detail.ecarts_detectes > 0 && (
+              {/* La validation ne dépendait ni du statut ni de la complétude :
+                  un inventaire sans écart (statut termine mais ecarts_detectes = 0)
+                  n'affichait jamais ce bouton et ne pouvait donc jamais être
+                  clos depuis l'interface. */}
+              {(detail.statut === 'termine' || (detail.statut === 'en_cours' && lignesRestantes === 0)) && (
                 <Button onClick={validerInventaire} disabled={actionEnCours} className="w-full bg-green-600 hover:bg-green-700">
                   {actionEnCours ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-1" />} Valider et ajuster le stock
                 </Button>

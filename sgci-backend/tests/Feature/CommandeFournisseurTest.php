@@ -20,8 +20,11 @@ class CommandeFournisseurTest extends TestCase
     use RefreshDatabase;
 
     private Boutique $boutique;
+
     private User $gerant;
+
     private Fournisseur $fournisseur;
+
     private Produit $produit;
 
     protected function setUp(): void
@@ -42,7 +45,7 @@ class CommandeFournisseurTest extends TestCase
             'proprietaire_id' => $this->gerant->id,
         ]);
 
-        $this->gerant->boutiques()->attach($this->boutique->id);
+        $this->gerant->boutiques()->attach($this->boutique->id, ['role_dans_boutique' => 'gerant']);
         $this->gerant->update(['current_boutique_id' => $this->boutique->id]);
 
         $this->fournisseur = Fournisseur::create([
@@ -73,7 +76,7 @@ class CommandeFournisseurTest extends TestCase
     private function creerCommande(string $statut = 'en_attente', int $montant = 20000): CommandeFournisseur
     {
         $commande = CommandeFournisseur::create([
-            'numero_commande' => 'CF-TEST-' . uniqid(),
+            'numero_commande' => 'CF-TEST-'.uniqid(),
             'fournisseur_id' => $this->fournisseur->id,
             'boutique_id' => $this->boutique->id,
             'date_commande' => now(),
@@ -146,7 +149,7 @@ class CommandeFournisseurTest extends TestCase
         ]);
 
         CommandeFournisseur::create([
-            'numero_commande' => 'CF-AUTRE-' . uniqid(),
+            'numero_commande' => 'CF-AUTRE-'.uniqid(),
             'fournisseur_id' => $this->fournisseur->id,
             'boutique_id' => $autreBoutique->id,
             'date_commande' => now(),
@@ -198,7 +201,7 @@ class CommandeFournisseurTest extends TestCase
         ]);
 
         $commande = CommandeFournisseur::create([
-            'numero_commande' => 'CF-AUTRE-' . uniqid(),
+            'numero_commande' => 'CF-AUTRE-'.uniqid(),
             'fournisseur_id' => $this->fournisseur->id,
             'boutique_id' => $autreBoutique->id,
             'date_commande' => now(),
@@ -245,7 +248,7 @@ class CommandeFournisseurTest extends TestCase
         $commande = $this->creerCommande('en_cours');
 
         $this->postJson("/api/commandes-fournisseurs/{$commande->id}/valider")
-            ->assertStatus(400);
+            ->assertStatus(409);
     }
 
     public function test_payer_commande(): void
@@ -275,6 +278,66 @@ class CommandeFournisseurTest extends TestCase
         $this->postJson("/api/commandes-fournisseurs/{$commande->id}/payer", [
             'montant' => 25000,
         ])->assertStatus(422);
+    }
+
+    public function test_les_reglements_successifs_cumulent_sans_perte(): void
+    {
+        Sanctum::actingAs($this->gerant);
+
+        $commande = $this->creerCommande('en_cours', 20000);
+
+        foreach ([6000, 6000, 6000] as $montant) {
+            $this->postJson("/api/commandes-fournisseurs/{$commande->id}/payer", [
+                'montant' => $montant,
+            ])->assertOk();
+        }
+
+        // 18 000 : c'est le total réellement encaissé. Un += sur une instance
+        // périmée perdrait des règlements et afficherait un solde inférieur au
+        // cash réel versé au fournisseur.
+        $this->assertSame(18000.0, (float) $commande->refresh()->montant_paye);
+
+        // Le solde exact est dû : ni refusé, ni accepté au-delà.
+        $this->postJson("/api/commandes-fournisseurs/{$commande->id}/payer", [
+            'montant' => 2000,
+        ])->assertOk();
+
+        $this->assertSame(20000.0, (float) $commande->refresh()->montant_paye);
+        $this->assertTrue($commande->refresh()->estPayee());
+        $this->assertSame(0.0, (float) $commande->montant_restant);
+    }
+
+    public function test_une_commande_entierement_payee_refuse_un_reglement_supplementaire(): void
+    {
+        Sanctum::actingAs($this->gerant);
+
+        $commande = $this->creerCommande('en_cours', 20000);
+
+        $this->postJson("/api/commandes-fournisseurs/{$commande->id}/payer", ['montant' => 20000])
+            ->assertOk();
+
+        $this->postJson("/api/commandes-fournisseurs/{$commande->id}/payer", ['montant' => 1])
+            ->assertStatus(409);
+
+        $this->assertSame(20000.0, (float) $commande->refresh()->montant_paye);
+    }
+
+    public function test_un_reglement_est_refuse_sur_commande_annulee_ou_livree(): void
+    {
+        Sanctum::actingAs($this->gerant);
+
+        foreach (['annule', 'livre'] as $statut) {
+            $commande = $this->creerCommande($statut, 20000);
+
+            $this->postJson("/api/commandes-fournisseurs/{$commande->id}/payer", ['montant' => 5000])
+                ->assertStatus(409);
+
+            $this->assertSame(
+                0.0,
+                (float) $commande->refresh()->montant_paye,
+                "Un règlement ne doit pas s'accumuler sur une commande $statut."
+            );
+        }
     }
 
     public function test_receptionner_commande_augmente_le_stock(): void
@@ -325,7 +388,107 @@ class CommandeFournisseurTest extends TestCase
                     'quantite_recue' => 1,
                 ],
             ],
-        ])->assertStatus(400);
+        ])->assertStatus(409);
+    }
+
+    /**
+     * Régression : un fournisseur appartient à un tenant.
+     *
+     * Avant : fournisseur_id n'était validé que par exists:fournisseurs,id. Un
+     * gérant pouvait attacher le fournisseur d'une autre boutique, et la
+     * réponse de store renvoyait load('fournisseur') — donc le nom, l'email, le
+     * téléphone, l'adresse et les contacts de l'autre tenant en clair.
+     */
+    public function test_refuse_un_fournisseur_d_autre_boutique(): void
+    {
+        Sanctum::actingAs($this->gerant);
+
+        $autreGerant = User::create([
+            'name' => 'Gérant Concurrent',
+            'email' => 'gerant-concurrent@sgci.bj',
+            'password' => Hash::make('password'),
+            'role' => 'gerant',
+            'est_actif' => true,
+        ]);
+
+        $autreBoutique = Boutique::create([
+            'nom' => 'Boutique Concurrente',
+            'adresse' => 'Cotonou',
+            'proprietaire_id' => $autreGerant->id,
+        ]);
+
+        $fournisseurEtranger = Fournisseur::create([
+            'nom' => 'Fournisseur Secret',
+            'email' => 'secret@sgci.bj',
+            'telephone' => '22990000000',
+            'adresse' => 'Adresse confidentielle',
+            'contact_principal' => 'Contact Confidentiel',
+            'email_contact' => 'contact-secret@sgci.bj',
+            'actif' => true,
+            'boutique_id' => $autreBoutique->id,
+        ]);
+
+        $reponse = $this->postJson('/api/commandes-fournisseurs', [
+            'fournisseur_id' => $fournisseurEtranger->id,
+            'lignes' => [
+                [
+                    'produit_id' => $this->produit->id,
+                    'quantite_commandee' => 5,
+                    'prix_unitaire' => 1000,
+                ],
+            ],
+        ])->assertStatus(422);
+
+        $this->assertDatabaseMissing('commande_fournisseurs', [
+            'fournisseur_id' => $fournisseurEtranger->id,
+        ]);
+
+        $corps = $reponse->getContent();
+        foreach (['Secret', 'secret@sgci.bj', '22990000000', 'confidentielle', 'Confidentiel'] as $secret) {
+            $this->assertStringNotContainsStringIgnoringCase($secret, $corps, 'Aucune donnée du fournisseur étranger ne doit fuiter.');
+        }
+    }
+
+    public function test_store_refuse_un_produit_d_autre_boutique(): void
+    {
+        Sanctum::actingAs($this->gerant);
+
+        $autreBoutique = Boutique::create([
+            'nom' => 'Boutique Etranger Produits',
+            'adresse' => 'Parakou',
+            'proprietaire_id' => $this->gerant->id,
+        ]);
+
+        $categorieEtrangere = Categorie::create([
+            'nom' => 'Catégorie Étrangère',
+            'boutique_id' => $autreBoutique->id,
+        ]);
+
+        $produitEtranger = Produit::create([
+            'nom' => 'Produit Etranger',
+            'description' => 'Ne doit pas etre commandable',
+            'prix' => 999,
+            'quantite_stock' => 3,
+            'seuil_alerte' => 1,
+            'categorie_id' => $categorieEtrangere->id,
+            'boutique_id' => $autreBoutique->id,
+            'unite_mesure' => 'piece',
+        ]);
+
+        $this->postJson('/api/commandes-fournisseurs', [
+            'fournisseur_id' => $this->fournisseur->id,
+            'lignes' => [
+                [
+                    'produit_id' => $produitEtranger->id,
+                    'quantite_commandee' => 2,
+                    'prix_unitaire' => 500,
+                ],
+            ],
+        ])->assertStatus(422)->assertJsonValidationErrors('lignes.0.produit_id');
+
+        $this->assertDatabaseMissing('ligne_commande_fournisseurs', [
+            'produit_id' => $produitEtranger->id,
+        ]);
     }
 
     public function test_annuler_commande(): void
@@ -346,7 +509,7 @@ class CommandeFournisseurTest extends TestCase
         $commande = $this->creerCommande('livre');
 
         $this->postJson("/api/commandes-fournisseurs/{$commande->id}/annuler")
-            ->assertStatus(400);
+            ->assertStatus(409);
     }
 
     public function test_destroy_commande(): void
@@ -360,6 +523,18 @@ class CommandeFournisseurTest extends TestCase
             ->assertJsonPath('message', 'Commande supprimée avec succès');
 
         $this->assertSoftDeleted('commande_fournisseurs', ['id' => $commande->id]);
+    }
+
+    public function test_ne_peut_pas_supprimer_une_commande_deja_validee(): void
+    {
+        Sanctum::actingAs($this->gerant);
+
+        $commande = $this->creerCommande('en_cours');
+
+        $this->deleteJson("/api/commandes-fournisseurs/{$commande->id}")
+            ->assertStatus(409);
+
+        $this->assertNotSoftDeleted('commande_fournisseurs', ['id' => $commande->id]);
     }
 
     public function test_caissier_ne_peut_pas_creer_de_commande(): void
@@ -387,5 +562,115 @@ class CommandeFournisseurTest extends TestCase
                 ],
             ],
         ])->assertStatus(403);
+    }
+
+    // ==================== ISOLATION MULTI-BOUTIQUE ====================
+
+    /**
+     * Produit d'une autre boutique, avec son stock initial.
+     */
+    private function produitEtranger(): Produit
+    {
+        $autreBoutique = Boutique::create([
+            'nom' => 'Boutique Etrangere',
+            'proprietaire_id' => $this->gerant->id,
+        ]);
+
+        $categorie = Categorie::create([
+            'nom' => ' Categorie Etrangere',
+            'boutique_id' => $autreBoutique->id,
+        ]);
+
+        return Produit::create([
+            'nom' => 'Produit Etranger',
+            'prix' => 1000,
+            'quantite_stock' => 7,
+            'seuil_alerte' => 2,
+            'categorie_id' => $categorie->id,
+            'boutique_id' => $autreBoutique->id,
+            'unite_mesure' => 'piece',
+        ]);
+    }
+
+    public function test_une_commande_ne_peut_pas_referencer_un_produit_d_une_autre_boutique(): void
+    {
+        Sanctum::actingAs($this->gerant);
+
+        $etranger = $this->produitEtranger();
+
+        $this->postJson('/api/commandes-fournisseurs', [
+            'fournisseur_id' => $this->fournisseur->id,
+            'lignes' => [
+                [
+                    'produit_id' => $etranger->id,
+                    'quantite_commandee' => 5,
+                    'prix_unitaire' => 1000,
+                ],
+            ],
+        ])->assertStatus(422)->assertJsonValidationErrors('lignes.0.produit_id');
+
+        $this->assertDatabaseCount('commande_fournisseurs', 0);
+    }
+
+    /**
+     * Une ligne créée avant la correction (ou via un import) peut référencer un
+     * produit devenu étranger. La réception doit refuser plutôt que d'augmenter
+     * le stock de l'autre boutique.
+     */
+    public function test_receptionner_une_ligne_hors_tenant_refuse_sans_toucher_le_stock(): void
+    {
+        Sanctum::actingAs($this->gerant);
+
+        $etranger = $this->produitEtranger();
+        $stockEtrangerAvant = (int) $etranger->quantite_stock;
+
+        $commande = $this->creerCommande('en_cours');
+        $ligne = $commande->lignes->first();
+        $ligne->update(['produit_id' => $etranger->id, 'quantite_commandee' => 5]);
+        $ligne->refresh();
+
+        $this->postJson("/api/commandes-fournisseurs/{$commande->id}/receptionner", [
+            'lignes' => [
+                ['ligne_id' => $ligne->id, 'quantite_recue' => 5],
+            ],
+        ])->assertStatus(422);
+
+        $this->assertSame(
+            $stockEtrangerAvant,
+            (int) $etranger->fresh()->quantite_stock,
+            'Le stock du produit d une autre boutique ne doit jamais bouger.'
+        );
+
+        $this->assertDatabaseMissing('mouvements_stock', ['produit_id' => $etranger->id]);
+    }
+
+    public function test_le_mouvement_de_reception_porte_le_boutique_du_produit_modifie(): void
+    {
+        Sanctum::actingAs($this->gerant);
+
+        $commande = $this->creerCommande('en_cours');
+        $ligne = $commande->lignes->first();
+        $stockAvant = (int) $this->produit->quantite_stock;
+
+        $this->postJson("/api/commandes-fournisseurs/{$commande->id}/receptionner", [
+            'lignes' => [
+                ['ligne_id' => $ligne->id, 'quantite_recue' => 2],
+            ],
+        ])->assertOk();
+
+        $mouvement = MouvementStock::where('produit_id', $this->produit->id)
+            ->latest('id')
+            ->firstOrFail();
+
+        // Le ledger doit désigner le tenant du produit modifié, pas celui de la
+        // commande : c'est la seule façon de réconcilier mouvements_stock et
+        // produits.quantite_stock.
+        $this->assertSame(
+            (int) $this->produit->boutique_id,
+            (int) $mouvement->boutique_id,
+            'Le mouvement doit pointer vers la boutique du produit incrémenté.'
+        );
+        $this->assertSame($stockAvant, (int) $mouvement->quantite_avant);
+        $this->assertSame($stockAvant + 2, (int) $mouvement->quantite_apres);
     }
 }

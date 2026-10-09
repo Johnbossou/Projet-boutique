@@ -11,6 +11,7 @@ use App\Models\LigneVente;
 use App\Models\Produit;
 use App\Models\User;
 use App\Models\Vente;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
@@ -22,8 +23,11 @@ class FactureTest extends TestCase
     use RefreshDatabase;
 
     private Boutique $boutique;
+
     private User $gerant;
+
     private Client $client;
+
     private Produit $produit;
 
     protected function setUp(): void
@@ -44,7 +48,7 @@ class FactureTest extends TestCase
             'proprietaire_id' => $this->gerant->id,
         ]);
 
-        $this->gerant->boutiques()->attach($this->boutique->id);
+        $this->gerant->boutiques()->attach($this->boutique->id, ['role_dans_boutique' => 'gerant']);
         $this->gerant->update(['current_boutique_id' => $this->boutique->id]);
 
         $this->client = Client::create([
@@ -118,7 +122,7 @@ class FactureTest extends TestCase
 
     private function dompdfEstInstalle(): bool
     {
-        return class_exists(\Barryvdh\DomPDF\Facade\Pdf::class);
+        return class_exists(Pdf::class);
     }
 
     public function test_generer_vente_cree_une_facture(): void

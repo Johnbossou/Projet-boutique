@@ -5,8 +5,8 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Models\CommandeClient;
 use App\Models\LigneCommandeClient;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class CommandeClientController extends Controller
@@ -125,24 +125,30 @@ class CommandeClientController extends Controller
             return response()->json(['message' => 'Non autorisé'], 403);
         }
 
-        if ($commande->statut !== 'en_attente') {
-            return response()->json([
-                'message' => 'Seules les commandes en attente peuvent être modifiées',
-            ], 400);
-        }
-
         $validated = $request->validate([
             'date_livraison_prevue' => 'nullable|date',
             'mode_paiement' => 'nullable|string',
             'notes' => 'nullable|string',
         ]);
 
-        $commande->update($validated);
+        return DB::transaction(function () use ($commande, $validated) {
+            $verrouillee = $this->commande_verrouillee($commande);
 
-        return response()->json([
-            'message' => 'Commande mise à jour avec succès',
-            'data' => $commande,
-        ]);
+            if (! $verrouillee) {
+                return response()->json(['message' => 'Commande introuvable'], 404);
+            }
+
+            if ($verrouillee->statut !== 'en_attente') {
+                return $this->dejaTraitee($verrouillee, 'modifiée');
+            }
+
+            $verrouillee->update($validated);
+
+            return response()->json([
+                'message' => 'Commande mise à jour avec succès',
+                'data' => $verrouillee,
+            ]);
+        });
     }
 
     /**
@@ -154,22 +160,39 @@ class CommandeClientController extends Controller
             return response()->json(['message' => 'Non autorisé'], 403);
         }
 
-        if ($commande->statut !== 'en_attente') {
+        return DB::transaction(function () use ($commande) {
+            $verrouillee = $this->commande_verrouillee($commande);
+
+            if (! $verrouillee) {
+                return response()->json(['message' => 'Commande introuvable'], 404);
+            }
+
+            if ($verrouillee->statut !== 'en_attente') {
+                return $this->dejaTraitee($verrouillee, 'validée');
+            }
+
+            $verrouillee->update(['statut' => 'en_cours']);
+
             return response()->json([
-                'message' => 'Seules les commandes en attente peuvent être validées',
-            ], 400);
-        }
-
-        $commande->update(['statut' => 'en_cours']);
-
-        return response()->json([
-            'message' => 'Commande validée avec succès',
-            'data' => $commande,
-        ]);
+                'message' => 'Commande validée avec succès',
+                'data' => $verrouillee,
+            ]);
+        });
     }
 
     /**
      * Annule une commande client
+     *
+     * Le statut est relu sous verrou, et non sur l'instance liee a la route.
+     * Deux annulations simultanees lisaient toutes deux « en_cours » sur
+     * cette instance, passaient le controle, puis ecrivaient « annule » deux
+     * fois : les deux repondaient 200 sans qu'aucune trace ne distingue la
+     * seconde d'un double clic.
+     *
+     * Concretement, sur une commande dont le paiement MobileMoney vient d'etre
+     * credite : le statut devenait « annule » pendant que montant_paye
+     * restait a son montant. La boutique annulait une commande deja payee, et
+     * l'argent encaisse ne l etait ni rapporte ni trace comme tel.
      */
     public function annuler(Request $request, CommandeClient $commande): JsonResponse
     {
@@ -177,18 +200,37 @@ class CommandeClientController extends Controller
             return response()->json(['message' => 'Non autorisé'], 403);
         }
 
-        if (!in_array($commande->statut, ['en_attente', 'en_cours'])) {
+        $resultat = DB::transaction(function () use ($commande) {
+            $verrouillee = $this->commande_verrouillee($commande);
+
+            if (! $verrouillee) {
+                return response()->json(['message' => 'Commande introuvable'], 404);
+            }
+
+            if (! in_array($verrouillee->statut, ['en_attente', 'en_cours'], true)) {
+                return $this->dejaTraitee($verrouillee, 'annulée');
+            }
+
+            // Un montant encaisse sur une commande qu'on annule doit etre
+            // signale : l'argent reste chez la boutique, mais il ne peut plus
+            // disparaitre dans un statut « annule » sans trace. Le rembordement
+            // effectif reste une decision metier — voir la note sur les
+            // commandes clients dans AMELIORATIONS_ET_MANQUANTS.md — mais le
+            // silence ne peut plus etre l'etat par defaut.
+            $encaisse = (float) $verrouillee->montant_paye;
+
+            $verrouillee->update(['statut' => 'annule']);
+
             return response()->json([
-                'message' => 'Seules les commandes en attente ou en cours peuvent être annulées',
-            ], 400);
-        }
+                'message' => $encaisse > 0
+                    ? 'Commande annulée. Attention : '.$encaisse.' ont déjà été encaissés et n’ont pas été remboursés.'
+                    : 'Commande annulée avec succès',
+                'data' => $verrouillee->fresh(),
+                'montant_paye' => $encaisse,
+            ]);
+        });
 
-        $commande->update(['statut' => 'annule']);
-
-        return response()->json([
-            'message' => 'Commande annulée avec succès',
-            'data' => $commande,
-        ]);
+        return $resultat;
     }
 
     /**
@@ -200,20 +242,65 @@ class CommandeClientController extends Controller
             return response()->json(['message' => 'Non autorisé'], 403);
         }
 
-        if ($commande->statut !== 'en_cours') {
+        return DB::transaction(function () use ($commande) {
+            $verrouillee = $this->commande_verrouillee($commande);
+
+            if (! $verrouillee) {
+                return response()->json(['message' => 'Commande introuvable'], 404);
+            }
+
+            if ($verrouillee->statut !== 'en_cours') {
+                return $this->dejaTraitee($verrouillee, 'livrée');
+            }
+
+            $verrouillee->update([
+                'statut' => 'livre',
+                'date_livraison_reelle' => now(),
+            ]);
+
             return response()->json([
-                'message' => 'Seules les commandes en cours peuvent être livrées',
-            ], 400);
-        }
+                'message' => 'Commande livrée avec succès',
+                'data' => $verrouillee,
+            ]);
+        });
+    }
 
-        $commande->update([
-            'statut' => 'livre',
-            'date_livraison_reelle' => now(),
-        ]);
+    /**
+     * Relit la commande sous verrou exclusive dans la transaction courante.
+     *
+     * Les quatre transitions de ce controleur passent par la : elles avaient
+     * toutes le meme defaut, et c'est ce qui justifie un seul point d'entree
+     * plutot que quatre relectures recopiees. L'instance liee a la route a ete
+     * lue au routage, avant que l'autre requete n'ait ecrit : son statut n'est
+     * plus le statut de la base. Verifier ce statut perime, puis ecrire, c'est
+     * laisser deux operations opposées reussir ensemble.
+     *
+     * L'ordre de verrou est le meme partout (mouvement, produit, commande) :
+     * deux transactions qui prennent les memes lignes dans des ordres
+     * opposes s'attendent jusqu'a l'expiration du delai InnoDB.
+     */
+    private function commande_verrouillee(CommandeClient $commande): ?CommandeClient
+    {
+        return CommandeClient::whereKey($commande->id)
+            ->where('boutique_id', $commande->boutique_id)
+            ->lockForUpdate()
+            ->first();
+    }
 
+    /**
+     * Refus commun quand le statut relu n'autorise plus l'operation demandee.
+     *
+     * 409 et non 400 : la commande existe, elle n'est simplement plus dans un
+     * etat compatible. La distinction 409 / 400 est ce qui permet au client de
+     * dire « traite entre-temps » plutot que « erreur de parametre » — et c'est
+     * aussi ce qui rend une double operation concurrente detectable au lieu
+     * d'etre silencieusement acceptee.
+     */
+    private function dejaTraitee(CommandeClient $commande, string $operation): JsonResponse
+    {
         return response()->json([
-            'message' => 'Commande livrée avec succès',
-            'data' => $commande,
-        ]);
+            'message' => 'Commande déjà traitée entre-temps (statut : '.$commande->statut.') — '.$operation.' refusée.',
+            'statut' => $commande->statut,
+        ], 409);
     }
 }

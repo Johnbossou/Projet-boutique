@@ -228,18 +228,32 @@ class FideliteController extends Controller
             return response()->json(['message' => 'Client non inscrit'], 404);
         }
 
-        if (!$recompense->peutEtreReclamee($clientFidelite)) {
-            return response()->json(['message' => 'Points insuffisants'], 400);
-        }
-
         return DB::transaction(function () use ($clientFidelite, $recompense) {
+            // Relecture SOUS VERROU du solde de points, et contrôle à
+            // l'intérieur de la transaction. Le contrôle « points suffisants »
+            // était fait avant la transaction, sur une instance lue plus tôt :
+            // deux réclamations simultanées lisaient le même solde, passaient
+            // toutes deux la garde, et retiraient chacune le montant. Le client
+            // finissait en points négatifs — une remise accordée deux fois.
+            $verrouille = ClientFidelite::whereKey($clientFidelite->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $verrouille) {
+                return response()->json(['message' => 'Client non inscrit'], 404);
+            }
+
+            if (! $recompense->peutEtreReclamee($verrouille)) {
+                return response()->json(['message' => 'Points insuffisants'], 409);
+            }
+
             // Retirer les points
-            $clientFidelite->retirerPoints($recompense->points_requis, 'Réclamation: ' . $recompense->nom);
+            $verrouille->retirerPoints($recompense->points_requis, 'Réclamation: ' . $recompense->nom);
 
             // Créer la réclamation
             $reclamation = ReclamationRecompense::create([
                 'recompense_fidelite_id' => $recompense->id,
-                'client_fidelite_id' => $clientFidelite->id,
+                'client_fidelite_id' => $verrouille->id,
                 'date_reclamation' => now(),
                 'statut' => 'valide',
                 'utilise' => false,

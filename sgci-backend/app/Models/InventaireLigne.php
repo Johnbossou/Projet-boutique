@@ -13,6 +13,7 @@ class InventaireLigne extends Model
         'inventaire_id',
         'produit_id',
         'quantite_systeme',
+        'quantite_systeme_comptage',
         'quantite_physique',
         'ecart',
         'notes',
@@ -20,6 +21,7 @@ class InventaireLigne extends Model
 
     protected $casts = [
         'quantite_systeme' => 'integer',
+        'quantite_systeme_comptage' => 'integer',
         'quantite_physique' => 'integer',
         'ecart' => 'integer',
     ];
@@ -31,6 +33,6 @@ class InventaireLigne extends Model
 
     public function produit()
     {
-        return $this->belongsTo(Produit::class);
+        return $this->belongsTo(Produit::class)->withTrashed();
     }
 }

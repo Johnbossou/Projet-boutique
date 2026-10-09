@@ -2,29 +2,34 @@
 
 namespace App\Http\Controllers\API;
 
-use App\Http\Controllers\Controller;
+use App\Exceptions\OperationRefusee;
 use App\Http\Controllers\Concerns\VerifieBoutique;
+use App\Http\Controllers\Controller;
 use App\Models\CommandeClient;
 use App\Models\Devis;
 use App\Models\LigneCommandeClient;
 use App\Models\LigneDevis;
-use Illuminate\Http\Request;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use Barryvdh\DomPDF\Facade\Pdf;
 
 class DevisController extends Controller
 {
     use VerifieBoutique;
+
     /**
      * Affiche la liste des devis de la boutique courante
      */
     public function index(Request $request): JsonResponse
     {
+        // commandeClient est chargée pour que le front sache si le devis a
+        // déjà été converti : sans elle, le bouton « Convertir » reste affiché
+        // après une conversion et renvoie un 409 au clic suivant.
         $query = Devis::where('boutique_id', $request->user()->current_boutique_id)
-            ->with(['client', 'user', 'lignes.produit']);
+            ->with(['client', 'user', 'lignes.produit', 'commandeClient']);
 
         // Filtre par statut
         if ($request->has('statut') && $request->statut) {
@@ -207,40 +212,50 @@ class DevisController extends Controller
             return response()->json(['message' => 'Non autorisé'], 403);
         }
 
-        if (!$devis->peutEtreConverti()) {
-            return response()->json([
-                'message' => 'Ce devis ne peut pas être converti en commande',
-            ], 400);
-        }
+        // Le verrou et le re-contrôle sont DANS la transaction : vérifier
+        // peutEtreConverti() avant ouvrait une course — deux double-clics
+        // passaient tous deux le contrôle et créaient deux commandes depuis
+        // le même devis.
+        try {
+            return DB::transaction(function () use ($request, $devis) {
+                $devis = Devis::whereKey($devis->id)->lockForUpdate()->firstOrFail();
 
-        return DB::transaction(function () use ($request, $devis) {
-            $commande = CommandeClient::create([
-                'client_id' => $devis->client_id,
-                'boutique_id' => $devis->boutique_id,
-                'devis_id' => $devis->id,
-                'date_commande' => now(),
-                'statut' => 'en_attente',
-                'montant_total' => $devis->montant_total,
-                'montant_paye' => 0,
-                'user_id' => $request->user()->id,
-            ]);
+                if (! $devis->peutEtreConverti()) {
+                    throw new OperationRefusee('Ce devis ne peut pas être converti en commande', 409);
+                }
 
-            foreach ($devis->lignes as $ligneDevis) {
-                LigneCommandeClient::create([
-                    'commande_client_id' => $commande->id,
-                    'produit_id' => $ligneDevis->produit_id,
-                    'quantite' => $ligneDevis->quantite,
-                    'prix_unitaire' => $ligneDevis->prix_unitaire,
-                    'remise_pourcentage' => $ligneDevis->remise_pourcentage,
-                    'montant_total' => $ligneDevis->montant_total,
+                $commande = CommandeClient::create([
+                    'client_id' => $devis->client_id,
+                    'boutique_id' => $devis->boutique_id,
+                    'devis_id' => $devis->id,
+                    'date_commande' => now(),
+                    'statut' => 'en_attente',
+                    'montant_total' => $devis->montant_total,
+                    'montant_paye' => 0,
+                    'user_id' => $request->user()->id,
                 ]);
-            }
 
-            return response()->json([
-                'message' => 'Devis converti en commande avec succès',
-                'data' => $commande->load('client', 'lignes.produit'),
-            ], 201);
-        });
+                foreach ($devis->lignes as $ligneDevis) {
+                    LigneCommandeClient::create([
+                        'commande_client_id' => $commande->id,
+                        'produit_id' => $ligneDevis->produit_id,
+                        'quantite' => $ligneDevis->quantite,
+                        'prix_unitaire' => $ligneDevis->prix_unitaire,
+                        'remise_pourcentage' => $ligneDevis->remise_pourcentage,
+                        'montant_total' => $ligneDevis->montant_total,
+                    ]);
+                }
+
+                return response()->json([
+                    'message' => 'Devis converti en commande avec succès',
+                    'data' => $commande->load('client', 'lignes.produit'),
+                ], 201);
+            }, 3);
+        } catch (OperationRefusee $e) {
+            // Laisse un 409 explicite plutôt qu'un 400 : la conversion est
+            // déjà faite, c'est un conflit d'état, pas une requête invalide.
+            return response()->json(['message' => $e->getMessage()], $e->statutHttp());
+        }
     }
 
     /**
@@ -257,9 +272,9 @@ class DevisController extends Controller
             'boutique' => $devis->boutique,
         ]);
 
-        $filename = 'devis/' . $devis->numero_devis . '.pdf';
+        $filename = 'devis/'.$devis->numero_devis.'.pdf';
         Storage::disk('public')->put($filename, $pdf->output());
 
-        return $pdf->download($devis->numero_devis . '.pdf');
+        return $pdf->download($devis->numero_devis.'.pdf');
     }
 }

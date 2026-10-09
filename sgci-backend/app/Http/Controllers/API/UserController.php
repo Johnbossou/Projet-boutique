@@ -3,11 +3,14 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
+use App\Models\Boutique;
 use App\Models\User;
 use App\Traits\Auditable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class UserController extends Controller
@@ -23,13 +26,25 @@ class UserController extends Controller
     private function peutGererMembre(User $acteur, User $cible): bool
     {
         if ($acteur->estProprietaire()) {
-            // Un propriétaire ne se gère pas lui-même via l'équipe.
-            return $acteur->id !== $cible->id;
+            // Un propriétaire ne gère que les membres de SES boutiques,
+            // sinon il pourrait désactiver n'importe quel compte de la plateforme.
+            // Il ne se gère pas lui-même via l'équipe.
+            if ($acteur->id === $cible->id) {
+                return false;
+            }
+
+            $boutiquesPossedees = $acteur->boutiquesPossedees()->pluck('boutiques.id');
+
+            if ($boutiquesPossedees->isEmpty()) {
+                return false;
+            }
+
+            return $cible->boutiques()->whereIn('boutique_id', $boutiquesPossedees)->exists();
         }
 
         // Gérant : cible rattachée à la boutique courante de l'acteur
         $boutiqueId = $acteur->current_boutique_id;
-        if (!$boutiqueId) {
+        if (! $boutiqueId) {
             return false;
         }
 
@@ -105,10 +120,10 @@ class UserController extends Controller
 
         // Règle métier : un seul gérant par boutique
         if ($boutiqueId) {
-            $boutique = \App\Models\Boutique::find($boutiqueId);
+            $boutique = Boutique::find($boutiqueId);
             if ($boutique && $boutique->aAcces($request->user())) {
                 $verif = $boutique->gererPromotionGerant(0, (string) ($roleBoutique ?: $validated['role']), (bool) $request->boolean('confirmer'));
-                if (!$verif['ok'] && $verif['code'] === 'gerant_existant') {
+                if (! $verif['ok'] && $verif['code'] === 'gerant_existant') {
                     return response()->json([
                         'message' => $verif['message'],
                         'code' => 'gerant_existant',
@@ -129,7 +144,7 @@ class UserController extends Controller
 
         // Assignation à une boutique via pivot (multi-tenancy) + règle gérant
         if ($boutiqueId && $roleBoutique) {
-            $boutique = \App\Models\Boutique::find($boutiqueId);
+            $boutique = Boutique::find($boutiqueId);
             if ($boutique && $boutique->aAcces($request->user())) {
                 if ($roleBoutique === 'gerant') {
                     $boutique->gererPromotionGerant($user->id, 'gerant', (bool) $request->boolean('confirmer'));
@@ -162,7 +177,7 @@ class UserController extends Controller
         $acteur = $request->user();
 
         // Portée : l'acteur ne gère que les membres accessibles dans sa boutique courante
-        if (!$this->peutGererMembre($acteur, $user)) {
+        if (! $this->peutGererMembre($acteur, $user)) {
             return response()->json([
                 'message' => 'Accès non autorisé à cet utilisateur.',
             ], 403);
@@ -184,10 +199,10 @@ class UserController extends Controller
 
         // Règle métier : un seul gérant par boutique (promotion vers gérant)
         if (isset($validated['role']) && $validated['role'] === 'gerant' && $acteur->current_boutique_id) {
-            $boutique = \App\Models\Boutique::find($acteur->current_boutique_id);
+            $boutique = Boutique::find($acteur->current_boutique_id);
             if ($boutique && $boutique->aAcces($acteur)) {
                 $verif = $boutique->gererPromotionGerant($user->id, 'gerant', (bool) $request->boolean('confirmer'));
-                if (!$verif['ok'] && $verif['code'] === 'gerant_existant') {
+                if (! $verif['ok'] && $verif['code'] === 'gerant_existant') {
                     return response()->json([
                         'message' => $verif['message'],
                         'code' => 'gerant_existant',
@@ -195,7 +210,7 @@ class UserController extends Controller
                     ], 409);
                 }
                 // Le user doit être rattaché à cette boutique
-                if (!$boutique->users()->where('user_id', $user->id)->exists()) {
+                if (! $boutique->users()->where('user_id', $user->id)->exists()) {
                     $boutique->rattacherUser($user->id, 'gerant');
                 }
             }
@@ -216,7 +231,7 @@ class UserController extends Controller
 
         // Synchroniser le pivot de la boutique courante quand le rôle du membre change
         if (isset($validated['role']) && $acteur->current_boutique_id) {
-            $boutique = \App\Models\Boutique::find($acteur->current_boutique_id);
+            $boutique = Boutique::find($acteur->current_boutique_id);
             if ($boutique && $boutique->users()->where('user_id', $user->id)->exists() && $validated['role'] !== 'proprietaire') {
                 $boutique->users()->updateExistingPivot($user->id, [
                     'role_dans_boutique' => $validated['role'] === 'gerant' ? 'gerant' : 'caissier',
@@ -239,7 +254,7 @@ class UserController extends Controller
         }
 
         // Portée : l'acteur ne gère que les membres accessibles dans sa boutique courante
-        if (!$this->peutGererMembre($request->user(), $user)) {
+        if (! $this->peutGererMembre($request->user(), $user)) {
             return response()->json([
                 'message' => 'Accès non autorisé à cet utilisateur.',
             ], 403);
@@ -260,7 +275,7 @@ class UserController extends Controller
         ]);
 
         // Vérifier que l'utilisateur a accès à cette boutique
-        if (!$request->user()->aAccesBoutique($validated['boutique_id'])) {
+        if (! $request->user()->aAccesBoutique($validated['boutique_id'])) {
             return response()->json(['message' => 'Accès non autorisé à cette boutique'], 403);
         }
 
@@ -274,11 +289,22 @@ class UserController extends Controller
     public function removeBoutique(Request $request, User $user, $boutiqueId): JsonResponse
     {
         // Vérifier que l'utilisateur a accès à cette boutique
-        if (!$request->user()->aAccesBoutique($boutiqueId)) {
+        if (! $request->user()->aAccesBoutique($boutiqueId)) {
             return response()->json(['message' => 'Accès non autorisé à cette boutique'], 403);
         }
 
         $user->boutiques()->detach($boutiqueId);
+
+        // Conséquence du retrait : plus de boutique courante invalide
+        // et plus de session valide si l'utilisateur n'a plus aucun accès.
+        if ((int) $user->current_boutique_id === (int) $boutiqueId) {
+            $repli = $user->fresh()->boutiquesAccessibles()->first();
+            $user->forceFill(['current_boutique_id' => $repli?->id])->save();
+        }
+
+        if (! $user->fresh()->aAccesBoutique($boutiqueId)) {
+            $user->tokens()->delete();
+        }
 
         return response()->json(['message' => 'Utilisateur retiré de la boutique']);
     }
@@ -303,13 +329,14 @@ class UserController extends Controller
             if ($boutiqueId && $request->user()->aAccesBoutique($boutiqueId)) {
                 $existant->boutiques()->syncWithoutDetaching([$boutiqueId => ['role_dans_boutique' => $role]]);
             }
+
             return response()->json(['message' => 'Utilisateur déjà présent, rattaché à la boutique'], 200);
         }
 
         $user = User::create([
             'name' => $validated['email'],
             'email' => $validated['email'],
-            'password' => Hash::make(\Illuminate\Support\Str::random(32)),
+            'password' => Hash::make(Str::random(32)),
             'role' => $role,
             'est_actif' => false,
         ]);
@@ -323,9 +350,24 @@ class UserController extends Controller
     /**
      * Export CSV des utilisateurs.
      */
-    public function export(Request $request): \Illuminate\Http\Response
+    public function export(Request $request): Response
     {
-        $users = User::orderBy('name')->get(['id', 'name', 'email', 'role', 'telephone', 'est_actif', 'created_at']);
+        // SÉCURITÉ : l'export ne doit jamais englober les autres boutiques.
+        // On croise les trois liens possibles : pivot, boutique courante,
+        // et possession (le propriétaire de la boutique).
+        $accessible = $request->user()->boutiquesAccessibles()->pluck('id');
+
+        $proprietaires = Boutique::whereIn('id', $accessible)->pluck('proprietaire_id');
+
+        $users = User::where(function ($q) use ($accessible, $proprietaires) {
+            $q->whereIn('current_boutique_id', $accessible)
+                ->orWhereIn('id', $proprietaires)
+                ->orWhereHas('boutiques', function ($sub) use ($accessible) {
+                    $sub->whereIn('boutique_user.boutique_id', $accessible);
+                });
+        })
+            ->orderBy('name')
+            ->get(['id', 'name', 'email', 'role', 'telephone', 'est_actif', 'created_at']);
 
         $csv = fopen('php://temp', 'r+');
         fputcsv($csv, ['id', 'name', 'email', 'role', 'telephone', 'est_actif', 'created_at']);
@@ -362,7 +404,7 @@ class UserController extends Controller
         while (($row = fgetcsv($handle)) !== false) {
             $data = array_combine($header ?: ['name', 'email', 'role', 'password'], $row ?: []);
             $email = $data['email'] ?? null;
-            if (!$email || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            if (! $email || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
                 continue;
             }
             if (User::where('email', $email)->exists()) {
@@ -371,7 +413,7 @@ class UserController extends Controller
             User::create([
                 'name' => $data['name'] ?? $email,
                 'email' => $email,
-                'password' => Hash::make($data['password'] ?? \Illuminate\Support\Str::random(12)),
+                'password' => Hash::make($data['password'] ?? Str::random(12)),
                 'role' => in_array($data['role'] ?? null, ['proprietaire', 'gerant', 'caissier'], true) ? $data['role'] : 'caissier',
                 'est_actif' => true,
             ]);

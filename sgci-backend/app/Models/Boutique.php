@@ -85,11 +85,9 @@ class Boutique extends Model
 
     public function aAcces(User $user)
     {
-        if ($user->role === 'proprietaire') {
-            return $this->proprietaire_id === $user->id;
-        }
-        
-        return $this->users()->where('user_id', $user->id)->exists();
+        // Délègue à la même source de vérité que User::aAccesBoutique()
+        // pour éviter les accès refusés quand le rôle global est dégradé.
+        return $user->aAccesBoutique($this->id);
     }
 
     /**
@@ -97,19 +95,25 @@ class Boutique extends Model
      */
     public function gerantActuel()
     {
+        // Le propriétaire est EXCLU : sa boutique n'a pas de « gérant » en
+        // concurrence à arbitrer. Les données migrées et le seeder le
+        // rangent en pivot 'gerant' (il gère sa boutique par défaut), sans
+        // cela il était pris pour le gérant déjà en place et pouvait être
+        // rétrogradé en caissier — pivot et rôle global — dès qu'un membre
+        // était promu gérant à son tour.
         return $this->users()
             ->wherePivot('role_dans_boutique', 'gerant')
             ->where('users.est_actif', true)
+            ->where('users.id', '!=', $this->proprietaire_id)
             ->first();
     }
 
     /**
      * Applique la règle métier « un seul gérant par boutique ».
      *
-     * @param int    $nouveauGerantId  id du user qui doit devenir gérant (0 si pas encore créé)
-     * @param string $role              gerant ou caissier (rôle visé)
-     * @param bool   $confirmer         true = l'utilisateur a les mains libres pour rétrograder
-     *
+     * @param  int  $nouveauGerantId  id du user qui doit devenir gérant (0 si pas encore créé)
+     * @param  string  $role  gerant ou caissier (rôle visé)
+     * @param  bool  $confirmer  true = l'utilisateur a les mains libres pour rétrograder
      * @return array{ok:bool, code:string, message?:string, gerant_actuel?:array}
      */
     public function gererPromotionGerant(int $nouveauGerantId, string $role, bool $confirmer = false): array
@@ -122,7 +126,7 @@ class Boutique extends Model
         $gerantActuel = $this->gerantActuel();
 
         // Aucun gérant existant : OK.
-        if (!$gerantActuel) {
+        if (! $gerantActuel) {
             return ['ok' => true, 'code' => 'ok'];
         }
 
@@ -132,7 +136,7 @@ class Boutique extends Model
         }
 
         // Un autre gérant existe : il faut la confirmation côté client.
-        if (!$confirmer) {
+        if (! $confirmer) {
             return [
                 'ok' => false,
                 'code' => 'gerant_existant',
@@ -141,7 +145,7 @@ class Boutique extends Model
                     'name' => $gerantActuel->name,
                     'email' => $gerantActuel->email,
                 ],
-                'message' => 'Cette boutique a déjà un gérant : ' . $gerantActuel->name,
+                'message' => 'Cette boutique a déjà un gérant : '.$gerantActuel->name,
             ];
         }
 
@@ -153,7 +157,7 @@ class Boutique extends Model
             ->where('boutique_user.boutique_id', '!=', $this->id)
             ->exists();
 
-        if (!$estGerantAilleurs) {
+        if (! $estGerantAilleurs) {
             $gerantActuel->role = 'caissier';
             $gerantActuel->save();
         }
@@ -174,7 +178,7 @@ class Boutique extends Model
             $this->users()->attach($userId, ['role_dans_boutique' => $role]);
         }
 
-        $user = \App\Models\User::find($userId);
+        $user = User::find($userId);
         if ($user && $user->role !== 'proprietaire') {
             if ($role === 'gerant') {
                 $user->role = 'gerant';
@@ -184,7 +188,7 @@ class Boutique extends Model
                     ->wherePivot('role_dans_boutique', 'gerant')
                     ->where('boutique_user.boutique_id', '!=', $this->id)
                     ->exists();
-                if (!$encoreGerant) {
+                if (! $encoreGerant) {
                     $user->role = 'caissier';
                 }
             }

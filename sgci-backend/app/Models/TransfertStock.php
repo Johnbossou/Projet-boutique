@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+
 class TransfertStock extends Model
 {
     use HasFactory;
@@ -52,7 +53,7 @@ class TransfertStock extends Model
      */
     public function produit()
     {
-        return $this->belongsTo(Produit::class);
+        return $this->belongsTo(Produit::class)->withTrashed();
     }
 
     /**
@@ -80,7 +81,12 @@ class TransfertStock extends Model
 
         static::creating(function ($transfert) {
             if (empty($transfert->numero_transfert)) {
-                $transfert->numero_transfert = 'TS-' . date('Ymd-His');
+                // Le suffixe aleatoire est indispensable : deux gérants
+                // creaient leurs transferts dans la meme seconde, et
+                // numero_transfert est unique. Sans lui, la creation simultanee
+                // echouait sur une violation de contrainte.
+                $transfert->numero_transfert = 'TS-'.date('Ymd-His').'-'
+                    .strtoupper(bin2hex(random_bytes(3)));
             }
         });
     }

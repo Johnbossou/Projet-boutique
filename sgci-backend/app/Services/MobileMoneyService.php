@@ -8,8 +8,11 @@ use Illuminate\Support\Facades\Log;
 class MobileMoneyService
 {
     private string $provider;
+
     private string $apiKey;
+
     private string $apiSecret;
+
     private string $baseUrl;
 
     public function __construct(string $provider = 'orange')
@@ -36,6 +39,17 @@ class MobileMoneyService
 
     /**
      * Initie un paiement Mobile Money
+     *
+     * Toute réponse d'échec porte un indicateur 'issue_connue' :
+     *   - true  : le prestataire a refusé (4xx). Le paiement n'a pas eu lieu,
+     *              le client peut réessayer sans risque.
+     *   - false : le prestataire n'a pas répondu, ou a répondu par une erreur
+     *              serveur (5xx). L'issue est INCONNUE : l'argent a pu être
+     *              débité. Marquer le paiement « échoué » sur cette base
+     *              ferait perdre un paiement réellement encaissé, puisque les
+     *              transitions automatiques ne partent que d'un « en_attente ».
+     *              Le paiement reste donc réconciliable via checkStatus et le
+     *              callback.
      */
     public function initiatePayment(array $paymentData): array
     {
@@ -50,10 +64,10 @@ class MobileMoneyService
             ];
 
             $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . $this->getAccessToken(),
+                'Authorization' => 'Bearer '.$this->getAccessToken(),
                 'Content-Type' => 'application/json',
                 'Accept' => 'application/json',
-            ])->post($this->baseUrl . '/payments', $payload);
+            ])->post($this->baseUrl.'/payments', $payload);
 
             if ($response->successful()) {
                 return [
@@ -65,22 +79,30 @@ class MobileMoneyService
 
             Log::error('Mobile Money payment failed', [
                 'provider' => $this->provider,
+                'status' => $response->status(),
+                'issue_connue' => $response->clientError(),
                 'response' => $response->body(),
             ]);
 
             return [
                 'success' => false,
+                'issue_connue' => $response->clientError(),
                 'message' => 'Échec de l\'initiation du paiement',
                 'error' => $response->json(),
             ];
         } catch (\Exception $e) {
+            // Exception = timeout, DNS, connexion coupée : le prestataire n'a
+            // pas tranché, l'issue est inconnue.
             Log::error('Mobile Money service error', [
                 'provider' => $this->provider,
+                'issue_connue' => false,
+                'external_id' => $paymentData['external_id'] ?? null,
                 'error' => $e->getMessage(),
             ]);
 
             return [
                 'success' => false,
+                'issue_connue' => false,
                 'message' => 'Erreur lors du traitement du paiement',
                 'error' => $e->getMessage(),
             ];
@@ -94,9 +116,9 @@ class MobileMoneyService
     {
         try {
             $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . $this->getAccessToken(),
+                'Authorization' => 'Bearer '.$this->getAccessToken(),
                 'Accept' => 'application/json',
-            ])->get($this->baseUrl . '/payments/' . $paymentId);
+            ])->get($this->baseUrl.'/payments/'.$paymentId);
 
             if ($response->successful()) {
                 return [
@@ -130,9 +152,9 @@ class MobileMoneyService
     {
         try {
             $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . $this->getAccessToken(),
+                'Authorization' => 'Bearer '.$this->getAccessToken(),
                 'Content-Type' => 'application/json',
-            ])->post($this->baseUrl . '/payments/' . $paymentId . '/cancel');
+            ])->post($this->baseUrl.'/payments/'.$paymentId.'/cancel');
 
             if ($response->successful()) {
                 return [
@@ -164,7 +186,7 @@ class MobileMoneyService
      */
     private function getAccessToken(): string
     {
-        $response = Http::asForm()->post($this->baseUrl . '/oauth/token', [
+        $response = Http::asForm()->post($this->baseUrl.'/oauth/token', [
             'grant_type' => 'client_credentials',
             'client_id' => $this->apiKey,
             'client_secret' => $this->apiSecret,
@@ -184,6 +206,7 @@ class MobileMoneyService
     {
         // Validation pour les numéros Bénin
         $pattern = '/^(?:\+229|00229)?[0-9]{8}$/';
+
         return preg_match($pattern, $phoneNumber) === 1;
     }
 
@@ -194,13 +217,13 @@ class MobileMoneyService
     {
         // Préfixes Orange Money Bénin
         $orangePrefixes = ['01', '02', '04', '07', '08', '09', '90', '91', '92', '93', '94', '95', '96', '97', '98', '99'];
-        
+
         // Préfixes MTN Mobile Money Bénin
         $mtnPrefixes = ['05', '06', '60', '61', '62', '63', '64', '65', '66', '67', '68', '69'];
 
         // Nettoyer le numéro
         $cleanNumber = preg_replace('/[^0-9]/', '', $phoneNumber);
-        
+
         // Extraire les 2 premiers chiffres après le code pays (229)
         if (strlen($cleanNumber) === 10) {
             $prefix = substr($cleanNumber, 2, 2);

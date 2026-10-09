@@ -14,13 +14,13 @@ class LigneVente extends Model
         'produit_id',
         'quantite',
         'prix_unitaire',
-        'sous_total'
+        'sous_total',
     ];
 
     protected $casts = [
         'prix_unitaire' => 'decimal:2',
         'sous_total' => 'decimal:2',
-        'quantite' => 'integer'
+        'quantite' => 'integer',
     ];
 
     // Calcul automatique du sous-total
@@ -68,9 +68,14 @@ class LigneVente extends Model
         return $this->belongsTo(Vente::class);
     }
 
+    /**
+     * withTrashed() est indispensable : une facture emise avant l'archivage d'un
+     * produit doit continuer a nommer ce produit, sinon le ticket deja encaisse
+     * devient illisible.
+     */
     public function produit()
     {
-        return $this->belongsTo(Produit::class);
+        return $this->belongsTo(Produit::class)->withTrashed();
     }
 
     // Accesseurs
@@ -84,6 +89,7 @@ class LigneVente extends Model
     {
         $this->prix_unitaire = $nouveauPrix;
         $this->save();
+
         return $this;
     }
 
@@ -91,6 +97,7 @@ class LigneVente extends Model
     {
         $this->quantite = $nouvelleQuantite;
         $this->save();
+
         return $this;
     }
 }

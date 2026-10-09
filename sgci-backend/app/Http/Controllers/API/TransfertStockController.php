@@ -3,11 +3,14 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
-use App\Models\TransfertStock;
+use App\Models\Categorie;
+use App\Models\MouvementStock;
 use App\Models\Produit;
-use Illuminate\Http\Request;
+use App\Models\TransfertStock;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class TransfertStockController extends Controller
 {
@@ -37,7 +40,7 @@ class TransfertStockController extends Controller
         if ($request->user()->current_boutique_id) {
             $query->where(function ($q) use ($request) {
                 $q->where('boutique_source_id', $request->user()->current_boutique_id)
-                  ->orWhere('boutique_destination_id', $request->user()->current_boutique_id);
+                    ->orWhere('boutique_destination_id', $request->user()->current_boutique_id);
             });
         }
 
@@ -51,46 +54,91 @@ class TransfertStockController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        $boutiqueSourceId = $request->user()->current_boutique_id;
+
+        // La destination doit être une boutique réellement accessible
+        // (possession ou appartenance). Sans ce controle, un gérant pouvait
+        // vider son stock vers un tenant choisi par devinette d'identifiant.
+        $destinationsAutorisees = $request->user()->boutiquesAccessibles()
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
         $validated = $request->validate([
-            'boutique_destination_id' => 'required|exists:boutiques,id',
-            'produit_id' => 'required|exists:produits,id',
+            'boutique_destination_id' => [
+                'required',
+                Rule::exists('boutiques', 'id'),
+                Rule::in($destinationsAutorisees),
+            ],
+            'produit_id' => [
+                'required',
+                Rule::exists('produits', 'id')->where('boutique_id', $boutiqueSourceId),
+            ],
             'quantite' => 'required|integer|min:1',
             'motif' => 'nullable|string',
             'notes' => 'nullable|string',
         ]);
 
-        return DB::transaction(function () use ($request, $validated) {
-            $boutiqueSourceId = $request->user()->current_boutique_id;
+        if ((int) $validated['boutique_destination_id'] === (int) $boutiqueSourceId) {
+            return response()->json([
+                'message' => 'La boutique de destination doit être différente de la source',
+            ], 422);
+        }
+
+        $quantite = (int) $validated['quantite'];
+
+        return DB::transaction(function () use ($request, $validated, $boutiqueSourceId, $quantite) {
+            // Verrou sur la ligne produit : le contrôle de stock et le débit
+            // doivent être atomiques, sinon deux transferts simultanés
+            // lisaient la même quantité et le stock devenait négatif.
             $produit = Produit::where('id', $validated['produit_id'])
                 ->where('boutique_id', $boutiqueSourceId)
+                ->lockForUpdate()
                 ->first();
 
-            if (!$produit) {
+            if (! $produit) {
                 return response()->json([
                     'message' => 'Produit non trouvé dans la boutique source',
                 ], 404);
             }
 
-            if ($produit->quantite_stock < $validated['quantite']) {
+            $quantiteAvant = (int) $produit->quantite_stock;
+
+            if ($quantiteAvant < $quantite) {
                 return response()->json([
                     'message' => 'Stock insuffisant pour le transfert',
                 ], 400);
             }
 
-            // Diminuer le stock de la boutique source
-            $produit->diminuerStock($validated['quantite']);
+            $quantiteApres = $quantiteAvant - $quantite;
+            $produit->update(['quantite_stock' => $quantiteApres]);
 
-            // Créer le transfert
             $transfert = TransfertStock::create([
                 'boutique_source_id' => $boutiqueSourceId,
                 'boutique_destination_id' => $validated['boutique_destination_id'],
                 'produit_id' => $validated['produit_id'],
-                'quantite' => $validated['quantite'],
+                'quantite' => $quantite,
                 'statut' => 'en_attente',
                 'date_transfert' => now(),
                 'motif' => $validated['motif'] ?? null,
                 'notes' => $validated['notes'] ?? null,
                 'user_source_id' => $request->user()->id,
+            ]);
+
+            // Le débit doit laisser une trace : sans cette ligne, un écart
+            // d'inventaire sur la boutique source est inexplicable.
+            MouvementStock::create([
+                'produit_id' => $produit->id,
+                'boutique_id' => $boutiqueSourceId,
+                'type' => 'sortie',
+                'quantite' => $quantite,
+                'raison' => 'transfert',
+                'statut' => 'accepte',
+                'reference_bon' => $transfert->numero_transfert,
+                'user_id' => $request->user()->id,
+                'notes' => 'Débit transfert vers boutique #'.$validated['boutique_destination_id'],
+                'quantite_avant' => $quantiteAvant,
+                'quantite_apres' => $quantiteApres,
             ]);
 
             return response()->json([
@@ -121,30 +169,64 @@ class TransfertStockController extends Controller
      */
     public function annuler(Request $request, TransfertStock $transfert): JsonResponse
     {
-        // Vérifier que l'utilisateur a accès à ce transfert
         $boutiqueId = $request->user()->current_boutique_id;
         if ($transfert->boutique_source_id !== $boutiqueId) {
             return response()->json(['message' => 'Non autorisé'], 403);
         }
 
-        if (!$transfert->peutEtreAnnule()) {
-            return response()->json([
-                'message' => 'Ce transfert ne peut pas être annulé',
-            ], 400);
-        }
+        return DB::transaction(function () use ($request, $transfert, $boutiqueId) {
+            // Le statut est revérifié sous verrou : tester peutEtreAnnule()
+            // avant la transaction laissait deux annulations passer, et le
+            // stock source était restitué deux fois.
+            $verrouille = TransfertStock::where('id', $transfert->id)
+                ->where('boutique_source_id', $boutiqueId)
+                ->lockForUpdate()
+                ->first();
 
-        return DB::transaction(function () use ($transfert) {
-            // Remettre le stock dans la boutique source
-            $produit = Produit::find($transfert->produit_id);
-            if ($produit) {
-                $produit->augmenterStock($transfert->quantite);
+            if (! $verrouille) {
+                return response()->json(['message' => 'Non autorisé'], 403);
             }
 
-            $transfert->update(['statut' => 'annule']);
+            if (! $verrouille->peutEtreAnnule()) {
+                return response()->json([
+                    'message' => 'Ce transfert ne peut pas être annulé',
+                ], 409);
+            }
+
+            // Produit scopé à la boutique source : un Produit::find() non scopé
+            // pouvait créditer le stock d'un produit qui n'appartient plus à la
+            // boutique débitée à la création.
+            $produit = Produit::where('id', $verrouille->produit_id)
+                ->where('boutique_id', $boutiqueId)
+                ->lockForUpdate()
+                ->first();
+
+            if ($produit) {
+                $quantiteAvant = (int) $produit->quantite_stock;
+                $quantiteApres = $quantiteAvant + (int) $verrouille->quantite;
+
+                $produit->update(['quantite_stock' => $quantiteApres]);
+
+                MouvementStock::create([
+                    'produit_id' => $produit->id,
+                    'boutique_id' => $boutiqueId,
+                    'type' => 'entree',
+                    'quantite' => (int) $verrouille->quantite,
+                    'raison' => 'transfert',
+                    'statut' => 'accepte',
+                    'reference_bon' => $verrouille->numero_transfert,
+                    'user_id' => $request->user()->id,
+                    'notes' => 'Restitution source, transfert #'.$verrouille->id.' annulé',
+                    'quantite_avant' => $quantiteAvant,
+                    'quantite_apres' => $quantiteApres,
+                ]);
+            }
+
+            $verrouille->update(['statut' => 'annule']);
 
             return response()->json([
                 'message' => 'Transfert annulé avec succès',
-                'data' => $transfert,
+                'data' => $verrouille,
             ]);
         });
     }
@@ -154,49 +236,55 @@ class TransfertStockController extends Controller
      */
     public function recevoir(Request $request, TransfertStock $transfert): JsonResponse
     {
-        // Vérifier que l'utilisateur a accès à ce transfert
         $boutiqueId = $request->user()->current_boutique_id;
         if ($transfert->boutique_destination_id !== $boutiqueId) {
             return response()->json(['message' => 'Non autorisé'], 403);
         }
 
-        if ($transfert->statut !== 'en_attente' && $transfert->statut !== 'en_cours') {
-            return response()->json([
-                'message' => 'Ce transfert ne peut pas être reçu',
-            ], 400);
-        }
-
-        return DB::transaction(function () use ($request, $transfert) {
-            // Augmenter le stock de la boutique destination
-            $produit = Produit::where('id', $transfert->produit_id)
-                ->where('boutique_id', $transfert->boutique_destination_id)
+        return DB::transaction(function () use ($request, $transfert, $boutiqueId) {
+            // Statut revérifié sous verrou. Le contrôle hors transaction
+            // permettait deux réceptions concurrentes du même transfert, et le
+            // stock destination était crédité deux fois.
+            $verrouille = TransfertStock::where('id', $transfert->id)
+                ->where('boutique_destination_id', $boutiqueId)
+                ->lockForUpdate()
                 ->first();
 
-            if (!$produit) {
-                // Créer le produit dans la boutique destination s'il n'existe pas
-                $produitOriginal = Produit::find($transfert->produit_id);
-                $produit = Produit::create([
-                    'nom' => $produitOriginal->nom,
-                    'description' => $produitOriginal->description,
-                    'prix' => $produitOriginal->prix,
-                    'quantite_stock' => 0,
-                    'seuil_alerte' => $produitOriginal->seuil_alerte,
-                    'categorie_id' => $produitOriginal->categorie_id,
-                    'est_perissable' => $produitOriginal->est_perissable,
-                    'code_qr' => $produitOriginal->code_qr,
-                    'unite_mesure' => $produitOriginal->unite_mesure,
-                    'image_url' => $produitOriginal->image_url,
-                    'date_peremption' => $produitOriginal->date_peremption,
-                    'date_fabrication' => $produitOriginal->date_fabrication,
-                    'lot_numero' => $produitOriginal->lot_numero,
-                    'duree_conservation_jours' => $produitOriginal->duree_conservation_jours,
-                    'boutique_id' => $transfert->boutique_destination_id,
-                ]);
+            if (! $verrouille) {
+                return response()->json(['message' => 'Non autorisé'], 403);
             }
 
-            $produit->augmenterStock($transfert->quantite);
+            if (! in_array($verrouille->statut, ['en_attente', 'en_cours'], true)) {
+                return response()->json([
+                    'message' => 'Ce transfert ne peut pas être reçu',
+                ], 409);
+            }
 
-            $transfert->update([
+            $produit = $this->trouverProduitDestination($verrouille, $boutiqueId);
+
+            if (! $produit) {
+                $produit = $this->creerProduitDestination($verrouille, $boutiqueId);
+            }
+
+            $quantiteAvant = (int) $produit->quantite_stock;
+            $quantiteApres = $quantiteAvant + (int) $verrouille->quantite;
+            $produit->update(['quantite_stock' => $quantiteApres]);
+
+            MouvementStock::create([
+                'produit_id' => $produit->id,
+                'boutique_id' => $boutiqueId,
+                'type' => 'entree',
+                'quantite' => (int) $verrouille->quantite,
+                'raison' => 'transfert',
+                'statut' => 'accepte',
+                'reference_bon' => $verrouille->numero_transfert,
+                'user_id' => $request->user()->id,
+                'notes' => 'Crédit transfert depuis boutique #'.$verrouille->boutique_source_id,
+                'quantite_avant' => $quantiteAvant,
+                'quantite_apres' => $quantiteApres,
+            ]);
+
+            $verrouille->update([
                 'statut' => 'termine',
                 'date_reception' => now(),
                 'user_destination_id' => $request->user()->id,
@@ -204,9 +292,92 @@ class TransfertStockController extends Controller
 
             return response()->json([
                 'message' => 'Transfert reçu avec succès',
-                'data' => $transfert->load(['boutiqueSource', 'boutiqueDestination', 'produit', 'userDestination']),
+                'data' => $verrouille->load(['boutiqueSource', 'boutiqueDestination', 'produit', 'userDestination']),
             ]);
         });
+    }
+
+    /**
+     * Retrouve le produit correspondant dans la boutique de destination.
+     *
+     * Chercher par l'identifiant du produit source ne peut jamais aboutir : les
+     * identifiants sont uniques, donc un produit de la destination ne portera
+     * jamais l'id du produit source. La recherche se fait donc sur l'identité
+     * commerciale, d'abord le code QR (unique globalement, donc fiable), puis à
+     * défaut le libellé exact.
+     *
+     * Sans cela, chaque réception créait un doublon de produit au lieu de
+     * créditer l'existant, et le stock de la destination se répartissait entre
+     * plusieurs lignes sans que l'écran puisse les réconcilier.
+     */
+    private function trouverProduitDestination(TransfertStock $transfert, int $boutiqueDestinationId): ?Produit
+    {
+        $source = Produit::find($transfert->produit_id);
+
+        if (! $source) {
+            return null;
+        }
+
+        $requete = Produit::where('boutique_id', $boutiqueDestinationId);
+
+        if ($source->code_qr) {
+            $parCode = (clone $requete)->where('code_qr', $source->code_qr)->lockForUpdate()->first();
+
+            if ($parCode) {
+                return $parCode;
+            }
+        }
+
+        return (clone $requete)->where('nom', $source->nom)->lockForUpdate()->first();
+    }
+
+    /**
+     * Duplique le produit source dans la boutique de destination.
+     *
+     * Deux écueils que la copie naïve franchissait :
+     *  - code_qr est unique globalement. Le recopier levait une erreur de
+     *    doublon, donc TOUT transfert vers une boutique qui n'a pas encore le
+     *    produit échouait définitivement ;
+     *  - categorie_id pointait vers la catégorie de la boutique source. Le
+     *    nouveau produit référençait donc une catégorie d'un autre tenant, et
+     *    la supprimer côté source le supprimait par cascade.
+     *
+     * La catégorie est donc retrouvée par son nom dans la destination, et
+     * créée au besoin. Le code QR est laissé nul : la destination attribuera
+     * le sien.
+     */
+    private function creerProduitDestination(TransfertStock $transfert, int $boutiqueDestinationId): Produit
+    {
+        $source = Produit::findOrFail($transfert->produit_id);
+
+        $categorie = Categorie::where('boutique_id', $boutiqueDestinationId)
+            ->where('nom', $source->categorie?->nom)
+            ->first();
+
+        if (! $categorie) {
+            $categorie = Categorie::create([
+                'nom' => ($source->categorie?->nom ?? 'Import').' (transfert)',
+                'boutique_id' => $boutiqueDestinationId,
+            ]);
+        }
+
+        return Produit::create([
+            'nom' => $source->nom,
+            'description' => $source->description,
+            'prix' => $source->prix,
+            'quantite_stock' => 0,
+            'seuil_alerte' => $source->seuil_alerte,
+            'categorie_id' => $categorie->id,
+            'est_perissable' => $source->est_perissable,
+            'code_qr' => null,
+            'unite_mesure' => $source->unite_mesure,
+            'image_url' => $source->image_url,
+            'date_peremption' => $source->date_peremption,
+            'date_fabrication' => $source->date_fabrication,
+            'lot_numero' => $source->lot_numero,
+            'duree_conservation_jours' => $source->duree_conservation_jours,
+            'boutique_id' => $boutiqueDestinationId,
+        ]);
     }
 
     /**
@@ -218,22 +389,22 @@ class TransfertStockController extends Controller
 
         $totalTransferts = TransfertStock::where(function ($q) use ($boutiqueId) {
             $q->where('boutique_source_id', $boutiqueId)
-              ->orWhere('boutique_destination_id', $boutiqueId);
+                ->orWhere('boutique_destination_id', $boutiqueId);
         })->count();
 
         $transfertsEnAttente = TransfertStock::where(function ($q) use ($boutiqueId) {
             $q->where('boutique_source_id', $boutiqueId)
-              ->orWhere('boutique_destination_id', $boutiqueId);
+                ->orWhere('boutique_destination_id', $boutiqueId);
         })->enAttente()->count();
 
         $transfertsEnCours = TransfertStock::where(function ($q) use ($boutiqueId) {
             $q->where('boutique_source_id', $boutiqueId)
-              ->orWhere('boutique_destination_id', $boutiqueId);
+                ->orWhere('boutique_destination_id', $boutiqueId);
         })->enCours()->count();
 
         $transfertsTermines = TransfertStock::where(function ($q) use ($boutiqueId) {
             $q->where('boutique_source_id', $boutiqueId)
-              ->orWhere('boutique_destination_id', $boutiqueId);
+                ->orWhere('boutique_destination_id', $boutiqueId);
         })->termine()->count();
 
         return response()->json([

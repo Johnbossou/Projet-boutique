@@ -35,6 +35,30 @@ export function getDelaiAnnulationMs(): number {
   }
 }
 
+/**
+ * Taux de TVA de la boutique courante, mis en cache par
+ * fetchBoutiqueSettings() au chargement de la caisse.
+ *
+ * La TVA est propre à chaque boutique : la coder en dur à 18 % faisait
+ * afficher un montant différent de celui que le serveur encaisse, et un
+ * calcul de monnaie rendue faux.
+ *
+ * Retourne un ratio (0.18) et non un pourcentage.
+ */
+export function getTauxTva(): number {
+  if (typeof window === 'undefined') return 0.18;
+  try {
+    const raw = localStorage.getItem(META_KEY);
+    if (!raw) return 0.18;
+    const meta = JSON.parse(raw);
+    const taux = Number(meta.taux_tva ?? 18);
+    if (!Number.isFinite(taux) || taux < 0) return 0.18;
+    return taux > 1 ? taux / 100 : taux;
+  } catch {
+    return 0.18;
+  }
+}
+
 export function apiToLocal(settings: BoutiqueSettingsApi): BoutiqueSettings {
   return {
     nom: settings.nom,

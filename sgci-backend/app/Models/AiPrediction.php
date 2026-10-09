@@ -34,7 +34,7 @@ class AiPrediction extends Model
 
     public function produit(): BelongsTo
     {
-        return $this->belongsTo(Produit::class);
+        return $this->belongsTo(Produit::class)->withTrashed();
     }
 
     public function scopeValidees($query)
@@ -60,7 +60,7 @@ class AiPrediction extends Model
     public function calculerErreur(int $demandeReelle): void
     {
         $this->demande_reelle = $demandeReelle;
-        
+
         if ($demandeReelle > 0) {
             $this->erreur_absolue = abs($this->demande_predite - $demandeReelle);
             $this->erreur_pourcentage = ($this->erreur_absolue / $demandeReelle) * 100;
@@ -68,7 +68,7 @@ class AiPrediction extends Model
             $this->erreur_absolue = $this->demande_predite;
             $this->erreur_pourcentage = $this->demande_predite > 0 ? 100 : 0;
         }
-        
+
         $this->date_validation = now();
         $this->save();
     }
@@ -78,7 +78,7 @@ class AiPrediction extends Model
         if ($this->erreur_pourcentage === null) {
             return false;
         }
-        
+
         return $this->erreur_pourcentage <= $tolerancePourcentage;
     }
 }

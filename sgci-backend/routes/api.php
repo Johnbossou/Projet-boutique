@@ -1,39 +1,38 @@
 <?php
 
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\AuthController;
-use App\Http\Controllers\API\ProduitController;
-use App\Http\Controllers\API\CategorieController;
-use App\Http\Controllers\API\VenteController;
-use App\Http\Controllers\API\AnalyticsController;
 use App\Http\Controllers\API\AIController;
-use App\Http\Controllers\API\ClientController;
-use App\Http\Controllers\API\MouvementStockController;
-use App\Http\Controllers\API\UserController;
-use App\Http\Controllers\API\BoutiqueController;
+use App\Http\Controllers\API\AnalyticsController;
 use App\Http\Controllers\API\AuditLogController;
-use App\Http\Controllers\API\NotificationController;
-use App\Http\Controllers\API\FcmController;
-use App\Http\Controllers\API\PredictionsController;
-use App\Http\Controllers\API\StockAlertController;
-use App\Http\Controllers\API\FournisseurController;
-use App\Http\Controllers\API\CommandeFournisseurController;
-use App\Http\Controllers\API\PeremptionController;
-use App\Http\Controllers\API\TransfertStockController;
-use App\Http\Controllers\API\DevisController;
-use App\Http\Controllers\API\CommandeClientController;
-use App\Http\Controllers\API\MobileMoneyController;
-use App\Http\Controllers\API\FactureController;
-use App\Http\Controllers\API\NotificationChannelController;
+use App\Http\Controllers\API\BoutiqueController;
+use App\Http\Controllers\API\CategorieController;
 use App\Http\Controllers\API\ChatController;
+use App\Http\Controllers\API\ClientController;
+use App\Http\Controllers\API\CommandeClientController;
+use App\Http\Controllers\API\CommandeFournisseurController;
+use App\Http\Controllers\API\DevisController;
+use App\Http\Controllers\API\FactureController;
+use App\Http\Controllers\API\FcmController;
 use App\Http\Controllers\API\FideliteController;
-use App\Http\Controllers\API\RetourVenteController;
+use App\Http\Controllers\API\FournisseurController;
 use App\Http\Controllers\API\InventaireController;
+use App\Http\Controllers\API\MobileMoneyController;
+use App\Http\Controllers\API\MouvementStockController;
+use App\Http\Controllers\API\NotificationChannelController;
+use App\Http\Controllers\API\NotificationController;
+use App\Http\Controllers\API\PeremptionController;
+use App\Http\Controllers\API\PredictionsController;
+use App\Http\Controllers\API\ProduitController;
+use App\Http\Controllers\API\RetourVenteController;
+use App\Http\Controllers\API\StockAlertController;
+use App\Http\Controllers\API\TransfertStockController;
+use App\Http\Controllers\API\UserController;
+use App\Http\Controllers\API\VenteController;
+use App\Http\Controllers\AuthController;
+use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
-| API Routes â€” SGCI BÃ©nin v1.2
+| API Routes — SGCI Bénin v1.2
 |--------------------------------------------------------------------------
 */
 
@@ -58,7 +57,7 @@ Route::middleware(['auth:sanctum', 'user.active', 'boutique.scope'])->group(func
     Route::get('/me', [AuthController::class, 'me']);
     Route::put('/me/profile', [AuthController::class, 'updateProfile']);
     Route::put('/me/password', [AuthController::class, 'updatePassword'])->middleware('throttle:3,1');
-    
+
     // 2FA
     Route::post('/2fa/enable', [AuthController::class, 'enableTwoFactor'])->middleware('throttle:3,1');
     Route::post('/2fa/confirm', [AuthController::class, 'confirmTwoFactor'])->middleware('throttle:3,1');
@@ -72,7 +71,7 @@ Route::middleware(['auth:sanctum', 'user.active', 'boutique.scope'])->group(func
 
     Route::get('/test', function () {
         return response()->json([
-            'message' => 'API SGCI-BÃ©nin est opÃ©rationnelle!',
+            'message' => 'API SGCI-Bénin est opérationnelle!',
             'timestamp' => now(),
             'user' => auth()->user()->name,
             'role' => auth()->user()->role,
@@ -98,7 +97,6 @@ Route::middleware(['auth:sanctum', 'user.active', 'boutique.scope'])->group(func
     Route::middleware('boutique.manage')->prefix('boutiques')->group(function () {
         Route::get('/{boutique}/users', [BoutiqueController::class, 'equipe']);
         Route::post('/{boutique}/users', [BoutiqueController::class, 'addMembre'])->middleware('throttle:10,1');
-        Route::delete('/{boutique}/users/{userId}', [BoutiqueController::class, 'removeUserById'])->middleware('throttle:20,1');
         Route::post('/{boutique}/users/{user}', [BoutiqueController::class, 'assignUser'])->middleware('throttle:20,1');
         Route::delete('/{boutique}/users/{user}', [BoutiqueController::class, 'removeUser'])->middleware('throttle:20,1');
     });
@@ -135,7 +133,24 @@ Route::middleware(['auth:sanctum', 'user.active', 'boutique.scope'])->group(func
         ->middleware('role.gerant')->middleware('throttle:20,1');
     Route::post('/mouvements-stock/{mouvement}/rejeter', [MouvementStockController::class, 'rejeter'])
         ->middleware('role.gerant')->middleware('throttle:20,1');
-    Route::apiResource('mouvements-stock', MouvementStockController::class);
+    // Workflow d'arrivage.
+    // Routes écrites explicitement plutôt qu'avec apiResource : le nom du
+    // paramètre de route doit correspondre à celui des signatures du
+    // contrôleur, sinon le model binding implicite ne se déclenche pas et
+    // le contrôleur reçoit un identifiant brut au lieu du modèle.
+    Route::get('/mouvements-stock', [MouvementStockController::class, 'index'])
+        ->middleware('throttle:60,1');
+    Route::post('/mouvements-stock', [MouvementStockController::class, 'store'])
+        ->middleware('throttle:30,1');
+    Route::get('/mouvements-stock/{mouvement}', [MouvementStockController::class, 'show'])
+        ->whereNumber('mouvement')
+        ->middleware('throttle:60,1');
+    Route::put('/mouvements-stock/{mouvement}', [MouvementStockController::class, 'update'])
+        ->whereNumber('mouvement')
+        ->middleware('throttle:30,1');
+    Route::delete('/mouvements-stock/{mouvement}', [MouvementStockController::class, 'destroy'])
+        ->whereNumber('mouvement')
+        ->middleware('throttle:20,1');
 
     Route::get('/ventes/aujourdhui/stats', [VenteController::class, 'statsVentesAujourdhui']);
     Route::get('/ventes/statistiques/general', [VenteController::class, 'statistiques']);
@@ -187,7 +202,7 @@ Route::middleware(['auth:sanctum', 'user.active', 'boutique.scope'])->group(func
         Route::delete('/{commande}', [CommandeFournisseurController::class, 'destroy'])->middleware('role.gerant')->middleware('throttle:5,1');
     });
 
-    // Gestion des dates de pÃ©remption
+    // Gestion des dates de péremption
     Route::prefix('peremption')->group(function () {
         Route::post('/check', [PeremptionController::class, 'checkAlerts'])->middleware('role.gerant')->middleware('throttle:5,1');
         Route::post('/sync', [PeremptionController::class, 'syncAlerts'])->middleware('throttle:10,1');
@@ -287,7 +302,7 @@ Route::middleware(['auth:sanctum', 'user.active', 'boutique.scope'])->group(func
         Route::delete('/{conversation}', [ChatController::class, 'destroy'])->middleware('throttle:5,1');
     });
 
-    // Programme de fidÃ©litÃ©
+    // Programme de fidélité
     Route::prefix('fidelite')->group(function () {
         Route::get('/', [FideliteController::class, 'index']);
         Route::post('/', [FideliteController::class, 'store'])->middleware('role.gerant')->middleware('throttle:10,1');

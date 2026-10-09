@@ -3,18 +3,17 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
-use App\Models\Vente;
-use App\Models\Produit;
 use App\Models\LigneVente;
-use App\Models\Categorie;
+use App\Models\Produit;
+use App\Models\Vente;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
 
 class AnalyticsController extends Controller
 {
-    private function boutiqueId(Request $request): int
+    private function boutiqueId(Request $request): ?int
     {
         return $request->user()->current_boutique_id;
     }
@@ -24,7 +23,7 @@ class AnalyticsController extends Controller
      */
     private function getDateRange($periode)
     {
-        return match($periode) {
+        return match ($periode) {
             '7j' => Carbon::now()->subDays(7),
             '30j' => Carbon::now()->subDays(30),
             '90j' => Carbon::now()->subDays(90),
@@ -56,10 +55,10 @@ class AnalyticsController extends Controller
         // Stats des produits (toujours le total, pas de filtre période)
         $statsProduits = Produit::where('boutique_id', $boutiqueId)
             ->select(
-            DB::raw('COUNT(*) as total_produits'),
-            DB::raw('SUM(quantite_stock) as total_stock'),
-            DB::raw('SUM(prix * quantite_stock) as valeur_stock_total')
-        )->first();
+                DB::raw('COUNT(*) as total_produits'),
+                DB::raw('SUM(quantite_stock) as total_stock'),
+                DB::raw('SUM(prix * quantite_stock) as valeur_stock_total')
+            )->first();
 
         $produitsEnAlerte = Produit::enAlerte()->where('boutique_id', $boutiqueId)->count();
         $produitsEnRupture = Produit::enRupture()->where('boutique_id', $boutiqueId)->count();
@@ -68,20 +67,20 @@ class AnalyticsController extends Controller
             'ventes' => [
                 'total_ventes' => $statsVentes->total_ventes ?? 0,
                 'chiffre_affaires_total' => $statsVentes->chiffre_affaires_total ?? 0,
-                'panier_moyen' => $statsVentes->panier_moyen ?? 0
+                'panier_moyen' => $statsVentes->panier_moyen ?? 0,
             ],
             'produits' => [
                 'total_produits' => $statsProduits->total_produits ?? 0,
                 'total_stock' => $statsProduits->total_stock ?? 0,
                 'valeur_stock_total' => $statsProduits->valeur_stock_total ?? 0,
                 'produits_en_alerte' => $produitsEnAlerte,
-                'produits_en_rupture' => $produitsEnRupture
+                'produits_en_rupture' => $produitsEnRupture,
             ],
             'metadata' => [
                 'periode' => $periode,
                 'date_debut' => $dateDebut->toISOString(),
-                'date_fin' => Carbon::now()->toISOString()
-            ]
+                'date_fin' => Carbon::now()->toISOString(),
+            ],
         ]);
     }
 
@@ -147,10 +146,10 @@ class AnalyticsController extends Controller
         $boutiqueId = $this->boutiqueId($request);
 
         $produits = LigneVente::with('produit')
-            ->whereHas('vente', function($query) use ($dateDebut, $boutiqueId) {
+            ->whereHas('vente', function ($query) use ($dateDebut, $boutiqueId) {
                 $query->where('statut', 'termine')
-                      ->where('boutique_id', $boutiqueId)
-                      ->where('created_at', '>=', $dateDebut);
+                    ->where('boutique_id', $boutiqueId)
+                    ->where('created_at', '>=', $dateDebut);
             })
             ->select(
                 'produit_id',
@@ -233,8 +232,8 @@ class AnalyticsController extends Controller
                 'periode' => $periode,
                 'exported_at' => now()->toISOString(),
                 'timezone' => config('app.timezone'),
-                'format' => $format
-            ]
+                'format' => $format,
+            ],
         ];
 
         return response()->json($data);
@@ -268,7 +267,7 @@ class AnalyticsController extends Controller
             'produits_en_alerte' => $produitsEnAlerte,
             'produits_en_rupture' => $produitsEnRupture,
             'total_en_alerte' => $produitsEnAlerte->count(),
-            'total_en_rupture' => $produitsEnRupture->count()
+            'total_en_rupture' => $produitsEnRupture->count(),
         ]);
     }
 }

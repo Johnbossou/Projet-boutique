@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Sequenceur;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -84,6 +85,11 @@ class CommandeClient extends Model
 
     /**
      * Générer automatiquement le numéro de commande
+     *
+     * Le numéro vient du Sequenceur (compteur en base sous verrou), pas
+     * d'un timestamp : 'CMD-'.date('Ymd-His') resolvait à la seconde et
+     * deux commandes créées dans la même seconde violaient l'index
+     * UNIQUE, remontant une erreur SQLSTATE 23000 à l'utilisateur.
      */
     protected static function boot()
     {
@@ -91,7 +97,7 @@ class CommandeClient extends Model
 
         static::creating(function ($commande) {
             if (empty($commande->numero_commande)) {
-                $commande->numero_commande = 'CMD-' . date('Ymd-His');
+                $commande->numero_commande = Sequenceur::prochain('CMD');
             }
         });
     }

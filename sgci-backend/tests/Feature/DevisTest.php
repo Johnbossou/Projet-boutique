@@ -9,6 +9,7 @@ use App\Models\Devis;
 use App\Models\LigneDevis;
 use App\Models\Produit;
 use App\Models\User;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\Sanctum;
@@ -19,8 +20,11 @@ class DevisTest extends TestCase
     use RefreshDatabase;
 
     private Boutique $boutique;
+
     private User $gerant;
+
     private Client $client;
+
     private Produit $produit;
 
     protected function setUp(): void
@@ -41,7 +45,7 @@ class DevisTest extends TestCase
             'proprietaire_id' => $this->gerant->id,
         ]);
 
-        $this->gerant->boutiques()->attach($this->boutique->id);
+        $this->gerant->boutiques()->attach($this->boutique->id, ['role_dans_boutique' => 'gerant']);
         $this->gerant->update(['current_boutique_id' => $this->boutique->id]);
 
         $this->client = Client::create([
@@ -141,7 +145,7 @@ class DevisTest extends TestCase
 
     public function test_pdf_endpoint(): void
     {
-        if (!class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+        if (! class_exists(Pdf::class)) {
             $this->markTestSkipped('DomPDF non installé');
         }
 

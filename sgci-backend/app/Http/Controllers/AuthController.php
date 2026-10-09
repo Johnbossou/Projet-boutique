@@ -2,21 +2,25 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Password;
-use Illuminate\Support\Str;
+use App\Models\Boutique;
 use App\Models\User;
-use Illuminate\Validation\ValidationException;
-use App\Services\TwoFactorAuthService;
 use App\Services\AuditLogService;
 use App\Services\EmailService;
+use App\Services\TwoFactorAuthService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+use Laravel\Sanctum\PersonalAccessToken;
 
 class AuthController extends Controller
 {
     protected $twoFactorService;
+
     protected $auditLogService;
+
     protected $emailService;
 
     public function __construct(TwoFactorAuthService $twoFactorService, AuditLogService $auditLogService, EmailService $emailService)
@@ -38,34 +42,45 @@ class AuthController extends Controller
             'boutique_telephone' => 'nullable|string|max:30',
         ]);
 
-        // Créer l'utilisateur
-        $user = User::create([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'telephone' => $validated['telephone'] ?? null,
-            'password' => Hash::make($validated['password']),
-            'role' => 'proprietaire',
-            'est_actif' => true,
-            'derniere_connexion' => now(),
-        ]);
+        // Normalisation : le middleware anti brute-force indexe sur
+        // strtolower(email), le login doit donc suivre la même casse.
+        $email = mb_strtolower(trim($validated['email']));
 
-        // Créer la boutique
-        $boutique = \App\Models\Boutique::create([
-            'nom' => $validated['boutique_nom'],
-            'adresse' => $validated['boutique_adresse'] ?? null,
-            'telephone' => $validated['boutique_telephone'] ?? null,
-            'proprietaire_id' => $user->id,
-            'devise' => 'XOF',
-            'taux_tva' => 18,
-        ]);
+        if (User::whereRaw('LOWER(email) = ?', [$email])->exists()) {
+            throw ValidationException::withMessages([
+                'email' => ['Cette adresse email est déjà utilisée.'],
+            ]);
+        }
 
-        // Associer l'utilisateur à sa boutique
-        $user->current_boutique_id = $boutique->id;
-        $user->save();
+        // Transaction : sans elle, un échec sur la boutique laisserait
+        // un utilisateur orphelin sans boutique.
+        [$user, $boutique] = DB::transaction(function () use ($validated, $email) {
+            $user = User::create([
+                'name' => $validated['name'],
+                'email' => $email,
+                'telephone' => $validated['telephone'] ?? null,
+                'password' => Hash::make($validated['password']),
+                'role' => 'proprietaire',
+                'est_actif' => true,
+            ]);
 
-        // Attacher au pivot pour que les requêtes whereHas('boutiques')
-        // (alertes stock, permissions par boutique) le trouvent aussi
-        $boutique->users()->attach($user->id, ['role_dans_boutique' => 'proprietaire']);
+            $boutique = Boutique::create([
+                'nom' => $validated['boutique_nom'],
+                'adresse' => $validated['boutique_adresse'] ?? null,
+                'telephone' => $validated['boutique_telephone'] ?? null,
+                'proprietaire_id' => $user->id,
+                'devise' => 'XOF',
+                'taux_tva' => 18,
+            ]);
+
+            $user->forceFill(['current_boutique_id' => $boutique->id])->save();
+
+            // Attacher au pivot pour que les requêtes whereHas('boutiques')
+            // (alertes stock, permissions par boutique) le trouvent aussi
+            $boutique->users()->attach($user->id, ['role_dans_boutique' => 'proprietaire']);
+
+            return [$user, $boutique];
+        });
 
         // Log l'inscription
         $this->auditLogService->logRegistration($user, $request);
@@ -95,7 +110,7 @@ class AuthController extends Controller
         if (Auth::attempt($request->only('email', 'password'))) {
             $user = User::where('email', $request->email)->first();
 
-            if (!$user->est_actif) {
+            if (! $user->est_actif) {
                 Auth::logout();
                 throw ValidationException::withMessages([
                     'email' => ['Ce compte est désactivé. Contactez le gérant.'],
@@ -106,7 +121,7 @@ class AuthController extends Controller
             if ($user->two_factor_enabled) {
                 // Si le code 2FA est fourni, le vérifier
                 if ($request->has('two_factor_code')) {
-                    if (!$this->twoFactorService->verifyCode($user, $request->two_factor_code)) {
+                    if (! $this->twoFactorService->verifyCode($user, $request->two_factor_code)) {
                         Auth::logout();
                         throw ValidationException::withMessages([
                             'two_factor_code' => ['Code 2FA invalide.'],
@@ -115,6 +130,7 @@ class AuthController extends Controller
                 } else {
                     // Demander le code 2FA
                     Auth::logout();
+
                     return response()->json([
                         'message' => 'Code 2FA requis',
                         'requires_two_factor' => true,
@@ -140,7 +156,7 @@ class AuthController extends Controller
                     'role' => $user->role,
                     'telephone' => $user->telephone,
                     'two_factor_enabled' => $user->two_factor_enabled,
-                ]
+                ],
             ]);
 
             $response->headers->setCookie(
@@ -158,11 +174,17 @@ class AuthController extends Controller
     public function logout(Request $request)
     {
         $user = $request->user();
-        
+
         // Log la déconnexion
         $this->auditLogService->logLogout($user, $request);
-        
-        $user->currentAccessToken()->delete();
+
+        // En authentification stateful (cookie de session), currentAccessToken()
+        // renvoie un TransientToken, qui n'est ni null ni supprimable.
+        // Seul un vrai PersonalAccessToken peut être révoqué.
+        $this->revoquerTokenCourant($user);
+
+        // Libérer aussi la session stateful éventuelle.
+        Auth::guard('web')->logout();
 
         $response = response()->json(['message' => 'Déconnexion réussie']);
         $response->headers->setCookie(
@@ -175,7 +197,10 @@ class AuthController extends Controller
     public function refresh(Request $request)
     {
         $user = $request->user();
-        $request->user()->currentAccessToken()->delete();
+
+        // Même garde-fou que logout() : TransientToken en mode session.
+        $this->revoquerTokenCourant($user);
+
         $tokenData = $this->issueToken($user);
 
         $response = response()->json([
@@ -204,7 +229,7 @@ class AuthController extends Controller
 
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
-            'email' => 'sometimes|email|unique:users,email,' . $user->id,
+            'email' => 'sometimes|email|unique:users,email,'.$user->id,
             'telephone' => 'nullable|string|max:30',
         ]);
 
@@ -225,13 +250,24 @@ class AuthController extends Controller
 
         $user = $request->user();
 
-        if (!Auth::attempt(['email' => $user->email, 'password' => $validated['current_password']])) {
+        // Vérification directe du hash : Auth::attempt() ré-authentifierait
+        // l'utilisateur via le guard web et créerait une session parasite.
+        if (! Hash::check($validated['current_password'], $user->password)) {
             throw ValidationException::withMessages([
                 'current_password' => ['Le mot de passe actuel est incorrect.'],
             ]);
         }
 
         $user->update(['password' => Hash::make($validated['password'])]);
+
+        // Cohérence avec resetPassword() : après un changement de mot de
+        // passe, toutes les autres sessions doivent être révoquées.
+        // Le token courant est conservé pour ne pas déconnecter l'utilisateur.
+        $tokenCourantId = $user->currentAccessToken()?->id;
+
+        $user->tokens()
+            ->when($tokenCourantId, fn ($q) => $q->where('id', '!=', $tokenCourantId))
+            ->delete();
 
         return response()->json(['message' => 'Mot de passe mis à jour']);
     }
@@ -248,9 +284,10 @@ class AuthController extends Controller
 
         // Enrichir chaque boutique avec le rôle effectif du user dans cette boutique
         $boutiquesAvecRole = $boutiques->map(function ($b) use ($user) {
-            if ($b instanceof \App\Models\Boutique) {
+            if ($b instanceof Boutique) {
                 $b->role_dans_boutique = $user->roleDansBoutique($b->id);
             }
+
             return $b;
         })->values();
 
@@ -282,7 +319,7 @@ class AuthController extends Controller
 
         $user = User::where('email', $request->email)->first();
 
-        if (!$user || !$user->est_actif) {
+        if (! $user || ! $user->est_actif) {
             return response()->json(['message' => $genericMessage]);
         }
 
@@ -293,7 +330,7 @@ class AuthController extends Controller
         $user->password_reset_expires_at = now()->addHour();
         $user->save();
 
-        $resetUrl = config('app.frontend_url') . '/reset-password?token=' . $token;
+        $resetUrl = config('app.frontend_url').'/reset-password?token='.$token;
 
         $this->emailService->sendPasswordReset($user, $resetUrl);
 
@@ -310,7 +347,7 @@ class AuthController extends Controller
         // Comparer le hash du token fourni avec celui stocké
         $user = User::where('password_reset_token', hash('sha256', $request->token))->first();
 
-        if (!$user) {
+        if (! $user) {
             throw ValidationException::withMessages([
                 'token' => ['Token invalide.'],
             ]);
@@ -322,7 +359,7 @@ class AuthController extends Controller
             ]);
         }
 
-        if (!$user->est_actif) {
+        if (! $user->est_actif) {
             throw ValidationException::withMessages([
                 'email' => ['Ce compte est désactivé. Contactez le gérant.'],
             ]);
@@ -366,7 +403,7 @@ class AuthController extends Controller
 
         $user = $request->user();
 
-        if (!$user->two_factor_secret) {
+        if (! $user->two_factor_secret) {
             return response()->json(['message' => 'Secret 2FA non généré'], 400);
         }
 
@@ -389,7 +426,7 @@ class AuthController extends Controller
         // Si un mot de passe est fourni (optionnel), on le vérifie.
         $password = $request->input('password');
 
-        if ($password !== null && $password !== '' && !Hash::check($password, $user->password)) {
+        if ($password !== null && $password !== '' && ! Hash::check($password, $user->password)) {
             throw ValidationException::withMessages([
                 'password' => ['Mot de passe incorrect.'],
             ]);
@@ -408,7 +445,7 @@ class AuthController extends Controller
 
         $user = $request->user();
 
-        if (!$user->aAccesBoutique($request->boutique_id)) {
+        if (! $user->aAccesBoutique($request->boutique_id)) {
             return response()->json(['message' => 'Accès non autorisé à cette boutique'], 403);
         }
 
@@ -422,6 +459,27 @@ class AuthController extends Controller
         }
 
         return response()->json(['message' => 'Erreur lors du changement de boutique'], 500);
+    }
+
+    /**
+     * Révoque le token Sanctum courant s'il existe réellement.
+     *
+     * currentAccessToken() peut renvoyer :
+     *  - un PersonalAccessToken (auth par Bearer)  -> supprimable
+     *  - un TransientToken (auth par cookie/session) -> aucun delete()
+     *  - null                                        -> rien à faire
+     */
+    private function revoquerTokenCourant(User $user): bool
+    {
+        $token = $user->currentAccessToken();
+
+        if ($token instanceof PersonalAccessToken) {
+            $token->delete();
+
+            return true;
+        }
+
+        return false;
     }
 
     private function issueToken(User $user): array

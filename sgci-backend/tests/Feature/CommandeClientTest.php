@@ -18,8 +18,11 @@ class CommandeClientTest extends TestCase
     use RefreshDatabase;
 
     private Boutique $boutique;
+
     private User $gerant;
+
     private Client $client;
+
     private Produit $produit;
 
     protected function setUp(): void
@@ -40,7 +43,7 @@ class CommandeClientTest extends TestCase
             'proprietaire_id' => $this->gerant->id,
         ]);
 
-        $this->gerant->boutiques()->attach($this->boutique->id);
+        $this->gerant->boutiques()->attach($this->boutique->id, ['role_dans_boutique' => 'gerant']);
         $this->gerant->update(['current_boutique_id' => $this->boutique->id]);
 
         $this->client = Client::create([
@@ -66,7 +69,7 @@ class CommandeClientTest extends TestCase
     private function creerCommande(string $statut = 'en_attente', ?Boutique $boutique = null): CommandeClient
     {
         return CommandeClient::create([
-            'numero_commande' => 'CMD-' . uniqid(),
+            'numero_commande' => 'CMD-'.uniqid(),
             'client_id' => $this->client->id,
             'boutique_id' => $boutique ? $boutique->id : $this->boutique->id,
             'date_commande' => now(),
@@ -215,6 +218,43 @@ class CommandeClientTest extends TestCase
         ]);
     }
 
+    public function test_annuler_signale_le_montant_encaisse(): void
+    {
+        Sanctum::actingAs($this->gerant);
+
+        $commande = $this->creerCommande('en_cours');
+        $commande->update(['montant_total' => 5000, 'montant_paye' => 5000]);
+
+        // Une commande deja payee ne peut pas etre annulee sans que l'argent
+        // encaisse soit signale : le rembordement effectif est une decision
+        // metier, mais le silence ne doit pas etre l'etat par defaut.
+        // Le message du premier appel doit signaler l'argent deja encaisse.
+        $reponse = $this->postJson("/api/commandes-clients/{$commande->id}/annuler")
+            ->assertOk()
+            ->assertJsonPath('montant_paye', 5000)
+            ->assertJsonPath('data.statut', 'annule');
+
+        $this->assertStringContainsString(
+            '5000',
+            (string) $reponse->json('message')
+        );
+    }
+
+    public function test_annuler_refuse_une_commande_deja_traitee(): void
+    {
+        Sanctum::actingAs($this->gerant);
+
+        $commande = $this->creerCommande('en_cours');
+        $commande->update(['statut' => 'livre']);
+
+        // Le second appel doit etre refuse explicitement, pas accepte en
+        // silence : c est ce qui distingue le comportement correct d une double
+        // annulation concurrente.
+        $this->postJson("/api/commandes-clients/{$commande->id}/annuler")
+            ->assertStatus(409)
+            ->assertJsonPath('statut', 'livre');
+    }
+
     public function test_commande_dune_autre_boutique_inaccessible(): void
     {
         Sanctum::actingAs($this->gerant);
@@ -247,7 +287,7 @@ class CommandeClientTest extends TestCase
             'role' => 'caissier',
             'est_actif' => true,
         ]);
-        $caissier->boutiques()->attach($this->boutique->id);
+        $caissier->boutiques()->attach($this->boutique->id, ['role_dans_boutique' => 'caissier']);
         $caissier->update(['current_boutique_id' => $this->boutique->id]);
 
         Sanctum::actingAs($caissier);

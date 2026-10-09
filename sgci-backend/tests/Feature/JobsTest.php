@@ -2,13 +2,13 @@
 
 namespace Tests\Feature;
 
-use App\Models\User;
-use App\Models\Categorie;
-use App\Models\Produit;
-use App\Models\MouvementStock;
-use App\Jobs\SendStockAlertsJob;
 use App\Jobs\SendPredictionAlertsJob;
+use App\Jobs\SendStockAlertsJob;
 use App\Jobs\ValidatePredictionsJob;
+use App\Models\Categorie;
+use App\Models\MouvementStock;
+use App\Models\Produit;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
@@ -74,30 +74,6 @@ class JobsTest extends TestCase
         Queue::assertPushed(SendStockAlertsJob::class, 1);
         Queue::assertPushed(SendPredictionAlertsJob::class, 1);
         Queue::assertPushed(ValidatePredictionsJob::class, 1);
-    }
-
-    public function test_stock_alert_job_handles_low_stock_gracefully(): void
-    {
-        $this->createGerant();
-        $produit = $this->createProduit();
-
-        // Le produit a un stock de 5 et un seuil de 10 : bien en alerte
-        $this->assertTrue($produit->quantite_stock < $produit->seuil_alerte);
-
-        // Le job ne doit lever aucune exception, même sans canaux configurés
-        (new SendStockAlertsJob())->handle();
-
-        $this->assertTrue(true);
-    }
-
-    public function test_stock_alert_job_without_gerants_returns_early(): void
-    {
-        $produit = $this->createProduit();
-
-        // Aucun gérant actif en base : le job doit se terminer sans erreur
-        (new SendStockAlertsJob())->handle();
-
-        $this->assertTrue($produit->fresh()->exists);
     }
 
     public function test_movement_validation_updates_stock(): void

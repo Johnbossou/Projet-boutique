@@ -13,6 +13,7 @@ class BoutiqueSeeder extends Seeder
 
         if (! $owner) {
             $this->command->warn('Aucun utilisateur proprietaire : BoutiqueSeeder ignore.');
+
             return;
         }
 
@@ -36,8 +37,14 @@ class BoutiqueSeeder extends Seeder
 
         // Rattacher tous les utilisateurs à la boutique (pivot + boutique courante)
         foreach (DB::table('users')->get() as $user) {
+            // Un propriétaire reste 'proprietaire' dans le pivot, comme le fait
+            // AuthController à l'inscription. Le mapping sur 'gerant' créait le
+            // même propriétaire avec deux rôles de pivot différents selon la
+            // façon dont la boutique était née : invisible tant que rien ne
+            // distingue les deux valeurs, et impossible à rattraper ensuite.
             $roleDansBoutique = match ($user->role) {
-                'proprietaire', 'gerant' => 'gerant',
+                'proprietaire' => 'proprietaire',
+                'gerant' => 'gerant',
                 default => 'caissier',
             };
 

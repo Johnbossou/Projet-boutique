@@ -5,8 +5,10 @@ namespace Tests\Feature;
 use App\Models\User;
 use App\Services\TwoFactorAuthService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\Sanctum;
 use ReflectionMethod;
 use Tests\TestCase;
@@ -23,7 +25,7 @@ class TwoFactorTest extends TestCase
     {
         parent::setUp();
 
-        $this->service = new TwoFactorAuthService();
+        $this->service = new TwoFactorAuthService;
         $this->user = User::create([
             'name' => 'Utilisateur 2FA',
             'email' => '2fa@sgci.bj',
@@ -78,11 +80,41 @@ class TwoFactorTest extends TestCase
         $this->assertFalse($this->service->verifyCode($this->user, ''));
     }
 
+    public function test_la_colonne_du_secret_peut_contenir_le_chiffrement(): void
+    {
+        // Ce test existe parce que SQLite ignore les longueurs déclarées : une
+        // colonne varchar(255) suffisait à tous les tests locaux alors que le
+        // chiffrement Laravel produit 256 caractères. En mode strict, MySQL
+        // refusait l'écriture et la 2FA était inopérante pour tout le monde —
+        // un défaut invisible en local et total en production.
+        $this->assertSame('text', Schema::getColumnType('users', 'two_factor_secret'));
+
+        // Et la longueur réelle reste mesurée, pour attraper un futur
+        // changement de format de chiffrement qui dépasserait à nouveau une
+        // colonne dimensionnée.
+        $plain = $this->service->generateSecret($this->user);
+        $chiffre = Crypt::encryptString($plain);
+
+        $this->assertGreaterThan(255, strlen($chiffre));
+        $this->assertLessThan(
+            65535,
+            strlen($chiffre),
+            'Un payload de secret au-delà de 65 Ko ne tient plus dans une colonne text : il faut un autre type.'
+        );
+    }
+
     public function test_fenetre_de_tolerance_plus_minus_1_periode(): void
     {
+        // Instant figé : la fenêtre est d'exactement une période, donc ce test
+        // était fatal dès qu'il tombait à cheval sur un changement de période
+        // (~3 % des exécutions). Avec une vraie horloge, le code de « $now - 30 »
+        // devient hors fenêtre dès que la seconde suivante fait basculer la
+        // période de référence.
+        Carbon::setTestNow(Carbon::createFromTimestamp(1767225600));
+
         $plain = $this->service->generateSecret($this->user);
 
-        $now = time();
+        $now = Carbon::now()->getTimestamp();
 
         $this->assertTrue($this->service->verifyCode($this->user, $this->codeAt($plain, $now - 30)));
         $this->assertTrue($this->service->verifyCode($this->user, $this->codeAt($plain, $now + 30)));

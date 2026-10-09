@@ -1,5 +1,7 @@
 <?php
+
 namespace App\Models;
+
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -11,7 +13,7 @@ class User extends Authenticatable
     use HasApiTokens, HasFactory, Notifiable, SoftDeletes;
 
     protected $fillable = [
-        'name', 'email', 'password', 'role', 'telephone', 'est_actif', 'current_boutique_id', 'notification_preferences'
+        'name', 'email', 'password', 'role', 'telephone', 'est_actif', 'current_boutique_id', 'notification_preferences',
     ];
 
     protected $hidden = ['password', 'remember_token'];
@@ -72,7 +74,7 @@ class User extends Authenticatable
      */
     public function roleDansBoutique($boutiqueId)
     {
-        if (!$boutiqueId) {
+        if (! $boutiqueId) {
             return $this->role;
         }
 
@@ -101,6 +103,7 @@ class User extends Authenticatable
     public function prefereNotification(string $type): bool
     {
         $prefs = $this->notification_preferences ?? [];
+
         return $prefs[$type] ?? true;
     }
 
@@ -111,12 +114,13 @@ class User extends Authenticatable
 
     public function switchBoutique($boutiqueId)
     {
-        if (!$this->aAccesBoutique($boutiqueId)) {
+        if (! $this->aAccesBoutique($boutiqueId)) {
             return false;
         }
 
         $this->current_boutique_id = $boutiqueId;
         $this->save();
+
         return true;
     }
 
@@ -130,6 +134,7 @@ class User extends Authenticatable
         if ($this->boutiquesPossedees()->exists()) {
             $this->role = 'proprietaire';
             $this->save();
+
             return 'proprietaire';
         }
 
@@ -148,13 +153,49 @@ class User extends Authenticatable
         return $this->role;
     }
 
+    /**
+     * Toutes les boutiques accessibles à cet utilisateur :
+     * celles qu'il possède (proprietaire_id) + celles du pivot.
+     *
+     * SOURCE DE VÉRITÉ UNIQUE. Remplace les anciens tests basés sur le
+     * rôle global ('estProprietaire()'), qui cachaient les boutiques
+     * possédées dès que le rôle global avait été dégradé.
+     */
+    public function scopeBoutiquesAccessibles($query)
+    {
+        return $query->where(function ($q) {
+            $q->where('proprietaire_id', $this->id)
+                ->orWhereIn('boutiques.id', function ($sub) {
+                    $sub->select('boutique_id')
+                        ->from('boutique_user')
+                        ->where('user_id', $this->id);
+                });
+        });
+    }
+
+    /**
+     * Collection des boutiques accessibles.
+     */
+    public function boutiquesAccessibles()
+    {
+        return $this->scopeBoutiquesAccessibles(Boutique::query())->get();
+    }
+
+    /**
+     * L'utilisateur a-t-il accès à cette boutique ?
+     *
+     * Source de vérité unique : roleDansBoutique(). L'ancien code
+     * testait le rôle GLOBAL ('proprietaire') puis le pivot, ce qui
+     * verrouillait un propriétaire réel dont le rôle global avait
+     * été dégradé (ex. propriétaire d'une boutique A mais gérant de B).
+     */
     public function aAccesBoutique($boutiqueId)
     {
-        if ($this->estProprietaire()) {
-            return $this->boutiquesPossedees()->where('id', $boutiqueId)->exists();
+        if (! $boutiqueId) {
+            return false;
         }
 
-        return $this->boutiques()->where('boutique_id', $boutiqueId)->exists();
+        return $this->roleDansBoutique($boutiqueId) !== null;
     }
 
     // Scopes

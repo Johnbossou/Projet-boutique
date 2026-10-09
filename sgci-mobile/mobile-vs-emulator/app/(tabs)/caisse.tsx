@@ -57,8 +57,8 @@ import {
   enqueueOfflineVente,
   loadOfflineQueue,
 } from "@/lib/offline-caisse";
-import { syncOfflineQueue } from "@/lib/sync-offline-caisse";
-import { fetchBoutiqueSettings, getDelaiAnnulationMs } from "@/lib/boutique-settings";
+import { syncOfflineQueue, lireErreurApi } from "@/lib/sync-offline-caisse";
+import { fetchBoutiqueSettings, getDelaiAnnulationMs, getTauxTvaSync } from "@/lib/boutique-settings";
 import { downloadFacturePdf } from "@/lib/facture-pdf";
 import { ProductImagePlaceholder } from "@/components/ProductImagePlaceholder";
 
@@ -126,6 +126,8 @@ export default function CaisseScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  // Taux de TVA de la boutique courante (ratio : 0.18 = 18 %).
+  const [tauxTva, setTauxTva] = useState(0.18);
   const [showRemiseInput, setShowRemiseInput] = useState(false);
   const [remise, setRemise] = useState(0);
   const [notes, setNotes] = useState("");
@@ -198,14 +200,26 @@ export default function CaisseScreen() {
   useEffect(() => {
     chargerProduits();
     chargerClients();
-    fetchBoutiqueSettings().catch(() => undefined);
+    fetchBoutiqueSettings()
+      .then(() => setTauxTva(getTauxTvaSync()))
+      .catch(() => undefined);
     loadOfflineQueue().then((q) => setOfflineCount(q.length));
-    syncOfflineQueue().then((n) => {
-      if (n > 0) {
-        Alert.alert("Synchronisation", `${n} vente(s) hors-ligne envoyée(s)`);
-        loadOfflineQueue().then((q) => setOfflineCount(q.length));
+    syncOfflineQueue().then((r) => {
+      if (r.synced > 0) {
         chargerProduits();
       }
+
+      // Les ventes rejetées définitivement ne reviennent plus : il faut
+      // le dire, sinon le caissier croit que sa vente est en attente.
+      if (r.rejetees.length > 0) {
+        Alert.alert(
+          "Ventes non synchronisées",
+          `${r.rejetees.length} vente(s) hors-ligne ont été refusées par le serveur et n'ont pas été enregistrées :\n\n` +
+            r.rejetees.map((x) => `• ${x.raison}`).join("\n")
+        );
+      }
+
+      loadOfflineQueue().then((q) => setOfflineCount(q.length));
     });
   }, []);
 
@@ -333,8 +347,15 @@ export default function CaisseScreen() {
   const onRefresh = async () => {
     setRefreshing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const synced = await syncOfflineQueue();
-    if (synced > 0) Alert.alert("Sync", `${synced} vente(s) synchronisée(s)`);
+    const r = await syncOfflineQueue();
+    if (r.synced > 0) Alert.alert("Sync", `${r.synced} vente(s) synchronisée(s)`);
+    if (r.rejetees.length > 0) {
+      Alert.alert(
+        "Ventes non synchronisées",
+        `${r.rejetees.length} vente(s) hors-ligne ont été refusées et n'ont pas été enregistrées :\n\n` +
+          r.rejetees.map((x) => `• ${x.raison}`).join("\n")
+      );
+    }
     const q = await loadOfflineQueue();
     setOfflineCount(q.length);
     await chargerProduits();
@@ -449,13 +470,21 @@ export default function CaisseScreen() {
   }, []);
 
   // Calculs
+  // Le taux doit être un état React : une variable de module mutée par
+  // fetchBoutiqueSettings() ne déclenche pas de rendu, et le useMemo
+  // conserverait un montant calculé à l'ancien taux alors que le libellé
+  // affiche déjà le nouveau.
+  const tauxTvaLibelle = `${(tauxTva * 100).toLocaleString('fr-FR', { maximumFractionDigits: 2 })}%`;
+
   const calculs = useMemo(() => {
     const sousTotal = panier.reduce(
       (total, item) => total + (item.sousTotal || 0),
       0
     );
     const montantApresRemise = Math.max(0, sousTotal - (remise || 0));
-    const tva = montantApresRemise * 0.18;
+    // Taux réel de la boutique, pas 18 % en dur : sinon le montant affiché
+    // et la monnaie rendue ne correspondent pas à ce que le serveur encaisse.
+    const tva = montantApresRemise * tauxTva;
     const total = montantApresRemise + tva;
 
     return {
@@ -464,7 +493,7 @@ export default function CaisseScreen() {
       tva: isNaN(tva) ? 0 : tva,
       total: isNaN(total) ? 0 : total,
     };
-  }, [panier, remise]);
+  }, [panier, remise, tauxTva]);
 
   const monnaieRendue = useMemo(() => {
     if (modePaiement === "especes" && montantRecu) {
@@ -545,7 +574,11 @@ export default function CaisseScreen() {
 
     setIsProcessing(true);
 
+    // Clé d'idempotence : si la réponse se perd après commit serveur et que
+    // l'utilisateur réessaie, le backend renvoie la vente existante au lieu
+    // de l'encaisser une seconde fois.
     const donneesVente = {
+      idempotency_key: `mob_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
       ligne_ventes: panier.map((item) => ({
         produit_id: item.produit.id,
         quantite: item.quantite,
@@ -600,8 +633,8 @@ export default function CaisseScreen() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `Erreur HTTP ${response.status}`);
+        const errorData = await response.json().catch(() => null);
+        throw new Error(lireErreurApi(errorData) ?? `Erreur HTTP ${response.status}`);
       }
 
       const venteConfirmee: VenteResponse = await response.json();
@@ -720,7 +753,7 @@ export default function CaisseScreen() {
             <div class="total">
               <div>Sous-total: ${(lastVente.montant_total - lastVente.tva + lastVente.remise).toLocaleString()} FCFA</div>
               ${lastVente.remise > 0 ? `<div>Remise: -${lastVente.remise.toLocaleString()} FCFA</div>` : ""}
-              <div>TVA (18%): ${lastVente.tva.toLocaleString()} FCFA</div>
+              <div>TVA (${tauxTvaLibelle}): ${lastVente.tva.toLocaleString()} FCFA</div>
               <div style="font-weight: bold; font-size: 14px;">
                 TOTAL: ${lastVente.montant_total.toLocaleString()} FCFA
               </div>
@@ -1098,7 +1131,7 @@ export default function CaisseScreen() {
           </View>
         )}
         <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>TVA (18%)</Text>
+          <Text style={styles.summaryLabel}>TVA (${tauxTvaLibelle})</Text>
           <Text style={styles.summaryValue}>
             {calculs.tva.toLocaleString()} FCFA
           </Text>
@@ -1550,7 +1583,7 @@ export default function CaisseScreen() {
                       )}
 
                       <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>TVA (18%)</Text>
+                        <Text style={styles.summaryLabel}>TVA (${tauxTvaLibelle})</Text>
                         <Text style={styles.summaryValue}>
                           {calculs.tva.toLocaleString()} FCFA
                         </Text>
@@ -1937,7 +1970,7 @@ export default function CaisseScreen() {
                     )}
 
                     <View style={styles.ticketTotalRow}>
-                      <Text style={styles.ticketTotalLabel}>TVA (18%):</Text>
+                      <Text style={styles.ticketTotalLabel}>TVA (${tauxTvaLibelle}):</Text>
                       <Text style={styles.ticketTotalValue}>
                         {lastVente.tva.toLocaleString()} FCFA
                       </Text>

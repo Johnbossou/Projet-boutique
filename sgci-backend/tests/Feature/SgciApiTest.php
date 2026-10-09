@@ -39,8 +39,14 @@ class SgciApiTest extends TestCase
         ]);
     }
 
-    private function seedProduit(): Produit
+    /**
+     * Un produit appartient à une boutique : sans boutique_id il n'est
+     * vendable par personne et les appels /ventes le rejettent.
+     */
+    private function seedProduit(?int $boutiqueId = null): Produit
     {
+        $boutiqueId ??= auth()->user()?->current_boutique_id;
+
         $categorie = Categorie::create([
             'nom' => 'Test Cat',
             'description' => 'Desc',
@@ -57,6 +63,7 @@ class SgciApiTest extends TestCase
             'categorie_id' => $categorie->id,
             'unite_mesure' => 'unite',
             'image_url' => 'https://example.com/img.jpg',
+            'boutique_id' => $boutiqueId,
         ]);
     }
 
@@ -153,9 +160,23 @@ class SgciApiTest extends TestCase
 
     public function test_caissier_cannot_validate_stock_movement(): void
     {
+        // Un mouvement de stock appartient nécessairement à une boutique :
+        // le caissier est donc rattaché à une, sinon la saisie est refusée
+        // avant même d'atteindre la tentative de validation.
+        $boutique = Boutique::create([
+            'nom' => 'Boutique Caissier',
+            'devise' => 'XOF',
+            'proprietaire_id' => $this->createGerant()->id,
+        ]);
+
         $caissier = $this->createCaissier();
-        Sanctum::actingAs($caissier);
+        $caissier->forceFill(['current_boutique_id' => $boutique->id])->save();
+        $boutique->users()->attach($caissier->id, ['role_dans_boutique' => 'caissier']);
+
         $produit = $this->seedProduit();
+        $produit->forceFill(['boutique_id' => $boutique->id])->save();
+
+        Sanctum::actingAs($caissier);
 
         $mouvement = $this->postJson('/api/mouvements-stock', [
             'produit_id' => $produit->id,
@@ -168,6 +189,9 @@ class SgciApiTest extends TestCase
 
         $this->postJson("/api/mouvements-stock/{$id}/valider")
             ->assertForbidden();
+
+        // Le stock ne doit pas avoir bougé.
+        $this->assertSame(50, $produit->fresh()->quantite_stock);
     }
 
     public function test_proprietaire_can_update_own_boutique(): void
@@ -180,7 +204,7 @@ class SgciApiTest extends TestCase
             'est_actif' => true,
         ]);
 
-        $boutique = \App\Models\Boutique::create([
+        $boutique = Boutique::create([
             'nom' => 'Ma Boutique',
             'adresse' => 'Adresse',
             'proprietaire_id' => $proprietaire->id,
@@ -208,7 +232,7 @@ class SgciApiTest extends TestCase
             'est_actif' => true,
         ]);
 
-        $boutique = \App\Models\Boutique::create([
+        $boutique = Boutique::create([
             'nom' => 'Boutique',
             'adresse' => 'Adresse',
             'proprietaire_id' => $proprietaire->id,
@@ -280,19 +304,19 @@ class SgciApiTest extends TestCase
             'est_actif' => true,
         ]);
 
-        $boutique1 = \App\Models\Boutique::create([
+        $boutique1 = Boutique::create([
             'nom' => 'Boutique 1',
             'adresse' => 'Adresse 1',
             'proprietaire_id' => $proprietaire->id,
         ]);
 
-        $boutique2 = \App\Models\Boutique::create([
+        $boutique2 = Boutique::create([
             'nom' => 'Boutique 2',
             'adresse' => 'Adresse 2',
             'proprietaire_id' => $proprietaire->id,
         ]);
 
-        $proprietaire->boutiques()->attach([$boutique1->id, $boutique2->id]);
+        $proprietaire->boutiques()->attach([$boutique1->id, $boutique2->id], ['role_dans_boutique' => 'proprietaire']);
         $proprietaire->update(['current_boutique_id' => $boutique1->id]);
 
         Sanctum::actingAs($proprietaire);
@@ -325,7 +349,7 @@ class SgciApiTest extends TestCase
             'est_actif' => true,
         ]);
 
-        $otherBoutique = \App\Models\Boutique::create([
+        $otherBoutique = Boutique::create([
             'nom' => 'Other Boutique',
             'adresse' => 'Other Address',
             'proprietaire_id' => $otherProprietaire->id,
@@ -361,6 +385,7 @@ class SgciApiTest extends TestCase
                 'seuil_alerte' => 5,
                 'categorie_id' => $categorie->id,
                 'unite_mesure' => 'unite',
+                'boutique_id' => $gerant->current_boutique_id,
             ]);
         }
 
@@ -513,19 +538,20 @@ class SgciApiTest extends TestCase
             'password' => 'court7',
             'password_confirmation' => 'court7',
         ])->assertStatus(422)
-          ->assertJsonValidationErrors(['password']);
+            ->assertJsonValidationErrors(['password']);
     }
 
     public function test_register_cree_utilisateur_boutique_et_pivot(): void
-    {        $this->postJson('/api/register', [
+    {
+        $this->postJson('/api/register', [
             'name' => 'Nouveau Proprio',
             'email' => 'nouveau@sgci.bj',
             'password' => 'password',
             'password_confirmation' => 'password',
             'boutique_nom' => 'Ma Boutique Test',
         ])->assertStatus(201)
-          ->assertJsonPath('user.role', 'proprietaire')
-          ->assertJsonPath('boutique.nom', 'Ma Boutique Test');
+            ->assertJsonPath('user.role', 'proprietaire')
+            ->assertJsonPath('boutique.nom', 'Ma Boutique Test');
 
         $user = User::where('email', 'nouveau@sgci.bj')->firstOrFail();
         $boutique = Boutique::where('nom', 'Ma Boutique Test')->firstOrFail();

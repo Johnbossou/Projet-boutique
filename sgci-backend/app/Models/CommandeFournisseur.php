@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Sequenceur;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -67,6 +68,10 @@ class CommandeFournisseur extends Model
 
     /**
      * Générer automatiquement le numéro de commande
+     *
+     * Compteur en base sous verrou (voir App\Services\Sequenceur). Le
+     * timestamp à la seconde précédent produisait des collisions sur
+     * l'index UNIQUE dès deux commandes dans la même seconde.
      */
     protected static function boot()
     {
@@ -74,7 +79,7 @@ class CommandeFournisseur extends Model
 
         static::creating(function ($commande) {
             if (empty($commande->numero_commande)) {
-                $commande->numero_commande = 'CF-' . date('Ymd-His');
+                $commande->numero_commande = Sequenceur::prochain('CF');
             }
         });
     }

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Boutique;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -31,7 +32,7 @@ class EmailService
                 'message' => 'Email envoyé avec succès',
             ];
         } catch (\Exception $e) {
-            Log::error("Erreur envoi email alerte stock", [
+            Log::error('Erreur envoi email alerte stock', [
                 'user_id' => $user->id,
                 'product_name' => $productName,
                 'error' => $e->getMessage(),
@@ -67,7 +68,7 @@ class EmailService
                 'message' => 'Email envoyé avec succès',
             ];
         } catch (\Exception $e) {
-            Log::error("Erreur envoi email notification vente", [
+            Log::error('Erreur envoi email notification vente', [
                 'user_id' => $user->id,
                 'sale_number' => $saleNumber,
                 'error' => $e->getMessage(),
@@ -103,7 +104,7 @@ class EmailService
                 'message' => 'Email envoyé avec succès',
             ];
         } catch (\Exception $e) {
-            Log::error("Erreur envoi email arrivage validé", [
+            Log::error('Erreur envoi email arrivage validé', [
                 'user_id' => $user->id,
                 'product_name' => $productName,
                 'error' => $e->getMessage(),
@@ -117,18 +118,24 @@ class EmailService
         }
     }
 
-    public function sendDailyReport(User $user, array $stats): array
+    /**
+     * Rapport quotidien d'une boutique.
+     *
+     * @param  Boutique|null  $boutique  si fourni, son nom remplace le nom de
+     *                                   l'application dans le corps du mail.
+     */
+    public function sendDailyReport(User $user, array $stats, ?Boutique $boutique = null): array
     {
         try {
             $data = array_merge($stats, [
                 'user_name' => $user->name,
-                'boutique_name' => config('app.name', 'SGCI Bénin'),
+                'boutique_name' => $boutique?->nom ?? config('app.name', 'SGCI Bénin'),
                 'date' => now()->format('d/m/Y'),
             ]);
 
             Mail::send('emails.daily-report', $data, function ($message) use ($user) {
                 $message->to($user->email)
-                    ->subject("Rapport Quotidien - " . now()->format('d/m/Y'));
+                    ->subject('Rapport Quotidien - '.now()->format('d/m/Y'));
             });
 
             Log::info("Email rapport quotidien envoyé à {$user->email}");
@@ -138,7 +145,7 @@ class EmailService
                 'message' => 'Email envoyé avec succès',
             ];
         } catch (\Exception $e) {
-            Log::error("Erreur envoi email rapport quotidien", [
+            Log::error('Erreur envoi email rapport quotidien', [
                 'user_id' => $user->id,
                 'error' => $e->getMessage(),
             ]);
@@ -172,7 +179,7 @@ class EmailService
                 'message' => 'Email envoyé avec succès',
             ];
         } catch (\Exception $e) {
-            Log::error("Erreur envoi email réinitialisation mot de passe", [
+            Log::error('Erreur envoi email réinitialisation mot de passe', [
                 'user_id' => $user->id,
                 'error' => $e->getMessage(),
             ]);

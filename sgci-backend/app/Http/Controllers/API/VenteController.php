@@ -2,26 +2,29 @@
 
 namespace App\Http\Controllers\API;
 
-use App\Http\Controllers\Controller;
-use App\Http\Controllers\Concerns\VerifieBoutique;
-use App\Services\FacturePdfService;
-use App\Traits\Auditable;
 use App\Events\VenteCreee;
+use App\Exceptions\OperationRefusee;
+use App\Http\Controllers\Concerns\VerifieBoutique;
+use App\Http\Controllers\Controller;
+use App\Models\Boutique;
 use App\Models\BoutiqueSetting;
 use App\Models\Client;
 use App\Models\LigneVente;
 use App\Models\MouvementStock;
 use App\Models\Produit;
 use App\Models\Vente;
+use App\Services\FacturePdfService;
+use App\Traits\Auditable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class VenteController extends Controller
 {
-    use VerifieBoutique, Auditable;
+    use Auditable, VerifieBoutique;
 
     public function index(Request $request): JsonResponse
     {
@@ -76,14 +79,18 @@ class VenteController extends Controller
 
         try {
             $validated = $this->validateVentePayload($request);
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             throw $e;
         }
 
         try {
             return DB::transaction(function () use ($validated, $request, $key) {
-                $montantTotal = $this->calculerMontantTotal($validated['ligne_ventes'], $validated['remise'] ?? 0);
-                $tauxTva = $this->tauxTva();
+                $montantTotal = $this->calculerMontantTotal(
+                    $validated['ligne_ventes'],
+                    $validated['remise'] ?? 0,
+                    $request->user()->current_boutique_id,
+                );
+                $tauxTva = $this->tauxTva($request->user()->current_boutique_id);
 
                 $vente = Vente::create(array_merge(
                     $this->extraireChampsPaiement($validated, $montantTotal),
@@ -116,7 +123,7 @@ class VenteController extends Controller
 
                 return response()->json($vente, 201);
             });
-        } catch (\RuntimeException $e) {
+        } catch (OperationRefusee $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
     }
@@ -138,7 +145,7 @@ class VenteController extends Controller
             return $this->annuler($vente);
         }
 
-        return response()->json(['message' => 'Action non autorisÃ©e'], 403);
+        return response()->json(['message' => 'Action non autorisée'], 403);
     }
 
     public function destroy(Vente $vente): JsonResponse
@@ -159,56 +166,63 @@ class VenteController extends Controller
             $this->mettreAJourMetriquesClient($clientId);
         }
 
-        return response()->json(['message' => 'Vente supprimÃ©e avec succÃ¨s']);
+        return response()->json(['message' => 'Vente supprimée avec succès']);
     }
 
     public function checkout(Request $request): JsonResponse
     {
         $validated = $this->validateVentePayload($request, requirePaiement: false);
+        $boutiqueId = $request->user()->current_boutique_id;
 
-        return DB::transaction(function () use ($validated, $request) {
-            $montantTotal = $this->calculerMontantTotal($validated['ligne_ventes'], $validated['remise'] ?? 0);
-            $tauxTva = $this->tauxTva();
+        try {
+            return DB::transaction(function () use ($validated, $request, $boutiqueId) {
+                $montantTotal = $this->calculerMontantTotal(
+                    $validated['ligne_ventes'],
+                    $validated['remise'] ?? 0,
+                    $boutiqueId,
+                );
+                $tauxTva = $this->tauxTva($boutiqueId);
 
-            $vente = Vente::create([
-                'user_id' => $request->user()->id,
-                'client_id' => $validated['client_id'] ?? null,
-                'remise' => $validated['remise'] ?? 0,
-                'notes' => $validated['notes'] ?? null,
-                'statut' => 'en_cours',
-                'montant_total' => $montantTotal,
-                'tva' => round($montantTotal * $tauxTva, 2),
-                'boutique_id' => $request->user()->current_boutique_id,
-            ]);
+                $vente = Vente::create([
+                    'user_id' => $request->user()->id,
+                    'client_id' => $validated['client_id'] ?? null,
+                    'remise' => $validated['remise'] ?? 0,
+                    'notes' => $validated['notes'] ?? null,
+                    'statut' => 'en_cours',
+                    'montant_total' => $montantTotal,
+                    'tva' => round($montantTotal * $tauxTva, 2),
+                    'boutique_id' => $boutiqueId,
+                ]);
 
-            foreach ($validated['ligne_ventes'] as $ligne) {
-                $produit = Produit::findOrFail($ligne['produit_id']);
-                if ($produit->quantite_stock < $ligne['quantite']) {
-                    throw new \RuntimeException('Stock insuffisant pour le produit: ' . $produit->nom);
+                foreach ($validated['ligne_ventes'] as $ligne) {
+                    $produit = $this->produitDeLAboutique($ligne['produit_id'], $boutiqueId);
+                    if ($produit->quantite_stock < $ligne['quantite']) {
+                        throw new OperationRefusee('Stock insuffisant pour le produit: '.$produit->nom);
+                    }
+
+                    LigneVente::create([
+                        'vente_id' => $vente->id,
+                        'produit_id' => $produit->id,
+                        'quantite' => $ligne['quantite'],
+                        'prix_unitaire' => $produit->prix,
+                        'sous_total' => $produit->prix * $ligne['quantite'],
+                    ]);
                 }
 
-                LigneVente::create([
-                    'vente_id' => $vente->id,
-                    'produit_id' => $ligne['produit_id'],
-                    'quantite' => $ligne['quantite'],
-                    'prix_unitaire' => $produit->prix,
-                    'sous_total' => $produit->prix * $ligne['quantite'],
-                ]);
-            }
+                $vente->load(['user', 'ligneVentes.produit', 'client']);
 
-            $vente->load(['user', 'ligneVentes.produit', 'client']);
-
-            return response()->json($vente, 201);
-        });
+                return response()->json($vente, 201);
+            });
+        } catch (OperationRefusee $e) {
+            // 422 : la demande est cohérente mais l'état du stock l'empêche.
+            // Sans ce catch, un stock insuffisant remonte une 500.
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
     }
 
     public function terminer(Request $request, Vente $vente): JsonResponse
     {
         $this->verifierBoutiqueDe($vente);
-
-        if ($vente->statut !== 'en_cours') {
-            return response()->json(['message' => 'Seule une vente en cours peut Ãªtre terminÃ©e.'], 422);
-        }
 
         $validated = $request->validate([
             'mode_paiement' => ['nullable', Rule::in(['especes', 'mtn', 'moov', 'carte'])],
@@ -218,85 +232,171 @@ class VenteController extends Controller
             'banque' => 'nullable|string|max:100',
         ]);
 
-        return DB::transaction(function () use ($vente, $validated, $request) {
-            $montantTotal = (float) $vente->montant_total;
-            $paiement = $this->extraireChampsPaiement(
-                array_merge($validated, ['mode_paiement' => $validated['mode_paiement'] ?? 'especes']),
-                $montantTotal
-            );
-            $vente->update($paiement);
+        try {
+            return DB::transaction(function () use ($vente, $validated, $request) {
+                // Contrôle « en cours » SOUS VERROU, et non avant la transaction.
+                //
+                // Lu dehors, il laissait deux caisses terminer la même vente :
+                // chacune le voyait à « en_cours », sortait le stock et encaissait
+                // le paiement. Le verrou sur le produit ne l'empêchait pas — chaque
+                // transaction relit quantite_stock et applique sa propre sortie.
+                // Le verrou sur la vente est donc la seule exclusion mutuelle de
+                // cette transition, et il la fait refuser en 409 au lieu d'écraser
+                // une annulation concurrente (409 : l'état a changé entre-temps).
+                $verrouillee = Vente::whereKey($vente->id)
+                    ->where('boutique_id', $vente->boutique_id)
+                    ->lockForUpdate()
+                    ->first();
 
-            foreach ($vente->ligneVentes as $ligne) {
-                // Re-lire le produit SOUS VERROU : évite le survente si deux
-                // caisses terminent des ventes sur le même stock simultanément.
-                $produit = Produit::whereKey($ligne->produit_id)->lockForUpdate()->first();
-
-                if (!$produit) {
-                    continue;
+                if (! $verrouillee) {
+                    return response()->json(['message' => 'Vente introuvable.'], 404);
                 }
 
-                if ($produit->quantite_stock < $ligne->quantite) {
-                    throw new \RuntimeException('Stock insuffisant pour: ' . $produit->nom);
+                if ($verrouillee->statut !== 'en_cours') {
+                    return response()->json([
+                        'message' => 'Seule une vente en cours peut être terminée.',
+                    ], 409);
                 }
 
-                $quantiteAvant = $produit->quantite_stock;
-                $quantiteApres = $quantiteAvant - $ligne->quantite;
-                $produit->update(['quantite_stock' => $quantiteApres]);
+                $vente = $verrouillee;
+                $montantTotal = (float) $vente->montant_total;
+                $paiement = $this->extraireChampsPaiement(
+                    array_merge($validated, ['mode_paiement' => $validated['mode_paiement'] ?? 'especes']),
+                    $montantTotal
+                );
+                $vente->update($paiement);
 
-                MouvementStock::create([
-                    'produit_id' => $produit->id,
-                    'quantite' => $ligne->quantite,
-                    'raison' => 'vente',
-                    'type' => 'sortie',
-                    'reference_bon' => (string) $vente->id,
-                    'notes' => 'Sortie de stock pour vente #' . $vente->id,
-                    'user_id' => $request->user()->id,
-                    'statut' => 'accepte',
-                    'quantite_avant' => $quantiteAvant,
-                    'quantite_apres' => $quantiteApres,
-                    'boutique_id' => $vente->boutique_id,
-                ]);
-            }
+                foreach ($vente->ligneVentes as $ligne) {
+                    // Re-lire le produit SOUS VERROU : évite le survente si deux
+                    // caisses terminent des ventes sur le même stock simultanément.
+                    // La contrainte boutique empêche de sortir le stock d'un autre tenant.
+                    $produit = Produit::where('id', $ligne->produit_id)
+                        ->where('boutique_id', $vente->boutique_id)
+                        ->lockForUpdate()
+                        ->first();
 
-            $vente->update(['statut' => 'termine']);
+                    if (! $produit) {
+                        // Ligne pointant hors tenant : on refuse plutôt que d'ignorer
+                        // silencieusement, sinon la vente est encaissée sans sortie de stock.
+                        throw new OperationRefusee('Produit indisponible: #'.$ligne->produit_id);
+                    }
 
-            if ($vente->client_id) {
-                $this->mettreAJourMetriquesClient($vente->client_id);
-            }
+                    if ($produit->quantite_stock < $ligne->quantite) {
+                        throw new OperationRefusee('Stock insuffisant pour: '.$produit->nom);
+                    }
 
-            $vente->load(['user', 'ligneVentes.produit', 'client']);
+                    $quantiteAvant = $produit->quantite_stock;
+                    $quantiteApres = $quantiteAvant - $ligne->quantite;
+                    $produit->update(['quantite_stock' => $quantiteApres]);
 
-            return response()->json($vente);
-        });
+                    MouvementStock::create([
+                        'produit_id' => $produit->id,
+                        'quantite' => $ligne->quantite,
+                        'raison' => 'vente',
+                        'type' => 'sortie',
+                        'reference_bon' => (string) $vente->id,
+                        'notes' => 'Sortie de stock pour vente #'.$vente->id,
+                        'user_id' => $request->user()->id,
+                        'statut' => 'accepte',
+                        'quantite_avant' => $quantiteAvant,
+                        'quantite_apres' => $quantiteApres,
+                        'boutique_id' => $vente->boutique_id,
+                    ]);
+                }
+
+                $vente->update(['statut' => 'termine']);
+
+                if ($vente->client_id) {
+                    $this->mettreAJourMetriquesClient($vente->client_id);
+                }
+
+                $vente->load(['user', 'ligneVentes.produit', 'client']);
+
+                return response()->json($vente);
+            });
+        } catch (OperationRefusee $e) {
+            // 422 : vente cohérente mais stock devenu insuffisant ou produit
+            // retiré du tenant. Sans ce catch, la caisse voit une 500.
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
     }
 
     public function annuler(Vente $vente): JsonResponse
     {
         $this->verifierBoutiqueDe($vente);
 
-        if ($vente->statut === 'annule') {
-            return response()->json(['message' => 'Cette vente est dÃ©jÃ  annulÃ©e.'], 422);
-        }
-
+        // Aucun pré-contrôle « déjà annulée » ici, volontairement.
+        //
+        // Il était lu avant la transaction, donc hors verrou : deux requêtes
+        // simultanées le voyaient toutes deux à « termine » et passaient toutes
+        // les deux. Vente::annuler() relit désormais le statut sous verrou et
+        // refuse en 409 ; ce contrôle fait doublon et, en plus, répondait 422
+        // à un cas que le modèle classe 409 — deux codes pour la même
+        // situation selon que la requête était séquentielle ou concurrente.
+        // Le modèle est désormais l'unique autorité.
         $ancienStatut = $vente->statut;
 
         if ($vente->statut === 'termine') {
-            $delai = BoutiqueSetting::current()->delai_annulation_vente_minutes
+            // Même piège que le taux de TVA : BoutiqueSetting::current() est un
+            // singleton sans boutique_id, donc le délai d'annulation était
+            // celui du premier réglage créé, pour toutes les agences. La table
+            // boutiques porte son propre délai en NOT NULL (défaut 5), on le
+            // lit donc directement.
+            $delai = $vente->boutique?->delai_annulation_vente_minutes
                 ?? config('sgci.delai_annulation_vente_minutes', 5);
 
             if ($delai > 0 && $vente->created_at->diffInMinutes(now()) > $delai) {
                 return response()->json([
-                    'message' => "DÃ©lai d'annulation dÃ©passÃ© ({$delai} minutes).",
+                    'message' => "Délai d'annulation dépassé ({$delai} minutes).",
                 ], 422);
             }
 
-            $vente->annuler();
+            // annuler() travaille sur une instance relue sous verrou et retourne
+            // cette instance. Sans cette réaffectation, on sérialiserait
+            // l'instance d'origine, toujours figée à « termine » : la base
+            // était correcte mais la réponse HTTP et le journal d'audit
+            // annonçaient une vente toujours terminée.
+            $vente = $vente->annuler();
 
             if ($vente->client_id) {
                 $this->mettreAJourMetriquesClient($vente->client_id);
             }
         } else {
-            $vente->update(['statut' => 'annule']);
+            // Une vente « en cours » n'a jamais décrémenté le stock : la
+            // restitution n'a pas à être rejouée, un simple changement de
+            // statut suffit.
+            //
+            // Mais ce chemin doit être protégé exactement comme terminer() : une
+            // mise à jour nue, hors transaction et hors verrou, écrasait le
+            // statut sans regarder ce qu'une opération concurrente venait
+            // d'écrire. Si terminer() validait au même instant, la vente passait
+            // de « termine » à « annule » APRÈS que le stock a été sorti : la
+            // marchandise n'était jamais restituée, et le statut affirmait le
+            // contraire. Sous verrou, « en_cours » est la seule valeur encore
+            // compatible ; tout autre statut est un refus 409.
+            $vente = DB::transaction(function () use ($vente) {
+                $verrouillee = Vente::whereKey($vente->id)
+                    ->where('boutique_id', $vente->boutique_id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $verrouillee) {
+                    throw new OperationRefusee('Vente introuvable.', 404);
+                }
+
+                if ($verrouillee->statut !== 'en_cours') {
+                    throw new OperationRefusee(
+                        $verrouillee->statut === 'annule'
+                            ? Vente::MSG_DEJA_ANNULEE
+                            : 'Vente déjà traitée entre-temps (statut : '.$verrouillee->statut.').',
+                        409
+                    );
+                }
+
+                $verrouillee->update(['statut' => 'annule']);
+
+                return $verrouillee;
+            });
         }
 
         $this->auditUpdate($vente, ['statut' => $ancienStatut]);
@@ -304,7 +404,7 @@ class VenteController extends Controller
         $vente->load(['user', 'ligneVentes.produit', 'client']);
 
         return response()->json([
-            'message' => 'Vente annulÃ©e',
+            'message' => 'Vente annulée',
             'vente' => $vente,
         ]);
     }
@@ -335,7 +435,12 @@ class VenteController extends Controller
 
         $service = app(FacturePdfService::class);
         $vente->load(['user', 'ligneVentes.produit', 'client']);
-        $boutique = BoutiqueSetting::current();
+
+        // L'identité imprimée sur la facture doit être celle de la boutique de
+        // la vente. BoutiqueSetting::current() renvoyait les coordonnées d'une
+        // boutique unique, donc toutes les factures portaient le même en-tête.
+        // pourModele() est le point de résolution partagé avec FacturePdfService.
+        $boutique = BoutiqueSetting::pourModele($vente);
 
         return response()->json([
             'boutique' => [
@@ -425,20 +530,32 @@ class VenteController extends Controller
 
     private function validateVentePayload(Request $request, bool $requirePaiement = true): array
     {
-        return $request->validate(array_merge([
+        // Isolation multi-boutiques : les produits et le client cités doivent
+        // appartenir à la boutique courante. Sans cette contrainte, un caissier
+        // de la boutique B encaisse les produits de la boutique A et décrémente
+        // son stock tout en estampillant la vente en boutique B.
+        $boutiqueId = $request->user()->current_boutique_id;
+
+        return $request->validate([
             'ligne_ventes' => 'required|array|min:1',
-            'ligne_ventes.*.produit_id' => 'required|exists:produits,id',
+            'ligne_ventes.*.produit_id' => [
+                'required',
+                Rule::exists('produits', 'id')->where(fn ($q) => $q->where('boutique_id', $boutiqueId)),
+            ],
             'ligne_ventes.*.quantite' => 'required|integer|min:1',
             'remise' => 'sometimes|numeric|min:0',
             'notes' => 'nullable|string|max:1000',
-            'client_id' => 'nullable|exists:clients,id',
+            'client_id' => [
+                'nullable',
+                Rule::exists('clients', 'id')->where(fn ($q) => $q->where('boutique_id', $boutiqueId)),
+            ],
             'mode_paiement' => ['nullable', Rule::in(['especes', 'mtn', 'moov', 'carte'])],
             'montant_recu' => 'nullable|numeric|min:0',
             'monnaie_rendue' => 'nullable|numeric|min:0',
             'numero_transaction' => 'nullable|string|max:100',
             'reference_carte' => 'nullable|string|max:100',
             'banque' => 'nullable|string|max:100',
-        ], $requirePaiement ? [] : []));
+        ]);
     }
 
     private function extraireChampsPaiement(array $validated, float $montantTotal): array
@@ -463,14 +580,14 @@ class VenteController extends Controller
         ];
     }
 
-    private function calculerMontantTotal(array $lignes, float $remise): float
+    private function calculerMontantTotal(array $lignes, float $remise, ?int $boutiqueId = null): float
     {
         $montantTotal = 0;
 
         foreach ($lignes as $ligne) {
-            $produit = Produit::findOrFail($ligne['produit_id']);
+            $produit = $this->produitDeLAboutique($ligne['produit_id'], $boutiqueId);
             if ($produit->quantite_stock < $ligne['quantite']) {
-                throw new \RuntimeException('Stock insuffisant pour le produit: ' . $produit->nom);
+                throw new OperationRefusee('Stock insuffisant pour le produit: '.$produit->nom);
             }
             $montantTotal += $produit->prix * $ligne['quantite'];
         }
@@ -478,11 +595,40 @@ class VenteController extends Controller
         return max(0, $montantTotal - $remise);
     }
 
+    /**
+     * Charge un produit en refusant explicitement tout produit d'un autre
+     * tenant. La validation de payload a déjà rejeté ces ids, mais on
+     * re-vérifie ici car ces helpers sont appelés aussi hors du cycle
+     * validé (batch offline) et la ligne pourrait venir d'un autre tenant.
+     */
+    private function produitDeLAboutique(int $produitId, ?int $boutiqueId): Produit
+    {
+        $produit = Produit::where('id', $produitId)
+            ->where('boutique_id', $boutiqueId)
+            ->first();
+
+        if (! $produit) {
+            throw new OperationRefusee('Produit indisponible: #'.$produitId);
+        }
+
+        return $produit;
+    }
+
     private function creerLignesEtMouvementsStock(Vente $vente, array $lignes, int $userId): void
     {
+        $boutiqueId = (int) $vente->boutique_id;
+
         foreach ($lignes as $ligne) {
             // Verrou pessimiste : sérialise les sorties de stock concurrentes
-            $produit = Produit::whereKey($ligne['produit_id'])->lockForUpdate()->firstOrFail();
+            $produit = Produit::where('id', $ligne['produit_id'])
+                ->where('boutique_id', $boutiqueId)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $produit) {
+                throw new OperationRefusee('Produit indisponible: #'.$ligne['produit_id']);
+            }
+
             $prixUnitaire = $produit->prix;
 
             LigneVente::create([
@@ -497,7 +643,7 @@ class VenteController extends Controller
             $quantiteApres = $quantiteAvant - $ligne['quantite'];
 
             if ($quantiteApres < 0) {
-                throw new \RuntimeException('Erreur stock pour: ' . $produit->nom);
+                throw new OperationRefusee('Erreur stock pour: '.$produit->nom);
             }
 
             $produit->update(['quantite_stock' => $quantiteApres]);
@@ -508,7 +654,7 @@ class VenteController extends Controller
                 'raison' => 'vente',
                 'type' => 'sortie',
                 'reference_bon' => (string) $vente->id,
-                'notes' => 'Sortie de stock pour vente #' . $vente->id,
+                'notes' => 'Sortie de stock pour vente #'.$vente->id,
                 'user_id' => $userId,
                 'statut' => 'accepte',
                 'quantite_avant' => $quantiteAvant,
@@ -518,10 +664,23 @@ class VenteController extends Controller
         }
     }
 
-    private function tauxTva(): float
+    /**
+     * Taux de TVA de la boutique courante.
+     *
+     * La table boutiques porte taux_tva en NOT NULL avec un défaut de 18.00 :
+     * le repli sur BoutiqueSetting::current() était donc inutile, et surtout
+     * illegitimate — ce singleton renvoyait le taux d'une autre agence, et son
+     * firstOrCreate([]) insérait une ligne depuis une simple lecture.
+     */
+    private function tauxTva(?int $boutiqueId = null): float
     {
-        $settings = BoutiqueSetting::current();
-        $taux = $settings->taux_tva ?? 18;
+        $boutiqueId ??= auth()->user()?->current_boutique_id;
+
+        $taux = $boutiqueId
+            ? Boutique::where('id', $boutiqueId)->value('taux_tva')
+            : null;
+
+        $taux ??= 18;
 
         return $taux > 1 ? $taux / 100 : (float) $taux;
     }
@@ -546,7 +705,7 @@ class VenteController extends Controller
                 ]);
             }
         } catch (\Exception $e) {
-            Log::error('Mise Ã  jour mÃ©triques client', [
+            Log::error('Mise à jour métriques client', [
                 'client_id' => $clientId,
                 'error' => $e->getMessage(),
             ]);
@@ -555,20 +714,29 @@ class VenteController extends Controller
 
     public function syncOfflineBatch(Request $request): JsonResponse
     {
+        $boutiqueId = $request->user()->current_boutique_id;
+
         $validated = $request->validate([
             'ventes' => 'required|array|min:1|max:100',
             'ventes.*.ligne_ventes' => 'required|array|min:1',
-            'ventes.*.ligne_ventes.*.produit_id' => 'required|exists:produits,id',
+            'ventes.*.ligne_ventes.*.produit_id' => [
+                'required',
+                Rule::exists('produits', 'id')->where(fn ($q) => $q->where('boutique_id', $boutiqueId)),
+            ],
             'ventes.*.ligne_ventes.*.quantite' => 'required|integer|min:1',
             'ventes.*.remise' => 'sometimes|numeric|min:0',
             'ventes.*.notes' => 'nullable|string|max:1000',
-            'ventes.*.client_id' => 'nullable|exists:clients,id',
+            'ventes.*.client_id' => [
+                'nullable',
+                Rule::exists('clients', 'id')->where(fn ($q) => $q->where('boutique_id', $boutiqueId)),
+            ],
             'ventes.*.mode_paiement' => ['nullable', Rule::in(['especes', 'mtn', 'moov', 'carte'])],
             'ventes.*.montant_recu' => 'nullable|numeric|min:0',
             'ventes.*.numero_transaction' => 'nullable|string|max:100',
             'ventes.*.reference_carte' => 'nullable|string|max:100',
             'ventes.*.banque' => 'nullable|string|max:100',
             'ventes.*.created_at' => 'nullable|date',
+            'ventes.*.idempotency_key' => 'nullable|string|max:100',
         ]);
 
         $results = [];
@@ -579,9 +747,48 @@ class VenteController extends Controller
 
         try {
             foreach ($validated['ventes'] as $index => $venteData) {
+                // Savepoint par vente : si la ligne 3 échoue, les ventes 1 et 2
+                // du lot restent valides et les écritures partielles de la
+                // vente 3 (vente créée, stock déjà décrémenté) sont annulées.
+                DB::beginTransaction();
+
                 try {
-                    $montantTotal = $this->calculerMontantTotal($venteData['ligne_ventes'], $venteData['remise'] ?? 0);
-                    $tauxTva = $this->tauxTva();
+                    // Rejeu d'une vente déjà synchronisée : si le client fournit
+                    // une clé d'idempotence déjà enregistrée pour cette boutique,
+                    // on renvoie la vente existante au lieu d'en créer une
+                    // seconde. Sans cela, un rejeu réseau du même lot recréait
+                    // des ventes « termine » et décrémentait le stock une
+                    // nouvelle fois — la perte d'unités la plus silencieuse du
+                    // mode hors-ligne.
+                    $cleIdempotence = $venteData['idempotency_key'] ?? null;
+
+                    if ($cleIdempotence) {
+                        $existante = Vente::where('boutique_id', $boutiqueId)
+                            ->where('idempotency_key', $cleIdempotence)
+                            ->first();
+
+                        if ($existante) {
+                            $existante->load(['user', 'ligneVentes.produit', 'client']);
+
+                            $results[] = [
+                                'index' => $index,
+                                'success' => true,
+                                'vente' => $existante,
+                                'idempotent' => true,
+                            ];
+                            $succes++;
+                            DB::commit();
+
+                            continue;
+                        }
+                    }
+
+                    $montantTotal = $this->calculerMontantTotal(
+                        $venteData['ligne_ventes'],
+                        $venteData['remise'] ?? 0,
+                        $boutiqueId,
+                    );
+                    $tauxTva = $this->tauxTva($boutiqueId);
 
                     $vente = Vente::create(array_merge(
                         $this->extraireChampsPaiement($venteData, $montantTotal),
@@ -595,6 +802,7 @@ class VenteController extends Controller
                             'tva' => round($montantTotal * $tauxTva, 2),
                             'created_at' => $venteData['created_at'] ?? now(),
                             'boutique_id' => $request->user()->current_boutique_id,
+                            'idempotency_key' => $cleIdempotence,
                         ]
                     ));
 
@@ -612,7 +820,10 @@ class VenteController extends Controller
                         'vente' => $vente,
                     ];
                     $succes++;
+                    DB::commit();
                 } catch (\Exception $e) {
+                    DB::rollBack();
+
                     $results[] = [
                         'index' => $index,
                         'success' => false,
@@ -629,7 +840,7 @@ class VenteController extends Controller
             DB::commit();
 
             return response()->json([
-                'message' => "Synchronisation terminÃ©e: {$succes} succÃ¨s, {$echecs} Ã©checs",
+                'message' => "Synchronisation terminée: {$succes} succès, {$echecs} échecs",
                 'succes' => $succes,
                 'echecs' => $echecs,
                 'results' => $results,

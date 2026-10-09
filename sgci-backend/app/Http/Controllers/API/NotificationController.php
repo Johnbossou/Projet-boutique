@@ -11,13 +11,25 @@ use Illuminate\Http\Request;
 
 class NotificationController extends Controller
 {
+    /**
+     * Filtre les notifications auxquelles l'utilisateur a droit.
+     *
+     * Les notifications sont toujours adressées à un destinataire précis
+     * (PeremptionService, StockAlertService, WorkflowNotificationService et
+     * generateStockAlerts remplissent tous user_id). Aucune n'est diffusée à
+     * « tout le monde » : la lecture des lignes où user_id est NULL revenait
+     * donc à exposer les notifications d'autres comptes, y compris le nom de
+     * produits, le stock et les seuils d'autres boutiques.
+     */
+    private function notificationsVisibles(Request $request)
+    {
+        return AppNotification::query()
+            ->where('user_id', $request->user()->id);
+    }
+
     public function index(Request $request): JsonResponse
     {
-        $query = AppNotification::query()
-            ->where(function ($q) use ($request) {
-                $q->whereNull('user_id')
-                    ->orWhere('user_id', $request->user()->id);
-            })
+        $query = $this->notificationsVisibles($request)
             ->orderByDesc('created_at');
 
         if ($request->boolean('unread_only')) {
@@ -29,18 +41,19 @@ class NotificationController extends Controller
 
     public function unreadCount(Request $request): JsonResponse
     {
-        $count = AppNotification::query()
-            ->unread()
-            ->where(function ($q) use ($request) {
-                $q->whereNull('user_id')->orWhere('user_id', $request->user()->id);
-            })
-            ->count();
+        $count = $this->notificationsVisibles($request)->unread()->count();
 
         return response()->json(['count' => $count]);
     }
 
-    public function markRead(AppNotification $notification): JsonResponse
+    public function markRead(Request $request, AppNotification $notification): JsonResponse
     {
+        // Sans ce contrôle, un identifiant deviné suffisait à lire et modifier
+        // la notification d'un autre compte (IDOR).
+        if ($notification->user_id !== $request->user()->id) {
+            return response()->json(['message' => 'Notification introuvable'], 404);
+        }
+
         $notification->update(['read_at' => now()]);
 
         return response()->json(['message' => 'Notification lue', 'notification' => $notification]);
@@ -48,11 +61,8 @@ class NotificationController extends Controller
 
     public function markAllRead(Request $request): JsonResponse
     {
-        AppNotification::query()
+        $this->notificationsVisibles($request)
             ->unread()
-            ->where(function ($q) use ($request) {
-                $q->whereNull('user_id')->orWhere('user_id', $request->user()->id);
-            })
             ->update(['read_at' => now()]);
 
         return response()->json(['message' => 'Toutes les notifications sont lues']);
@@ -66,7 +76,7 @@ class NotificationController extends Controller
         $user = $request->user();
         $role = $user->roleDansBoutique($user->current_boutique_id);
 
-        if (!in_array($role, ['gerant', 'proprietaire'], true)) {
+        if (! in_array($role, ['gerant', 'proprietaire'], true)) {
             return response()->json(['message' => 'Réservé au gérant'], 403);
         }
 
@@ -78,25 +88,33 @@ class NotificationController extends Controller
         ]);
     }
 
-    public static function generateStockAlerts(?int $boutiqueId = null): int
+    /**
+     * Crée les notifications de stock bas et de rupture.
+     *
+     * $boutiqueId est obligatoire : croiser « tous les gérants de toutes les
+     * boutiques » avec « tous les produits de toutes les boutiques » expédiait
+     * à chaque gérant le nom, le stock et le seuil des produits des autres
+     * tenants. La commande planifiée toutes les heures appelait précisément ce
+     * cas global.
+     */
+    public static function generateStockAlerts(int $boutiqueId): int
     {
+        $gerants = User::where('role', 'gerant')
+            ->where('est_actif', true)
+            ->whereHas('boutiques', function ($q) use ($boutiqueId) {
+                $q->where('boutiques.id', $boutiqueId);
+            })
+            ->pluck('id');
+
+        if ($gerants->isEmpty()) {
+            return 0;
+        }
+
+        $alertes = Produit::enAlerte()->where('boutique_id', $boutiqueId)->with('categorie')->get();
+        $ruptures = Produit::enRupture()->where('boutique_id', $boutiqueId)->get();
+
         $created = 0;
 
-        if ($boutiqueId) {
-            $gerants = User::where('role', 'gerant')
-                ->where('est_actif', true)
-                ->whereHas('boutiques', function ($q) use ($boutiqueId) {
-                    $q->where('boutiques.id', $boutiqueId);
-                })
-                ->pluck('id');
-
-            $alertes = Produit::enAlerte()->where('boutique_id', $boutiqueId)->with('categorie')->get();
-            $ruptures = Produit::enRupture()->where('boutique_id', $boutiqueId)->get();
-        } else {
-            $gerants = User::where('role', 'gerant')->where('est_actif', true)->pluck('id');
-            $alertes = Produit::enAlerte()->with('categorie')->get();
-            $ruptures = Produit::enRupture()->get();
-        }
         foreach ($alertes as $produit) {
             foreach ($gerants as $userId) {
                 $exists = AppNotification::where('user_id', $userId)
@@ -105,13 +123,15 @@ class NotificationController extends Controller
                     ->where('data->produit_id', $produit->id)
                     ->exists();
 
-                if (!$exists) {
+                if (! $exists) {
                     AppNotification::create([
                         'user_id' => $userId,
                         'type' => 'stock_alerte',
-                        'title' => 'Stock bas : ' . $produit->nom,
+                        'title' => 'Stock bas : '.$produit->nom,
                         'message' => "Il reste {$produit->quantite_stock} unités (seuil {$produit->seuil_alerte}).",
-                        'data' => ['produit_id' => $produit->id],
+                        // boutique_id est indispensable : MouvementStockController
+                        // ne résout une alerte obsolète que s'il est présent.
+                        'data' => ['produit_id' => $produit->id, 'boutique_id' => $boutiqueId],
                     ]);
                     $created++;
                 }
@@ -126,13 +146,13 @@ class NotificationController extends Controller
                     ->where('data->produit_id', $produit->id)
                     ->exists();
 
-                if (!$exists) {
+                if (! $exists) {
                     AppNotification::create([
                         'user_id' => $userId,
                         'type' => 'stock_rupture',
-                        'title' => 'Rupture : ' . $produit->nom,
+                        'title' => 'Rupture : '.$produit->nom,
                         'message' => 'Produit en rupture de stock.',
-                        'data' => ['produit_id' => $produit->id],
+                        'data' => ['produit_id' => $produit->id, 'boutique_id' => $boutiqueId],
                     ]);
                     $created++;
                 }

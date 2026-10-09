@@ -1,13 +1,16 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { FileText, Download, FileX2, Loader2 } from 'lucide-react';
+import { FileText, Download, FileX2, Loader2, Check, X, ShoppingCart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { EmptyState } from '@/components/EmptyState';
 import { apiFetch } from '@/lib/api-client';
+import { lireErreurApi } from '@/lib/api-errors';
+import { getEffectiveRole, canGerer } from '@/lib/role';
+import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 
 interface Devis {
@@ -20,6 +23,7 @@ interface Devis {
   notes: string | null;
   client: { id: number; nom: string } | null;
   user: { id: number; name: string } | null;
+  commande_client?: { id: number; numero_commande: string } | null;
   lignes: Array<{
     id: number;
     quantite: number;
@@ -43,9 +47,13 @@ const STATUT_LABELS: Record<string, string> = {
 };
 
 export default function DevisPage() {
+  const { user } = useAuth();
+  const userPeutGerer = canGerer(user, getEffectiveRole(user));
+
   const [devis, setDevis] = useState<Devis[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filtreStatut, setFiltreStatut] = useState('all');
+  const [actionEnCours, setActionEnCours] = useState<number | null>(null);
 
   const chargerDevis = useCallback(async () => {
     setIsLoading(true);
@@ -65,6 +73,43 @@ export default function DevisPage() {
   }, [filtreStatut]);
 
   useEffect(() => { chargerDevis(); }, [chargerDevis]);
+
+  /**
+   * Appelle une action de cycle de vie du devis et recharge la liste.
+   *
+   * Le backend répond 409 quand l'action est refusée pour cause d'état
+   * (devis déjà converti, statut incompatible). C'est un conflit métier
+   * attendu, pas une panne : le message du serveur est affiché tel quel
+   * plutôt qu'un « Erreur HTTP 409 ».
+   */
+  const appelerAction = async (d: Devis, action: string, succes: string) => {
+    setActionEnCours(d.id);
+    try {
+      const res = await apiFetch(`/devis/${d.id}/${action}`, { method: 'POST' });
+
+      if (res.ok) {
+        toast.success(succes);
+        await chargerDevis();
+        return;
+      }
+
+      let message = `Erreur HTTP ${res.status}`;
+      try {
+        message = lireErreurApi(await res.json()) ?? message;
+      } catch {
+        // Réponse sans corps JSON : on garde le message par défaut.
+      }
+      toast.error(message);
+    } catch {
+      toast.error('Erreur réseau');
+    } finally {
+      setActionEnCours(null);
+    }
+  };
+
+  const accepter = (d: Devis) => appelerAction(d, 'accepter', 'Devis accepté');
+  const refuser = (d: Devis) => appelerAction(d, 'refuser', 'Devis refusé');
+  const convertir = (d: Devis) => appelerAction(d, 'convertir-commande', 'Commande créée depuis le devis');
 
   const telechargerPdf = async (d: Devis) => {
     try {
@@ -155,9 +200,58 @@ export default function DevisPage() {
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">{new Date(d.date_devis).toLocaleDateString('fr-FR')}</TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" onClick={() => telechargerPdf(d)} title="Télécharger PDF">
-                        <Download className="w-4 h-4" />
-                      </Button>
+                      <div className="flex items-center justify-end gap-1">
+                        {userPeutGerer && d.statut === 'en_attente' && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => accepter(d)}
+                              disabled={actionEnCours === d.id}
+                              title="Accepter le devis"
+                            >
+                              <Check className="w-4 h-4 text-green-600" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => refuser(d)}
+                              disabled={actionEnCours === d.id}
+                              title="Refuser le devis"
+                            >
+                              <X className="w-4 h-4 text-red-600" />
+                            </Button>
+                          </>
+                        )}
+
+                        {userPeutGerer && d.statut === 'accepte' && !d.commande_client && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => convertir(d)}
+                            disabled={actionEnCours === d.id}
+                            title="Convertir en commande"
+                          >
+                            {actionEnCours === d.id
+                              ? <Loader2 className="w-4 h-4 animate-spin" />
+                              : <ShoppingCart className="w-4 h-4" />}
+                            Convertir
+                          </Button>
+                        )}
+
+                        {d.commande_client && (
+                          <span
+                            className="text-xs text-muted-foreground font-mono"
+                            title={`Commande ${d.commande_client.numero_commande}`}
+                          >
+                            {d.commande_client.numero_commande}
+                          </span>
+                        )}
+
+                        <Button variant="ghost" size="sm" onClick={() => telechargerPdf(d)} title="Télécharger PDF">
+                          <Download className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
