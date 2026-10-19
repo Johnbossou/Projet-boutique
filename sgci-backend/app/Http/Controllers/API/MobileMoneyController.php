@@ -6,9 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Models\CommandeClient;
 use App\Models\Paiement;
 use App\Services\MobileMoneyService;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
@@ -82,70 +84,110 @@ class MobileMoneyController extends Controller
             ]);
         }
 
-        // Le montant est crédité tel quel au montant_paye de la commande : un
-        // montant supérieur au reste à payer gonflait le total payé au-delà
-        // de la commande et faisait passer estPayee() sur une commande
-        // surpayée. Une commande annulée ne se règle pas.
-        $commande = null;
-
-        if (! empty($validated['commande_client_id'])) {
-            $commande = CommandeClient::find($validated['commande_client_id']);
-
-            if ($commande->statut === 'annule') {
-                return response()->json([
-                    'message' => 'Impossible de payer une commande annulée',
-                ], 400);
-            }
-
-            $reste = (float) $commande->montant_restant;
-
-            if ((float) $validated['amount'] > $reste + 0.001) {
-                return response()->json([
-                    'message' => 'Le montant dépasse le reste à payer de la commande',
-                    'reste_a_payer' => round($reste, 2),
-                ], 400);
-            }
-        }
-
         // Mettre à jour le service avec le bon fournisseur
         $this->mobileMoneyService = new MobileMoneyService($provider);
 
-        // Créer un enregistrement de paiement. numero_paiement est laissé vide :
-        // Paiement::boot() l'alloue via le séquenceur sous verrou.
+        // La vérification du reste à payer et la création de la ligne forment
+        // une section critique par commande : les paiements « en_attente » sont
+        // des réservations, leur somme immobilise la dette. Sans ce mutex, deux
+        // initiations (deux clés d'idempotence distinctes, ou deux double-taps)
+        // lisaient le même reste, le laissaient passer toutes les deux, puis le
+        // prestataire débitait deux fois — et les callbacks créditaient
+        // montant_paye au-delà de montant_total. La commande était payée deux
+        // fois pour une dette unique.
+        //
+        // Le verrou est porté par le cache (store « database » en production) :
+        // il est partagé entre les workers, contrairement à un verrou purement
+        // in-process. On ne l'ouvre que lorsqu'une commande est rattachée, seul
+        // cas où une réservation a un sens.
+        $verrou = ! empty($validated['commande_client_id'])
+            ? Cache::lock('momo:reservation:commande:'.$validated['commande_client_id'], 10)
+            : null;
+
+        if ($verrou) {
+            try {
+                $verrou->block(5);
+            } catch (LockTimeoutException) {
+                return response()->json([
+                    'message' => 'Un paiement est déjà en cours pour cette commande.',
+                ], 409);
+            }
+        }
+
         try {
-            $paiement = Paiement::create([
-                'idempotency_key' => $validated['idempotency_key'] ?? null,
-                'commande_client_id' => $validated['commande_client_id'] ?? null,
-                'boutique_id' => $request->user()->current_boutique_id,
-                'montant' => $validated['amount'],
-                'mode_paiement' => 'mobile_money_'.$provider,
-                'telephone' => $validated['phone_number'],
-                'date_paiement' => now(),
-                'statut' => 'en_attente',
-                'user_id' => $request->user()->id,
-            ]);
-        } catch (QueryException $e) {
-            // Deux requêtes portant la même clé peuvent passer la lecture
-            // préalable en même temps : c'est l'index UNIQUE qui tranche.
-            // La perdante ne doit pas remonter une 500 — elle rend le
-            // paiement déjà créé, comme un rejeu.
-            if (! $this->estViolationCleIdempotence($e)) {
-                throw $e;
+            if (! empty($validated['commande_client_id'])) {
+                // Relecture scopée boutique : la contrainte de validation
+                // garantit déjà le tenant, mais le contrôle monétaire ne doit
+                // pas dépendre d'une entité potentiellement obsolète.
+                $commande = CommandeClient::where('id', $validated['commande_client_id'])
+                    ->where('boutique_id', $request->user()->current_boutique_id)
+                    ->first();
+
+                if (! $commande) {
+                    return response()->json(['message' => 'Commande introuvable.'], 404);
+                }
+
+                if ($commande->statut === 'annule') {
+                    return response()->json([
+                        'message' => 'Impossible de payer une commande annulée',
+                    ], 400);
+                }
+
+                // Reste à payer = dette restante MOINS ce qui est déjà réservé
+                // par des paiements en attente.
+                $reserve = (float) Paiement::where('commande_client_id', $commande->id)
+                    ->where('statut', 'en_attente')
+                    ->sum('montant');
+
+                $reste = (float) $commande->montant_restant - $reserve;
+
+                if ((float) $validated['amount'] > $reste + 0.001) {
+                    return response()->json([
+                        'message' => 'Le montant dépasse le reste à payer de la commande',
+                        'reste_a_payer' => round($reste, 2),
+                    ], 400);
+                }
             }
 
-            $existant = Paiement::where('boutique_id', $request->user()->current_boutique_id)
-                ->where('idempotency_key', $validated['idempotency_key'])
-                ->first();
+            // numero_paiement est laissé vide : Paiement::boot() l'alloue via
+            // le séquenceur sous verrou.
+            try {
+                $paiement = Paiement::create([
+                    'idempotency_key' => $validated['idempotency_key'] ?? null,
+                    'commande_client_id' => $validated['commande_client_id'] ?? null,
+                    'boutique_id' => $request->user()->current_boutique_id,
+                    'montant' => $validated['amount'],
+                    'mode_paiement' => 'mobile_money_'.$provider,
+                    'telephone' => $validated['phone_number'],
+                    'date_paiement' => now(),
+                    'statut' => 'en_attente',
+                    'user_id' => $request->user()->id,
+                ]);
+            } catch (QueryException $e) {
+                // Deux requêtes portant la même clé peuvent passer la lecture
+                // préalable en même temps : c'est l'index UNIQUE qui tranche.
+                // La perdante ne doit pas remonter une 500 — elle rend le
+                // paiement déjà créé, comme un rejeu.
+                if (! $this->estViolationCleIdempotence($e)) {
+                    throw $e;
+                }
 
-            if (! $existant) {
-                throw $e;
+                $existant = Paiement::where('boutique_id', $request->user()->current_boutique_id)
+                    ->where('idempotency_key', $validated['idempotency_key'])
+                    ->first();
+
+                if (! $existant) {
+                    throw $e;
+                }
+
+                return response()->json([
+                    'message' => 'Paiement déjà initié',
+                    'idempotent' => true,
+                    'data' => ['paiement' => $existant],
+                ]);
             }
-
-            return response()->json([
-                'message' => 'Paiement déjà initié',
-                'idempotent' => true,
-                'data' => ['paiement' => $existant],
-            ]);
+        } finally {
+            $verrou?->release();
         }
 
         // Initier le paiement

@@ -527,6 +527,23 @@ class MouvementStockController extends Controller
                     throw new OperationRefusee('Ce mouvement a déjà été traité', 409);
                 }
 
+                // Ordre de verrouillage global « commande → produit », identique
+                // à CommandeFournisseurController::receptionner(). Un arrivage
+                // direct (ce chemin) et une réception fournisseur peuvent porter
+                // sur la même commande : reporterSurCommandeFournisseur() met à
+                // jour ses lignes, et sans verrou préalable sur la commande les
+                // deux incréments de quantite_recue se perdaient (lost update),
+                // laissant la commande bloquée en « en_cours ». Verrouiller la
+                // commande APRÈS le produit inverserait l'ordre face à
+                // receptionner() et créerait un interblocage : on la verrouille
+                // donc impérativement avant le produit.
+                if ($mouvementVerrouille->commande_fournisseur_id) {
+                    CommandeFournisseur::where('id', $mouvementVerrouille->commande_fournisseur_id)
+                        ->where('boutique_id', $mouvementVerrouille->boutique_id)
+                        ->lockForUpdate()
+                        ->first();
+                }
+
                 // Idem pour le stock : sans verrou, deux sorties partantes
                 // lisaient le même quantite_stock, passaient toutes deux la
                 // garde « < 0 » et écrivaient la même valeur absolue. Le stock
