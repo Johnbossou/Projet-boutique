@@ -8,6 +8,16 @@ module.exports = defineConfig([
     ignores: ['dist/*'],
   },
   {
+    // Le setup Jest est un .js, pas un *.test.js : sans ce bloc, le global
+    // `jest` n'est pas déclaré et le lint s'arrête sur `no-undef`.
+    files: ['jest.setup.js', 'jest.config.js'],
+    languageOptions: {
+      globals: {
+        jest: 'readonly',
+      },
+    },
+  },
+  {
     rules: {
       'react/no-unescaped-entities': 'off',
     },
