@@ -9,12 +9,16 @@ use App\Http\Controllers\Controller;
 use App\Models\Boutique;
 use App\Models\BoutiqueSetting;
 use App\Models\Client;
+use App\Models\ClientFidelite;
 use App\Models\LigneVente;
 use App\Models\MouvementStock;
 use App\Models\Produit;
+use App\Models\ProgrammeFidelite;
+use App\Models\TransactionPoints;
 use App\Models\Vente;
 use App\Services\FacturePdfService;
 use App\Traits\Auditable;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -111,6 +115,7 @@ class VenteController extends Controller
 
                 if ($vente->client_id) {
                     $this->mettreAJourMetriquesClient($vente->client_id);
+                    $this->synchroniserPointsFidelite($vente);
                 }
 
                 $vente->load(['user', 'ligneVentes.produit', 'client']);
@@ -308,6 +313,7 @@ class VenteController extends Controller
 
                 if ($vente->client_id) {
                     $this->mettreAJourMetriquesClient($vente->client_id);
+                    $this->synchroniserPointsFidelite($vente);
                 }
 
                 $vente->load(['user', 'ligneVentes.produit', 'client']);
@@ -360,6 +366,10 @@ class VenteController extends Controller
 
             if ($vente->client_id) {
                 $this->mettreAJourMetriquesClient($vente->client_id);
+                // Vente passée à « annule » par le modèle : les points de
+                // l'achat sont repris ici (l'annulation d'une vente en cours,
+                // jamais créditée, est un no-op).
+                $this->synchroniserPointsFidelite($vente);
             }
         } else {
             // Une vente « en cours » n'a jamais décrémenté le stock : la
@@ -712,6 +722,150 @@ class VenteController extends Controller
         }
     }
 
+    /**
+     * Crédite les points fidélité d'une vente terminée, ou les reprend si elle
+     * est annulée.
+     *
+     * Le programme `points_par_achat` était paramétrable depuis l'UI mais
+     * jamais appliqué : seul le retrait à la réclamation de récompense
+     * existait. Un achat ne créditant rien, le programme était inerte — c'est
+     * le périmètre acté : crédit à chaque vente finalisée (libellé UI
+     * « pts/achat »), un montant fixe par vente, pas un taux sur le montant.
+     *
+     * Deux propriétés font la sûreté du calcul :
+     *
+     * - idempotence par la vente : chaque transaction porte `vente_id`. Le
+     *   crédit n'a lieu qu'au absence de transaction « gain » pour la vente, la
+     *   reprise qu'en absence de « retrait ». Rejouer store/sync-offline ou
+     *   terminer ne crédite donc jamais deux fois ;
+     * - lecture sous verrou : `lockForUpdate()` sur la vente sérialise avec
+     *   terminer()/annuler() (aussi exécutés sous verrou), le verrou sur le
+     *   compte client empêche deux ventes simultanées d'incrémenter le même
+     *   solde au même endroit.
+     *
+     * Transaction imbriquée (savepoint) volontaire : depuis store(),
+     * terminer() ou syncOfflineBatch() on est déjà dans une transaction
+     * englobante ; depuis annuler() — la transaction du modèle est close — il
+     * faut en ouvrir une, sinon le verrou de la vente serait relâché en
+     * autocommit à la fin du SELECT et ne sérialiserait rien.
+     *
+     * Jamais d'exception : une vente ne doit pas échouer pour un point de
+     * fidélité (syncOfflineBatch() ferait échouer l'item de lot). Un échec est
+     * journalisé, comme dans `mettreAJourMetriquesClient()`.
+     */
+    private function synchroniserPointsFidelite(Vente $vente): void
+    {
+        try {
+            DB::transaction(function () use ($vente) {
+                if (! $vente->client_id) {
+                    return;
+                }
+
+                $verrouillee = Vente::whereKey($vente->id)->lockForUpdate()->first();
+
+                if (! $verrouillee
+                    || ! $verrouillee->client_id
+                    || ! in_array($verrouillee->statut, ['termine', 'annule'], true)) {
+                    return;
+                }
+
+                // Programmes de la seule boutique de la vente : le programme
+                // d'une autre agence ne crédite pas un autre tenant.
+                $programme = ProgrammeFidelite::where('boutique_id', $verrouillee->boutique_id)
+                    ->where('actif', true)
+                    ->first();
+
+                if (! $programme) {
+                    return;
+                }
+
+                $compte = ClientFidelite::where('programme_fidelite_id', $programme->id)
+                    ->where('client_id', $verrouillee->client_id)
+                    ->lockForUpdate()
+                    ->first();
+
+                $gain = TransactionPoints::where('vente_id', $verrouillee->id)
+                    ->where('type', 'gain')
+                    ->first();
+
+                if ($verrouillee->statut === 'termine') {
+                    if ($gain) {
+                        return;
+                    }
+
+                    $compte ??= $this->inscrireAuProgrammeFidelite($programme, $verrouillee->client_id);
+
+                    $compte->ajouterPoints(
+                        (int) $programme->points_par_achat,
+                        'Achat vente #'.$verrouillee->id,
+                        $verrouillee
+                    );
+
+                    return;
+                }
+
+                // Annulée : le client ne garde pas les points d'un achat
+                // remboursé — sinon « acheter puis annuler » farme des points à
+                // l'infini. On ne reprend que les points de CETTE vente.
+                if (! $gain || ! $compte) {
+                    return;
+                }
+
+                if (TransactionPoints::where('vente_id', $verrouillee->id)
+                    ->where('type', 'retrait')
+                    ->exists()) {
+                    return;
+                }
+
+                // Le client a pu dépenser ses points entre le crédit et
+                // l'annulation : retirerPoints() refuse un retrait supérieur au
+                // solde, ce qui ferait échouer l'annulation pour un point déjà
+                // consommé. On borne au solde disponible ; la transaction
+                // enregistrée reflète ce qui a réellement été repris.
+                $reprise = min($compte->points, (int) $gain->points);
+
+                $compte->retirerPoints($reprise, 'Annulation vente #'.$verrouillee->id, $verrouillee);
+
+                // Contrairement à ajouterPoints(), retirerPoints() ne recalcule
+                // pas le niveau : sans cela le client resterait à son ancien
+                // rang après avoir perdu les points qui le fondaient.
+                $compte->mettreAJourNiveau();
+            });
+        } catch (\Exception $e) {
+            Log::error('Points fidélité vente', [
+                'vente_id' => $vente->id,
+                'statut' => $vente->statut,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Inscrit au programme un client qui achète avant toute inscription
+     * explicite : sans auto-inscription, seuls les clients déjà inscrits
+     * accumuleraient des points et le crédit à l'achat resterait inopérant.
+     */
+    private function inscrireAuProgrammeFidelite(ProgrammeFidelite $programme, int $clientId): ClientFidelite
+    {
+        try {
+            return ClientFidelite::create([
+                'programme_fidelite_id' => $programme->id,
+                'client_id' => $clientId,
+                'points' => 0,
+                'niveau_actuel' => 'Débutant',
+                'date_inscription' => now(),
+            ]);
+        } catch (QueryException) {
+            // Course possible : deux ventes simultanées d'un même client, la
+            // contrainte unique (programme, client) a tranché. On relit le
+            // compte que l'autre transaction vient de créer.
+            return ClientFidelite::where('programme_fidelite_id', $programme->id)
+                ->where('client_id', $clientId)
+                ->lockForUpdate()
+                ->firstOrFail();
+        }
+    }
+
     public function syncOfflineBatch(Request $request): JsonResponse
     {
         $boutiqueId = $request->user()->current_boutique_id;
@@ -810,6 +964,7 @@ class VenteController extends Controller
 
                     if ($vente->client_id) {
                         $this->mettreAJourMetriquesClient($vente->client_id);
+                        $this->synchroniserPointsFidelite($vente);
                     }
 
                     $vente->load(['user', 'ligneVentes.produit', 'client']);

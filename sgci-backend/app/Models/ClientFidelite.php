@@ -68,8 +68,12 @@ class ClientFidelite extends Model
 
     /**
      * Retirer des points
+     *
+     * `vente` est facultatif : la réclamation de récompense n'est liée à
+     * aucune vente, l'annulation d'une vente l'est (c'est ce lien qui rend le
+     * retrait traçable et donc idempotent à la reprise).
      */
-    public function retirerPoints(int $points, string $raison): void
+    public function retirerPoints(int $points, string $raison, ?Vente $vente = null): void
     {
         if ($this->points < $points) {
             throw new \Exception('Points insuffisants');
@@ -83,6 +87,7 @@ class ClientFidelite extends Model
             'type' => 'retrait',
             'points' => $points,
             'raison' => $raison,
+            'vente_id' => $vente ? $vente->id : null,
         ]);
     }
 
