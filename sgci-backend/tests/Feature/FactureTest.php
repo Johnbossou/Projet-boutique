@@ -169,6 +169,51 @@ class FactureTest extends TestCase
         }
     }
 
+    public function test_facture_vente_reflete_ht_tva_ttc_reellement_factures(): void
+    {
+        Sanctum::actingAs($this->gerant);
+
+        // Stockage caisse (invariant VenteController) : montant_total = base
+        // HT après remise, tva = TVA encaissée en PLUS (18 %), le client a
+        // payé la somme des deux (11 800).
+        $vente = Vente::create([
+            'montant_total' => 10000,
+            'tva' => 1800,
+            'remise' => 0,
+            'statut' => 'termine',
+            'user_id' => $this->gerant->id,
+            'client_id' => $this->client->id,
+            'boutique_id' => $this->boutique->id,
+        ]);
+
+        $this->postJson('/api/factures/generer-vente', ['vente_id' => $vente->id]);
+
+        $facture = Facture::where('vente_id', $vente->id)->firstOrFail();
+
+        // L'ancien calcul divisait par 1,18 (il traitait montant_total comme
+        // du TTC) : 8 474,58 / 1 525,42 / 10 000 — les trois montants faux.
+        $this->assertSame(10000.0, (float) $facture->montant_ht);
+        $this->assertSame(1800.0, (float) $facture->montant_tva);
+        $this->assertSame(11800.0, (float) $facture->montant_ttc);
+    }
+
+    public function test_facture_commande_n_invente_aucune_tva(): void
+    {
+        Sanctum::actingAs($this->gerant);
+
+        // Les commandes clients n'appliquent aucun taux (ni colonne tva, ni
+        // lecture de taux_tva) : le client paie montant_total tel quel.
+        $commande = $this->creerCommande();
+
+        $this->postJson('/api/factures/generer-commande', ['commande_client_id' => $commande->id]);
+
+        $facture = Facture::where('commande_client_id', $commande->id)->firstOrFail();
+
+        $this->assertSame(20000.0, (float) $facture->montant_ht);
+        $this->assertSame(0.0, (float) $facture->montant_tva);
+        $this->assertSame(20000.0, (float) $facture->montant_ttc);
+    }
+
     public function test_index_scope_a_la_boutique_courante(): void
     {
         Sanctum::actingAs($this->gerant);

@@ -64,10 +64,20 @@ class FacturationService
                 return $factureExistante;
             }
 
-            // TVA basée sur le taux configuré dans la boutique (défaut 18%)
-            $tauxTva = (float) ($vente->boutique?->taux_tva ?? 18);
-            $diviseurTva = 1 + ($tauxTva / 100);
-            $montantHt = $vente->montant_total / $diviseurTva;
+            // INVARIANT DE STOCKAGE (cf. VenteController::store/checkout) :
+            // ventes.montant_total est la BASE HT après remise, ventes.tva est
+            // la TVA effectivement calculée (base × taux boutique), et la
+            // caisse encaisse la somme des deux (HT + TVA = TTC).
+            //
+            // Ancien calcul : montant_total / (1 + taux) — il traitait
+            // montant_total comme du TTC : la facture annonçait un TTC égal au
+            // HT stocké, un HT réduit de ~15 % et une TVA de ~15,25 % au lieu
+            // de 18 %. On aligne la facture sur ce qui a réellement été
+            // facturé et encaissé, avec la TVA enregistrée sur la vente (taux
+            // modifié depuis, vente à 0 % : telle que facturée).
+            $montantHt = (float) $vente->montant_total;
+            $montantTva = (float) $vente->tva;
+            $montantTtc = $montantHt + $montantTva;
 
             $facture = Facture::create([
                 'numero_facture' => 'FAC-'.date('Ymd-His').'-'.$vente->id,
@@ -76,8 +86,8 @@ class FacturationService
                 'boutique_id' => $vente->boutique_id,
                 'date_facture' => now(),
                 'montant_ht' => $montantHt,
-                'montant_tva' => $vente->montant_total - $montantHt,
-                'montant_ttc' => $vente->montant_total,
+                'montant_tva' => $montantTva,
+                'montant_ttc' => $montantTtc,
                 'statut' => 'paye',
                 'envoyee' => false,
             ]);
@@ -130,10 +140,16 @@ class FacturationService
                 return $factureExistante;
             }
 
-            // TVA basée sur le taux configuré dans la boutique (défaut 18%)
-            $tauxTva = (float) ($commande->boutique?->taux_tva ?? 18);
-            $diviseurTva = 1 + ($tauxTva / 100);
-            $montantHt = $commande->montant_total / $diviseurTva;
+            // AUCUNE TVA sur les commandes clients : CommandeClientController
+            // additionne les lignes sans aucun taux (pas de colonne tva, pas
+            // de lecture de taux_tva), et le paiement (mobile money) compare
+            // montant_paye à montant_total — le client paie le total tel quel.
+            //
+            // Ancien calcul : montant_total / (1 + 18 %) inventait une TVA
+            // que personne n'avait versée et réduisait d'autant le HT. On
+            // aligne la facture sur l'encaissement réel (HT = TTC, TVA 0)
+            // plutôt que de facturer une somme que le client n'a pas payée.
+            $montantHt = (float) $commande->montant_total;
 
             $facture = Facture::create([
                 'numero_facture' => 'FAC-'.date('Ymd-His').'-'.$commande->id,
@@ -142,8 +158,8 @@ class FacturationService
                 'boutique_id' => $commande->boutique_id,
                 'date_facture' => now(),
                 'montant_ht' => $montantHt,
-                'montant_tva' => $commande->montant_total - $montantHt,
-                'montant_ttc' => $commande->montant_total,
+                'montant_tva' => 0,
+                'montant_ttc' => $montantHt,
                 'statut' => $commande->estPayee() ? 'paye' : 'en_attente',
                 'envoyee' => false,
             ]);

@@ -17,8 +17,9 @@ interface Facture {
   id: number;
   numero_facture: string;
   statut: string;
-  montant_total: number;
-  tva: number;
+  montant_ht: number;
+  montant_tva: number;
+  montant_ttc: number;
   client: { id?: number; nom: string; email: string } | null;
   vente: { id?: number; numero_vente: string } | null;
   commandeClient: { id?: number; numero_commande: string } | null;
@@ -180,8 +181,10 @@ export default function FacturesPage() {
     }
   };
 
-  const formatMontant = (montant: number) =>
-    montant.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' XOF';
+  // Défense : une facture d'une version antérieure sans montants projetés
+  // affichait `undefined.toLocaleString()` et faisait tomber toute la page.
+  const formatMontant = (montant?: number) =>
+    (montant ?? 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' XOF';
 
   return (
     <div className="p-4 lg:p-6 space-y-6">
@@ -244,7 +247,7 @@ export default function FacturesPage() {
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold">
-              {formatMontant(factures.reduce((s, f) => s + f.montant_total, 0))}
+              {formatMontant(factures.reduce((s, f) => s + (f.montant_ttc ?? 0), 0))}
             </p>
           </CardContent>
         </Card>
@@ -306,7 +309,7 @@ export default function FacturesPage() {
                   <TableHead>N° facture</TableHead>
                   <TableHead>Client</TableHead>
                   <TableHead>Réf. source</TableHead>
-                  <TableHead className="text-right">Montant</TableHead>
+                  <TableHead className="text-right">Total TTC</TableHead>
                   <TableHead className="text-right">TVA</TableHead>
                   <TableHead>Statut</TableHead>
                   <TableHead>Date</TableHead>
@@ -321,9 +324,9 @@ export default function FacturesPage() {
                     <TableCell className="text-xs text-muted-foreground">
                       {f.vente?.numero_vente ?? f.commandeClient?.numero_commande ?? '—'}
                     </TableCell>
-                    <TableCell className="text-right font-mono">{formatMontant(f.montant_total)}</TableCell>
+                    <TableCell className="text-right font-mono">{formatMontant(f.montant_ttc)}</TableCell>
                     <TableCell className="text-right font-mono text-xs text-muted-foreground">
-                      {formatMontant(f.tva)}
+                      {formatMontant(f.montant_tva)}
                     </TableCell>
                     <TableCell>
                       <Badge variant="secondary" className={STATUT_COLORS[f.statut] ?? ''}>
@@ -459,17 +462,17 @@ export default function FacturesPage() {
               <div className="flex justify-end gap-6 text-sm pt-2 border-t">
                 <div>
                   <span className="text-muted-foreground">TVA : </span>
-                  <span className="font-medium">{formatMontant(detailOuvert.tva)}</span>
+                  <span className="font-medium">{formatMontant(detailOuvert.montant_tva)}</span>
                 </div>
                 <div>
                   <span className="text-muted-foreground">Total HT : </span>
                   <span className="font-medium">
-                    {formatMontant(detailOuvert.montant_total - detailOuvert.tva)}
+                    {formatMontant(detailOuvert.montant_ht)}
                   </span>
                 </div>
                 <div>
                   <span className="text-muted-foreground">Total TTC : </span>
-                  <span className="font-bold text-lg">{formatMontant(detailOuvert.montant_total)}</span>
+                  <span className="font-bold text-lg">{formatMontant(detailOuvert.montant_ttc)}</span>
                 </div>
               </div>
 

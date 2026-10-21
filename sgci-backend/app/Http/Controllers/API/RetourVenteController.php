@@ -91,6 +91,24 @@ class RetourVenteController extends Controller
             // que deux créations concurrentes ne consomment pas le même quota.
             $venteVerrouillee = Vente::whereKey($vente->id)->lockForUpdate()->firstOrFail();
 
+            // ARBITRAGE RETOURS (décision actée) : remboursement en BRUT,
+            // TTC — on rend au client ce qu'il a réellement sorti de sa poche.
+            // Les prix unitaires sont HT (la caisse ajoute la TVA au total :
+            // total = base + base × taux), rembourser la seule base HT
+            // laisserait au client la charge de la TVA versée à l'État sur un
+            // achat qu'il rapporte.
+            //
+            // On grossit du taux RÉELLEMENT appliqué à cette vente (tva
+            // enregistrée ÷ montant_total), pas du taux courant de la
+            // boutique : taux modifié depuis, vente à 0 %, vente sans TVA —
+            // on rembourse exactement tel que facturé. Sans base ou sans TVA,
+            // facteur 1 (rien n'a été collecté, rien n'est rendu).
+            $facteurTva = 1.0;
+
+            if ($venteVerrouillee->montant_total > 0 && $venteVerrouillee->tva > 0) {
+                $facteurTva = 1 + ((float) $venteVerrouillee->tva) / ((float) $venteVerrouillee->montant_total);
+            }
+
             $dejaRetourneParLigne = $this->quantiteDejaValideeParLigne($venteVerrouillee->id);
 
             $restantParLigne = [];
@@ -136,7 +154,9 @@ class RetourVenteController extends Controller
 
                     // On rembourse le RELIQUAT, pas la quantité vendue : sinon le
                     // montant_rembourse incluait des unités déjà rendues.
-                    $montantLigne = $disponible * $ligne->prix_unitaire;
+                    // Base prix × qté remboursée en HT, portée en TTC par le
+                    // facteur TVA de la vente (cf. arbitrage ci-dessus).
+                    $montantLigne = round($disponible * $ligne->prix_unitaire * $facteurTva, 2);
                     $montantTotalRembourse += $montantLigne;
 
                     RetourVenteLigne::create([
@@ -176,16 +196,19 @@ class RetourVenteController extends Controller
                     // rendus reviendrait a l'annuler pour un client qui ramene tout.
                     //
                     // CONsequence a garder en tete : sur une vente remisee, un retour
-                    // total rembourse montant_total, soit PLUS que le montant
-                    // effectivement encaisse (montant_total - remise). C'est
-                    // deliberé : la remise reste due a la boutique. Une vente remisee
-                    // ne doit donc pas etre annulee par un retour, sinon la boutique
-                    // perd deux fois.
+                    // total rembourse plus que le montant effectivement encaisse
+                    // (base - remise, TVA comprise). C'est délibéré : la
+                    // remise reste due a la boutique. Une vente remisee ne doit donc
+                    // pas etre annulee par un retour, sinon la boutique perd deux
+                    // fois.
                     //
                     // Pour un remboursement borne au seul encaissement, il faut
                     // repartir la remise sur les lignes (net au prorata) : ce serait
                     // un autre calcul, et un autre jeu de tests.
-                    $montantLigne = $ligneData['quantite_retournee'] * $ligneVente->prix_unitaire;
+                    //
+                    // MONTANTS EN TTC : le facteur TVA de la vente s'applique
+                    // aussi ici (décision actée « brut »), cf. arbitrage plus haut.
+                    $montantLigne = round($ligneData['quantite_retournee'] * $ligneVente->prix_unitaire * $facteurTva, 2);
                     $montantTotalRembourse += $montantLigne;
 
                     RetourVenteLigne::create([

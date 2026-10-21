@@ -6,6 +6,7 @@ use App\Models\Boutique;
 use App\Models\Categorie;
 use App\Models\Produit;
 use App\Models\RetourVente;
+use App\Models\RetourVenteLigne;
 use App\Models\User;
 use App\Models\Vente;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -43,7 +44,7 @@ class RetoursTest extends TestCase
         $this->gerant->update(['current_boutique_id' => $this->boutique->id]);
     }
 
-    private function seedVenteTerminee(): Vente
+    private function seedVenteTerminee(int $tva = 0): Vente
     {
         $categorie = Categorie::create(['nom' => 'Cat R', 'description' => 'D', 'couleur' => '#000', 'icone' => 'box']);
         $produit = Produit::create([
@@ -59,6 +60,7 @@ class RetoursTest extends TestCase
 
         $vente = Vente::create([
             'montant_total' => 10000,
+            'tva' => $tva,
             'remise' => 0,
             'statut' => 'termine',
             'mode_paiement' => 'especes',
@@ -120,6 +122,55 @@ class RetoursTest extends TestCase
         $response->assertCreated()
             ->assertJsonPath('data.statut', 'en_attente')
             ->assertJsonPath('data.montant_rembourse', '10000.00');
+    }
+
+    public function test_retour_total_rembourse_en_brut_ttc(): void
+    {
+        Sanctum::actingAs($this->gerant);
+
+        // TVA telle que stockée par la caisse : base HT 10 000 + TVA 18 %
+        // = 1 800 encaissés en plus. Le client a réellement sorti 11 800,
+        // c'est ce qui lui est rendu (décision actée : « brut » TTC, pas la
+        // base HT — sans quoi le client perdrait la TVA versée à l'État sur
+        // un achat qu'il rapporte).
+        $vente = $this->seedVenteTerminee(tva: 1800);
+
+        $response = $this->postJson('/api/retours', [
+            'vente_id' => $vente->id,
+            'type' => 'total',
+            'motif' => 'insatisfait',
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('data.montant_rembourse', '11800.00');
+
+        // La ligne reprend le même TTC (2 × 5 000 × 1,18).
+        $ligne = RetourVenteLigne::where('retour_vente_id', $response->json('data.id'))->firstOrFail();
+        $this->assertSame(11800.0, (float) $ligne->montant_retourne);
+    }
+
+    public function test_retour_partiel_rembourse_en_brut_ttc(): void
+    {
+        Sanctum::actingAs($this->gerant);
+
+        $vente = $this->seedVenteTerminee(tva: 1800);
+        $ligneVente = $vente->ligneVentes->first();
+
+        $response = $this->postJson('/api/retours', [
+            'vente_id' => $vente->id,
+            'type' => 'partiel',
+            'motif' => 'defectueux',
+            'lignes' => [
+                ['ligne_vente_id' => $ligneVente->id, 'quantite_retournee' => 1],
+            ],
+        ]);
+
+        // 1 × 5 000 HT × 1,18 = 5 900 TTC.
+        $response->assertCreated()
+            ->assertJsonPath('data.montant_rembourse', '5900.00');
+
+        $ligne = RetourVenteLigne::where('retour_vente_id', $response->json('data.id'))->firstOrFail();
+        $this->assertSame(5900.0, (float) $ligne->montant_retourne);
     }
 
     public function test_valider_retour_remplit_stock(): void

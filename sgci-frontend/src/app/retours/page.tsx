@@ -187,7 +187,7 @@ export default function RetoursPage() {
                   <TableHead>Vente</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Motif</TableHead>
-                  <TableHead className="text-right">Montant</TableHead>
+                  <TableHead className="text-right">Montant (TTC)</TableHead>
                   <TableHead>Statut</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead />
@@ -231,7 +231,7 @@ export default function RetoursPage() {
                 <div><span className="text-muted-foreground">Vente :</span> {detailOuvert.vente?.numero_vente ?? '—'}</div>
                 <div><span className="text-muted-foreground">Type :</span> <span className="capitalize">{TYPE_LABELS[detailOuvert.type] ?? detailOuvert.type}</span></div>
                 <div><span className="text-muted-foreground">Motif :</span> {MOTIF_LABELS[detailOuvert.motif] ?? detailOuvert.motif}</div>
-                <div><span className="text-muted-foreground">Montant :</span> <span className="font-bold">{detailOuvert.montant_rembourse.toLocaleString('fr-FR')} XOF</span></div>
+                <div><span className="text-muted-foreground">Montant remboursé (TTC) :</span> <span className="font-bold">{detailOuvert.montant_rembourse.toLocaleString('fr-FR')} XOF</span></div>
                 <div><span className="text-muted-foreground">Créé par :</span> {detailOuvert.user?.name ?? '—'}</div>
                 <div><span className="text-muted-foreground">Date :</span> {new Date(detailOuvert.created_at).toLocaleString('fr-FR')}</div>
               </div>
@@ -247,7 +247,7 @@ export default function RetoursPage() {
                     <TableRow>
                       <TableHead>Produit</TableHead>
                       <TableHead className="text-right">Qté</TableHead>
-                      <TableHead className="text-right">Montant</TableHead>
+                      <TableHead className="text-right">Montant (TTC)</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
