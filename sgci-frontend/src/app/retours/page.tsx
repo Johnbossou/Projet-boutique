@@ -120,7 +120,9 @@ export default function RetoursPage() {
     }
   };
 
-  const totalRembourse = retours.filter(r => r.statut === 'valide').reduce((s, r) => s + r.montant_rembourse, 0);
+  // Number() : montant_rembourse arrive en chaîne ("10000.00") — sans
+  // conversion, le reduce concatènerait des chaînes au lieu d'additionner.
+  const totalRembourse = retours.filter(r => r.statut === 'valide').reduce((s, r) => s + Number(r.montant_rembourse), 0);
 
   return (
     <div className="p-4 lg:p-6 space-y-6">

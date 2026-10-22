@@ -140,16 +140,18 @@ class FacturationService
                 return $factureExistante;
             }
 
-            // AUCUNE TVA sur les commandes clients : CommandeClientController
-            // additionne les lignes sans aucun taux (pas de colonne tva, pas
-            // de lecture de taux_tva), et le paiement (mobile money) compare
-            // montant_paye à montant_total — le client paie le total tel quel.
+            // Même invariant que les ventes : commande_clients.montant_total
+            // est la base HT (somme des lignes après remise) et tva la TVA du
+            // taux boutique, ajoutée à la création — le client paie
+            // montant_a_payer = HT + TVA (mobile money compare déjà là-dessus).
             //
-            // Ancien calcul : montant_total / (1 + 18 %) inventait une TVA
-            // que personne n'avait versée et réduisait d'autant le HT. On
-            // aligne la facture sur l'encaissement réel (HT = TTC, TVA 0)
-            // plutôt que de facturer une somme que le client n'a pas payée.
+            // Les commandes antérieures à la colonne portent tva = 0 :
+            // HT = TTC, fidèle à ce qui a réellement été encaissé (l'ancien
+            // calcul divisait par 1,18 et inventait une TVA que personne
+            // n'avait versée).
             $montantHt = (float) $commande->montant_total;
+            $montantTva = (float) $commande->tva;
+            $montantTtc = $montantHt + $montantTva;
 
             $facture = Facture::create([
                 'numero_facture' => 'FAC-'.date('Ymd-His').'-'.$commande->id,
@@ -158,8 +160,8 @@ class FacturationService
                 'boutique_id' => $commande->boutique_id,
                 'date_facture' => now(),
                 'montant_ht' => $montantHt,
-                'montant_tva' => 0,
-                'montant_ttc' => $montantHt,
+                'montant_tva' => $montantTva,
+                'montant_ttc' => $montantTtc,
                 'statut' => $commande->estPayee() ? 'paye' : 'en_attente',
                 'envoyee' => false,
             ]);

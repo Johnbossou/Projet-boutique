@@ -258,10 +258,15 @@
 
     <!-- Totaux -->
     @php
+        // Invariant caisse : montant_total = base HT après remise, tva
+        // ajoutée par-dessus — le client paie HT + TVA. L'ancien calcul
+        // inversait ($ttc = montant_total, $ht = montant_total - tva) :
+        // le PDF annonçait un total SANS la TVA et un « HT » en moins de
+        // la TVA (10 000 / 1 800 affichés 10 000 « total » et 8 200 « HT »).
         $remise = (float)($vente->remise ?? 0);
         $tva = (float)($vente->tva ?? 0);
-        $ttc = (float)$vente->montant_total;
-        $ht = $ttc - $tva;
+        $ht = (float)$vente->montant_total;
+        $ttc = $ht + $tva;
     @endphp
     <table class="totals-box">
         @if($remise > 0)

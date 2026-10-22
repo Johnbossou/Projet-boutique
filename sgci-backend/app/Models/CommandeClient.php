@@ -21,6 +21,7 @@ class CommandeClient extends Model
         'date_livraison_reelle',
         'statut',
         'montant_total',
+        'tva',
         'montant_paye',
         'mode_paiement',
         'notes',
@@ -32,8 +33,16 @@ class CommandeClient extends Model
         'date_livraison_prevue' => 'date',
         'date_livraison_reelle' => 'date',
         'montant_total' => 'decimal:2',
+        'tva' => 'decimal:2',
         'montant_paye' => 'decimal:2',
     ];
+
+    /**
+     * montant_a_payer et montant_restant sont des dérivés TTC : le front et
+     * les PDF ne doivent jamais recalculer HT + TVA eux-mêmes (c'est ainsi
+     * que la caisse et les factures ont affiché des montants faux).
+     */
+    protected $appends = ['montant_a_payer', 'montant_restant'];
 
     /**
      * Relation avec le client
@@ -135,19 +144,37 @@ class CommandeClient extends Model
     }
 
     /**
-     * Calculer le montant restant à payer
+     * Ce que le client doit réellement payer : base HT + TVA encaissée.
+     *
+     * Invariant commun aux ventes et aux commandes : *_total est la base HT,
+     * la TVA s'ajoute par-dessus (caisse = HT + TVA, idem ici). Les
+     * commandes antérieures à la colonne tva portent 0 — a_payer = total,
+     * exactement ce qui a été encaissé.
+     */
+    public function getMontantAPayerAttribute(): float
+    {
+        return round((float) $this->montant_total + (float) $this->tva, 2);
+    }
+
+    /**
+     * Calculer le montant restant à payer (TTC restant dû)
      */
     public function getMontantRestantAttribute(): float
     {
-        return $this->montant_total - $this->montant_paye;
+        return round($this->montant_a_payer - (float) $this->montant_paye, 2);
     }
 
     /**
      * Vérifier si la commande est entièrement payée
+     *
+     * Comparaison sur le TTC dû et non sur la base HT : avec la TVA, payer
+     * la base seule ne solde pas la commande. L'épsilon absorbe les arrondis
+     * binaires des décimales (0,01 + 1 799,99 qui ne fait pas exactement
+     * 1 800,00 en virgule flottante).
      */
     public function estPayee(): bool
     {
-        return $this->montant_paye >= $this->montant_total;
+        return (float) $this->montant_paye >= $this->montant_a_payer - 0.001;
     }
 
     public function facture()

@@ -243,9 +243,27 @@
     </table>
 
     <table class="totals-box">
+        @php
+            // Même invariant que la caisse : montant_total = base HT, tva
+            // encaissée en plus (colonnes renseignées à la création ; les
+            // commandes antérieures portent tva = 0 → HT = TTC).
+            $ht = (float) $commande->montant_total;
+            $tva = (float) ($commande->tva ?? 0);
+            $ttc = $ht + $tva;
+        @endphp
+        @if($tva > 0)
+        <tr>
+            <td class="row-label">Montant HT</td>
+            <td width="120" class="row-value">{{ number_format($ht, 0, ',', ' ') }} FCFA</td>
+        </tr>
+        <tr>
+            <td class="row-label">TVA ({{ $boutique->taux_tva ?? 18 }}%)</td>
+            <td width="120" class="row-value">{{ number_format($tva, 0, ',', ' ') }} FCFA</td>
+        </tr>
+        @endif
         <tr>
             <td class="row-label">Total à payer</td>
-            <td width="120" class="row-value" style="font-size: 13px;">{{ number_format($commande->montant_total, 0, ',', ' ') }} FCFA</td>
+            <td width="120" class="row-value" style="font-size: 13px;">{{ number_format($ttc, 0, ',', ' ') }} FCFA</td>
         </tr>
         @if($commande->montant_paye > 0)
         <tr>
@@ -259,7 +277,7 @@
         @endif
         <tr class="grand-total">
             <td class="row-label">TOTAL {{ \Illuminate\Support\Str::upper($boutique->devise ?? 'XOF') }}</td>
-            <td width="120" class="row-value">{{ number_format($commande->montant_total, 0, ',', ' ') }} {{ $boutique->devise }}</td>
+            <td width="120" class="row-value">{{ number_format($ttc, 0, ',', ' ') }} {{ $boutique->devise }}</td>
         </tr>
     </table>
 

@@ -211,7 +211,7 @@ export default function DevisScreen() {
               Validite : {new Date(selected.date_validite).toLocaleDateString("fr-FR")}
             </Text>
             <Text style={[styles.cardTitle, { marginTop: 8 }]}>
-              Total : {fmt(selected.montant_total)}
+              Total HT : {fmt(selected.montant_total)}
             </Text>
           </View>
 

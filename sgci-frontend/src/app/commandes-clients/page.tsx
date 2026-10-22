@@ -31,6 +31,9 @@ interface Commande {
   numero_commande: string;
   statut: string;
   montant_total: number;
+  tva: number;
+  montant_a_payer: number;
+  montant_restant: number;
   montant_paye: number;
   client: { id: number; nom: string; telephone: string } | null;
   user: { name: string } | null;
@@ -42,6 +45,10 @@ interface Commande {
   notes: string | null;
   created_at: string;
 }
+
+// montant_total/tva reviennent en decimal:2 (chaîne côté API) — Number()
+// absorbe les deux formes sans planter l'affichage.
+const fmt = (v: number) => Number(v).toLocaleString('fr-FR');
 
 const STATUT_COLORS: Record<string, string> = {
   en_attente: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
@@ -206,7 +213,7 @@ export default function CommandesClientsPage() {
                 <TableRow>
                   <TableHead>Numéro</TableHead>
                   <TableHead>Client</TableHead>
-                  <TableHead className="text-right">Montant</TableHead>
+                  <TableHead className="text-right">Total (TTC)</TableHead>
                   <TableHead className="text-right">Payé</TableHead>
                   <TableHead>Statut</TableHead>
                   <TableHead>Date</TableHead>
@@ -218,8 +225,8 @@ export default function CommandesClientsPage() {
                   <TableRow key={c.id}>
                     <TableCell className="font-mono text-xs">{c.numero_commande}</TableCell>
                     <TableCell>{c.client?.nom ?? '—'}</TableCell>
-                    <TableCell className="text-right font-mono">{c.montant_total.toLocaleString('fr-FR')} XOF</TableCell>
-                    <TableCell className="text-right font-mono">{c.montant_paye.toLocaleString('fr-FR')} XOF</TableCell>
+                    <TableCell className="text-right font-mono">{fmt(c.montant_a_payer)} XOF</TableCell>
+                    <TableCell className="text-right font-mono">{fmt(c.montant_paye)} XOF</TableCell>
                     <TableCell>
                       <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${STATUT_COLORS[c.statut] ?? ''}`}>
                         {STATUT_LABELS[c.statut] ?? c.statut}
@@ -275,12 +282,26 @@ export default function CommandesClientsPage() {
                   </div>
                 )}
                 <div>
-                  <span className="text-muted-foreground">Montant total :</span>{' '}
-                  <span className="font-bold">{detailOuvert.montant_total.toLocaleString('fr-FR')} XOF</span>
+                  <span className="text-muted-foreground">Base HT :</span>{' '}
+                  <span className="font-mono">{fmt(detailOuvert.montant_total)} XOF</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">TVA :</span>{' '}
+                  <span className="font-mono">{fmt(detailOuvert.tva)} XOF</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Total à payer (TTC) :</span>{' '}
+                  <span className="font-bold">{fmt(detailOuvert.montant_a_payer)} XOF</span>
                 </div>
                 <div>
                   <span className="text-muted-foreground">Montant payé :</span>{' '}
-                  <span className="font-bold text-green-600 dark:text-green-400">{detailOuvert.montant_paye.toLocaleString('fr-FR')} XOF</span>
+                  <span className="font-bold text-green-600 dark:text-green-400">{fmt(detailOuvert.montant_paye)} XOF</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Reste à payer :</span>{' '}
+                  <span className={`font-bold ${Number(detailOuvert.montant_restant) > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-green-600 dark:text-green-400'}`}>
+                    {fmt(detailOuvert.montant_restant)} XOF
+                  </span>
                 </div>
                 {detailOuvert.date_livraison_prevue && (
                   <div>

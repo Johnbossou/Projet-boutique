@@ -751,11 +751,11 @@ export default function CaisseScreen() {
             </table>
             
             <div class="total">
-              <div>Sous-total: ${(lastVente.montant_total - lastVente.tva + lastVente.remise).toLocaleString()} FCFA</div>
-              ${lastVente.remise > 0 ? `<div>Remise: -${lastVente.remise.toLocaleString()} FCFA</div>` : ""}
-              <div>TVA (${tauxTvaLibelle}): ${lastVente.tva.toLocaleString()} FCFA</div>
+              <div>Sous-total: ${(Number(lastVente.montant_total) + Number(lastVente.remise)).toLocaleString()} FCFA</div>
+              ${lastVente.remise > 0 ? `<div>Remise: -${Number(lastVente.remise).toLocaleString()} FCFA</div>` : ""}
+              <div>TVA (${tauxTvaLibelle}): ${Number(lastVente.tva).toLocaleString()} FCFA</div>
               <div style="font-weight: bold; font-size: 14px;">
-                TOTAL: ${lastVente.montant_total.toLocaleString()} FCFA
+                TOTAL: ${(Number(lastVente.montant_total) + Number(lastVente.tva)).toLocaleString()} FCFA
               </div>
             </div>
             
@@ -1782,7 +1782,7 @@ export default function CaisseScreen() {
                 }}
               >
                 <Text style={{ color: "#fff", fontWeight: "600" }}>
-                  #{v.numero_vente ?? v.id} — {v.montant_total?.toLocaleString()} FCFA
+                  #{v.numero_vente ?? v.id} — {(Number(v.montant_total) + Number(v.tva)).toLocaleString()} FCFA
                 </Text>
                 <Text style={{ color: "#94a3b8", fontSize: 12 }}>{v.statut}</Text>
                 {v.peut_annuler && (
@@ -1946,15 +1946,16 @@ export default function CaisseScreen() {
 
                   <View style={styles.ticketDivider} />
 
-                  {/* Totaux */}
+                  {/* Totaux — montant_total = base HT (stockage serveur) :
+                      sous-total = HT + remise, total = HT + TVA. Number()
+                      car les décimales arrivent en chaîne ("10000.00"). */}
                   <View style={styles.ticketTotals}>
                     <View style={styles.ticketTotalRow}>
                       <Text style={styles.ticketTotalLabel}>Sous-total:</Text>
                       <Text style={styles.ticketTotalValue}>
                         {(
-                          lastVente.montant_total -
-                          lastVente.tva +
-                          lastVente.remise
+                          Number(lastVente.montant_total) +
+                          Number(lastVente.remise)
                         ).toLocaleString()}{" "}
                         FCFA
                       </Text>
@@ -1993,7 +1994,7 @@ export default function CaisseScreen() {
                     >
                       <Text style={styles.ticketGrandTotalLabel}>TOTAL:</Text>
                       <Text style={styles.ticketGrandTotalValue}>
-                        {lastVente.montant_total.toLocaleString()} FCFA
+                        {(Number(lastVente.montant_total) + Number(lastVente.tva)).toLocaleString()} FCFA
                       </Text>
                     </View>
                   </View>

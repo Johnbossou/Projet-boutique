@@ -140,7 +140,7 @@ export default function ApprovisionnementPage() {
   const totalEnAttente = commandes.filter((c) => c.statut === 'en_attente').length;
   const totalEnCours = commandes.filter((c) => c.statut === 'en_cours').length;
   const totalLivrees = commandes.filter((c) => c.statut === 'livre').length;
-  const montantTotal = commandes.filter((c) => c.statut !== 'annule').reduce((s, c) => s + c.montant_total, 0);
+  const montantTotal = commandes.filter((c) => c.statut !== 'annule').reduce((s, c) => s + Number(c.montant_total), 0);
 
   const creerCommande = async () => {
     if (!fournisseurId) {

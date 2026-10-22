@@ -4,9 +4,9 @@ namespace App\Http\Controllers\API;
 
 use App\Events\VenteCreee;
 use App\Exceptions\OperationRefusee;
+use App\Http\Controllers\Concerns\TauxTva;
 use App\Http\Controllers\Concerns\VerifieBoutique;
 use App\Http\Controllers\Controller;
-use App\Models\Boutique;
 use App\Models\BoutiqueSetting;
 use App\Models\Client;
 use App\Models\ClientFidelite;
@@ -28,7 +28,7 @@ use Illuminate\Validation\ValidationException;
 
 class VenteController extends Controller
 {
-    use Auditable, VerifieBoutique;
+    use Auditable, TauxTva, VerifieBoutique;
 
     public function index(Request $request): JsonResponse
     {
@@ -672,27 +672,6 @@ class VenteController extends Controller
                 'boutique_id' => $vente->boutique_id,
             ]);
         }
-    }
-
-    /**
-     * Taux de TVA de la boutique courante.
-     *
-     * La table boutiques porte taux_tva en NOT NULL avec un défaut de 18.00 :
-     * le repli sur BoutiqueSetting::current() était donc inutile, et surtout
-     * illegitimate — ce singleton renvoyait le taux d'une autre agence, et son
-     * firstOrCreate([]) insérait une ligne depuis une simple lecture.
-     */
-    private function tauxTva(?int $boutiqueId = null): float
-    {
-        $boutiqueId ??= auth()->user()?->current_boutique_id;
-
-        $taux = $boutiqueId
-            ? Boutique::where('id', $boutiqueId)->value('taux_tva')
-            : null;
-
-        $taux ??= 18;
-
-        return $taux > 1 ? $taux / 100 : (float) $taux;
     }
 
     private function mettreAJourMetriquesClient(int $clientId): void

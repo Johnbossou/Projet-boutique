@@ -54,10 +54,14 @@ interface Vente {
   numero_commande: string;
   date_commande: string;
   montant_total: number;
+  tva?: number;
   statut: "en_attente" | "confirmee" | "expediee" | "livree" | "annulee";
   produits_count: number;
   created_at: string;
 }
+
+// montant_total = base HT côté serveur : le client a payé HT + TVA.
+const totalDu = (v: Vente) => Number(v.montant_total) + Number(v.tva ?? 0);
 
 interface Client {
   id: number;
@@ -842,7 +846,7 @@ export default function ClientsScreen() {
         </View>
         <View style={styles.commandeRight}>
           <Text style={styles.commandeMontant}>
-            {commande.montant_total.toLocaleString()} FCFA
+            {totalDu(commande).toLocaleString()} FCFA
           </Text>
           <View
             style={[
@@ -1764,7 +1768,7 @@ export default function ClientsScreen() {
                               </View>
                               <View style={styles.recentCommandeRight}>
                                 <Text style={styles.recentCommandeMontant}>
-                                  {commande.montant_total.toLocaleString()} FCFA
+                                  {totalDu(commande).toLocaleString()} FCFA
                                 </Text>
                                 <View
                                   style={[

@@ -302,4 +302,103 @@ class CommandeClientTest extends TestCase
 
         $this->assertDatabaseCount('commande_clients', 0);
     }
+
+    // --- TVA : même régime que la caisse -------------------------------
+    // Sans cette ligne, le même produit était taxé à 18 % à la caisse et à
+    // 0 % en commande : les clients contournaient la TVA en commandant.
+
+    public function test_store_applique_la_tva_du_taux_boutique(): void
+    {
+        Sanctum::actingAs($this->gerant);
+
+        $reponse = $this->postJson('/api/commandes-clients', [
+            'client_id' => $this->client->id,
+            'lignes' => [
+                ['produit_id' => $this->produit->id, 'quantite' => 2, 'prix_unitaire' => 10000],
+            ],
+        ])->assertCreated();
+
+        // base HT 20 000, TVA 18 % = 3 600, le client doit 23 600
+        $this->assertDatabaseHas('commande_clients', [
+            'boutique_id' => $this->boutique->id,
+            'montant_total' => 20000.00,
+            'tva' => 3600.00,
+        ]);
+
+        $commande = CommandeClient::firstOrFail();
+        $this->assertSame(23600.0, (float) $commande->montant_a_payer);
+        $this->assertArrayHasKey('montant_a_payer', $reponse->json('data'));
+        $this->assertEquals(23600, $reponse->json('data.montant_a_payer'));
+    }
+
+    public function test_store_calcule_la_tva_sur_la_base_apres_remise(): void
+    {
+        Sanctum::actingAs($this->gerant);
+
+        $this->postJson('/api/commandes-clients', [
+            'client_id' => $this->client->id,
+            'lignes' => [
+                ['produit_id' => $this->produit->id, 'quantite' => 2, 'prix_unitaire' => 10000, 'remise_pourcentage' => 10],
+            ],
+        ])->assertCreated();
+
+        // remise ligne 10 % → base 18 000, TVA calculée sur LA BASE RÉELLE
+        // facturée (3 240), pas sur le prix d'appel
+        $this->assertDatabaseHas('commande_clients', [
+            'montant_total' => 18000.00,
+            'tva' => 3240.00,
+        ]);
+    }
+
+    public function test_store_respecte_le_taux_personnalise_de_la_boutique(): void
+    {
+        Sanctum::actingAs($this->gerant);
+
+        $this->boutique->update(['taux_tva' => 10]);
+
+        $this->postJson('/api/commandes-clients', [
+            'client_id' => $this->client->id,
+            'lignes' => [
+                ['produit_id' => $this->produit->id, 'quantite' => 1, 'prix_unitaire' => 10000],
+            ],
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('commande_clients', [
+            'montant_total' => 10000.00,
+            'tva' => 1000.00,
+        ]);
+    }
+
+    public function test_une_commande_sans_tva_reste_en_ht_egale_au_ttc(): void
+    {
+        // Création hors API (commandes antérieures à la colonne) : tva = 0,
+        // a_payer = total — exactement ce qui a été encaissé, aucun rétroactif.
+        $commande = $this->creerCommande();
+
+        $this->assertSame(20000.0, (float) $commande->montant_a_payer);
+        $this->assertSame(20000.0, (float) $commande->montant_restant);
+        $this->assertFalse($commande->estPayee());
+
+        $commande->update(['montant_paye' => 20000]);
+
+        $this->assertTrue($commande->fresh()->estPayee());
+    }
+
+    public function test_est_payee_compare_au_ttc_et_non_a_la_base_ht(): void
+    {
+        $commande = $this->creerCommande();
+        $commande->update(['tva' => 3600]); // dû : 23 600
+
+        // Payer la base HT seule ne solde PAS la commande (11 800 restent
+        // dûs sur une base de 10 000 au taux normal)
+        $commande->update(['montant_paye' => 20000]);
+
+        $this->assertFalse($commande->fresh()->estPayee());
+        $this->assertSame(3600.0, (float) $commande->fresh()->montant_restant);
+
+        $commande->update(['montant_paye' => 23600]);
+
+        $this->assertTrue($commande->fresh()->estPayee());
+        $this->assertSame(0.0, (float) $commande->fresh()->montant_restant);
+    }
 }

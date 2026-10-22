@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\API;
 
 use App\Exceptions\OperationRefusee;
+use App\Http\Controllers\Concerns\TauxTva;
 use App\Http\Controllers\Concerns\VerifieBoutique;
 use App\Http\Controllers\Controller;
 use App\Models\CommandeClient;
@@ -18,7 +19,7 @@ use Illuminate\Support\Facades\Storage;
 
 class DevisController extends Controller
 {
-    use VerifieBoutique;
+    use TauxTva, VerifieBoutique;
 
     /**
      * Affiche la liste des devis de la boutique courante
@@ -224,6 +225,11 @@ class DevisController extends Controller
                     throw new OperationRefusee('Ce devis ne peut pas être converti en commande', 409);
                 }
 
+                // Le devis reste une offre en base HT (le devis affiche le
+                // total tel quel, comme la caisse affiche un sous-total) ;
+                // la commande, elle, applique le taux boutique au moment de
+                // la conversion — un devis accepté paie HT + TVA, au même
+                // régime que la caisse.
                 $commande = CommandeClient::create([
                     'client_id' => $devis->client_id,
                     'boutique_id' => $devis->boutique_id,
@@ -231,6 +237,7 @@ class DevisController extends Controller
                     'date_commande' => now(),
                     'statut' => 'en_attente',
                     'montant_total' => $devis->montant_total,
+                    'tva' => round((float) $devis->montant_total * $this->tauxTva($devis->boutique_id), 2),
                     'montant_paye' => 0,
                     'user_id' => $request->user()->id,
                 ]);

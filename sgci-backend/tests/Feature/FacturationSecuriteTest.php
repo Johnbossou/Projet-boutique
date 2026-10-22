@@ -355,6 +355,25 @@ class FacturationSecuriteTest extends TestCase
         $this->assertDatabaseCount('lignes_commande_clients', 1);
     }
 
+    public function test_la_conversion_applique_la_tva_de_la_boutique(): void
+    {
+        Sanctum::actingAs($this->gerant);
+
+        $devis = $this->creerDevis('accepte');
+
+        $this->postJson("/api/devis/{$devis->id}/convertir-commande")->assertStatus(201);
+
+        $commande = CommandeClient::where('devis_id', $devis->id)->firstOrFail();
+
+        // Le devis reste une offre en HT (6 000) ; la commande convertie
+        // applique le taux boutique : TVA 18 % = 1 080, le client doit
+        // 7 080 — même régime que la caisse, sinon un devis accepté était
+        // 18 % moins cher qu'un achat au comptoir.
+        $this->assertSame(6000.0, (float) $commande->montant_total);
+        $this->assertSame(1080.0, (float) $commande->tva);
+        $this->assertSame(7080.0, (float) $commande->montant_a_payer);
+    }
+
     // --- Séquenceur des devis ------------------------------------------
 
     public function test_les_devis_crees_dans_la_meme_seconde_ne_collident_pas(): void

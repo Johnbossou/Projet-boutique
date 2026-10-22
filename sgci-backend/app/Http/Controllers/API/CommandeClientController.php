@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\API;
 
+use App\Http\Controllers\Concerns\TauxTva;
 use App\Http\Controllers\Controller;
 use App\Models\CommandeClient;
 use App\Models\LigneCommandeClient;
@@ -11,6 +12,8 @@ use Illuminate\Support\Facades\DB;
 
 class CommandeClientController extends Controller
 {
+    use TauxTva;
+
     /**
      * Affiche la liste des commandes clients de la boutique courante
      */
@@ -93,7 +96,17 @@ class CommandeClientController extends Controller
                 ]);
             }
 
-            $commande->update(['montant_total' => $montantTotal]);
+            // Même invariant que la caisse : montant_total reste la base HT
+            // (somme des lignes après remise) et la TVA du taux boutique
+            // s'ajoute par-dessus — le client paie montant_a_payer =
+            // HT + TVA. Sans cette ligne, le même produit était taxé à 18 %
+            // à la caisse et à 0 % en commande : les clients contournaient la
+            // TVA en commandant, et la boutique sous-encaissait une TVA
+            // qu'elle devait pourtant reverser.
+            $commande->update([
+                'montant_total' => $montantTotal,
+                'tva' => round($montantTotal * $this->tauxTva($request->user()->current_boutique_id), 2),
+            ]);
 
             return response()->json([
                 'message' => 'Commande client créée avec succès',

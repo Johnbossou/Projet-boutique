@@ -201,8 +201,10 @@ class FactureTest extends TestCase
     {
         Sanctum::actingAs($this->gerant);
 
-        // Les commandes clients n'appliquent aucun taux (ni colonne tva, ni
-        // lecture de taux_tva) : le client paie montant_total tel quel.
+        // Commande antérieure à la colonne tva (création hors API) : tva = 0,
+        // la facture n'invente rien — HT = TTC, fidèle à ce qui a été
+        // encaissé. L'ancien calcul divisait par 1,18 et affichait
+        // 16 949 / 3 051 / 20 000 sur 20 000 réellement dus.
         $commande = $this->creerCommande();
 
         $this->postJson('/api/factures/generer-commande', ['commande_client_id' => $commande->id]);
@@ -212,6 +214,24 @@ class FactureTest extends TestCase
         $this->assertSame(20000.0, (float) $facture->montant_ht);
         $this->assertSame(0.0, (float) $facture->montant_tva);
         $this->assertSame(20000.0, (float) $facture->montant_ttc);
+    }
+
+    public function test_facture_commande_avec_tva_reflete_ht_tva_ttc(): void
+    {
+        Sanctum::actingAs($this->gerant);
+
+        // Commande créée avec la TVA du taux boutique (même invariant que
+        // la caisse) : base 20 000, TVA 18 % = 3 600, dû 23 600.
+        $commande = $this->creerCommande();
+        $commande->update(['tva' => 3600]);
+
+        $this->postJson('/api/factures/generer-commande', ['commande_client_id' => $commande->id]);
+
+        $facture = Facture::where('commande_client_id', $commande->id)->firstOrFail();
+
+        $this->assertSame(20000.0, (float) $facture->montant_ht);
+        $this->assertSame(3600.0, (float) $facture->montant_tva);
+        $this->assertSame(23600.0, (float) $facture->montant_ttc);
     }
 
     public function test_index_scope_a_la_boutique_courante(): void

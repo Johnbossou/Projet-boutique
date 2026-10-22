@@ -177,7 +177,7 @@ export default function DevisPage() {
                 <TableRow>
                   <TableHead>Référence</TableHead>
                   <TableHead>Client</TableHead>
-                  <TableHead className="text-right">Montant</TableHead>
+                  <TableHead className="text-right">Montant HT</TableHead>
                   <TableHead>Statut</TableHead>
                   <TableHead>Validité</TableHead>
                   <TableHead>Date</TableHead>

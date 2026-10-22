@@ -449,6 +449,40 @@ class MobileMoneyReservationTest extends TestCase
         $this->assertSame(1, Paiement::count());
     }
 
+    public function test_le_reste_a_payer_d_une_commande_inclut_la_tva(): void
+    {
+        Http::fake([
+            '*/oauth/token' => Http::response(['access_token' => 'token-test'], 200),
+            '*' => Http::response(['transaction_id' => 'TX-TTC'], 200),
+        ]);
+
+        Sanctum::actingAs($this->user);
+
+        // base HT 10 000 + TVA 18 % (1 800) → le client doit 11 800.
+        // Sans l'accesseur TTC, le garde lisait un reste de 10 000 et
+        // refusait un paiement parfaitement normal (ou laissait passer un
+        // paiement ne couvrant pas la dette).
+        $commande = $this->commande(10000);
+        $commande->update(['tva' => 1800]);
+
+        $this->postJson('/api/mobile-money/initiate', $this->charge([
+            'amount' => 11900,
+            'commande_client_id' => $commande->id,
+        ]))
+            ->assertStatus(400)
+            ->assertJsonPath('reste_a_payer', 11800);
+
+        $this->assertSame(0, Paiement::count());
+
+        // Le montant exact du TTC dû passe la garde.
+        $this->postJson('/api/mobile-money/initiate', $this->charge([
+            'amount' => 11800,
+            'commande_client_id' => $commande->id,
+        ]))->assertOk();
+
+        $this->assertSame(1, Paiement::count());
+    }
+
     public function test_le_montant_reste_libre_sans_commande_associate(): void
     {
         Http::fake([

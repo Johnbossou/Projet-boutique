@@ -44,10 +44,15 @@ interface Vente {
   numero_commande: string;
   date_commande: string;
   montant_total: number;
+  tva?: number;
   statut: 'en_attente' | 'confirmee' | 'expediee' | 'livree' | 'annulee';
   produits_count: number;
   created_at: string;
 }
+
+// montant_total = base HT (stockage serveur) : le client a payé la somme
+// avec la TVA. Number() absorbe les décimales renvoyées en chaîne.
+const totalDu = (v: Vente) => Number(v.montant_total) + Number(v.tva ?? 0);
 
 interface Client {
   id: number;
@@ -618,7 +623,7 @@ export default function ClientsPage() {
         </div>
       </div>
       <div className="text-right">
-        <p className="font-bold text-lg">{commande.montant_total.toLocaleString()} FCFA</p>
+        <p className="font-bold text-lg">{totalDu(commande).toLocaleString()} FCFA</p>
         <Badge variant={
           commande.statut === 'livree' ? 'default' :
           commande.statut === 'expediee' ? 'secondary' : 'outline'
@@ -1505,7 +1510,7 @@ export default function ClientsPage() {
                                     </p>
                                   </div>
                                   <div className="text-right">
-                                    <p className="font-bold">{commande.montant_total.toLocaleString()} FCFA</p>
+                                    <p className="font-bold">{totalDu(commande).toLocaleString()} FCFA</p>
                                     <Badge variant="outline" className={
                                       commande.statut === 'livree' ? 'bg-green-50 text-green-700 border-green-200' :
                                       commande.statut === 'expediee' ? 'bg-blue-50 text-blue-700 border-blue-200' :

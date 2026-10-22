@@ -1790,7 +1790,7 @@ export default function CaissePage() {
                             </div>
                           </div>
                           <div className="text-right space-y-1 text-sm text-slate-600 dark:text-slate-400">
-                            <div>Total: {(vente.montant_total + vente.tva).toLocaleString()} FCFA</div>
+                            <div>Total: {(Number(vente.montant_total) + Number(vente.tva)).toLocaleString()} FCFA</div>
                             <div>Mode: {
                                 { especes: 'Espèces', mtn: 'MTN Money', moov: 'Moov Money', carte: 'Carte Bancaire' }[vente.mode_paiement || 'especes'] ?? vente.mode_paiement
                               }</div>
@@ -1988,7 +1988,7 @@ export default function CaissePage() {
                     <div className="mt-6 space-y-2 text-sm border-t border-green-200 pt-4">
                       <div className="flex justify-between">
                         <span>Sous-total:</span>
-                        <span>{(lastVente.montant_total + lastVente.remise).toLocaleString()} FCFA</span>
+                        <span>{(Number(lastVente.montant_total) + Number(lastVente.remise)).toLocaleString()} FCFA</span>
                       </div>
                       
                       {lastVente.remise > 0 && (
@@ -2013,7 +2013,7 @@ export default function CaissePage() {
 
                       <div className="flex justify-between font-bold text-lg border-t border-green-300 pt-2 text-green-800 dark:text-green-300">
                         <span>TOTAL:</span>
-                        <span>{(lastVente.montant_total + lastVente.tva).toLocaleString()} FCFA</span>
+                        <span>{(Number(lastVente.montant_total) + Number(lastVente.tva)).toLocaleString()} FCFA</span>
                       </div>
                     </div>
 
@@ -2153,7 +2153,7 @@ export default function CaissePage() {
                                 <div class="summary">
                                   <div class="summary-row">
                                     <span>SOUS-TOTAL</span>
-                                    <span>${(lastVente.montant_total + lastVente.remise).toLocaleString()} FCFA</span>
+                                    <span>${(Number(lastVente.montant_total) + Number(lastVente.remise)).toLocaleString()} FCFA</span>
                                   </div>
                                   ${lastVente.remise > 0 ? `
                                     <div class="summary-row">
@@ -2173,7 +2173,7 @@ export default function CaissePage() {
                                   ` : ''}
                                   <div class="summary-row total-row">
                                     <span>TOTAL</span>
-                                    <span>${(lastVente.montant_total + lastVente.tva).toLocaleString()} FCFA</span>
+                                    <span>${(Number(lastVente.montant_total) + Number(lastVente.tva)).toLocaleString()} FCFA</span>
                                   </div>
                                 </div>
                                 

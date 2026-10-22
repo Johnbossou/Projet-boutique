@@ -183,8 +183,10 @@ export default function FacturesPage() {
 
   // Défense : une facture d'une version antérieure sans montants projetés
   // affichait `undefined.toLocaleString()` et faisait tomber toute la page.
+  // Number() : les décimales arrivent en chaîne ("8474.58") — sans conversion,
+  // les sommes enchaînent des chaînes au lieu de s'additionner.
   const formatMontant = (montant?: number) =>
-    (montant ?? 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' XOF';
+    Number(montant ?? 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' XOF';
 
   return (
     <div className="p-4 lg:p-6 space-y-6">
@@ -247,7 +249,7 @@ export default function FacturesPage() {
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold">
-              {formatMontant(factures.reduce((s, f) => s + (f.montant_ttc ?? 0), 0))}
+              {formatMontant(factures.reduce((s, f) => s + Number(f.montant_ttc ?? 0), 0))}
             </p>
           </CardContent>
         </Card>

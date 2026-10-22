@@ -564,6 +564,10 @@ class ClientController extends Controller
                     'numero_commande' => $vente->numero_vente,
                     'date_commande' => $vente->created_at,
                     'montant_total' => (float) $vente->montant_total,
+                    // montant_total est la base HT : le client a payé
+                    // montant_total + tva — afficher le seul HT mentait
+                    // d'18 % sur l'historique du client.
+                    'tva' => (float) $vente->tva,
                     'statut' => $vente->statut,
                     'caissier' => $vente->user?->name,
                     'lignes' => $vente->ligneVentes->map(fn ($l) => [
@@ -631,6 +635,9 @@ class ClientController extends Controller
                 'numero_commande' => $vente->numero_vente,
                 'date_commande' => $vente->created_at,
                 'montant_total' => (float) $vente->montant_total,
+                // Base HT + TVA : le front affiche la somme des deux (ce
+                // que le client a réellement payé), pas la base seule.
+                'tva' => (float) $vente->tva,
                 'statut' => $vente->statut,
                 'produits_count' => $vente->ligneVentes->count(),
                 'produits' => $vente->ligneVentes->map(function ($ligne) {

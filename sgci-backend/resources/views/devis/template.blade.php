@@ -92,7 +92,7 @@
     </table>
 
     <div class="totals">
-        <div class="grand-total">Total : {{ number_format($devis->montant_total, 0, ',', ' ') }} {{ $boutique->devise }}</div>
+        <div class="grand-total">Total HT : {{ number_format($devis->montant_total, 0, ',', ' ') }} {{ $boutique->devise }}</div>
     </div>
 
     @if($devis->notes)
