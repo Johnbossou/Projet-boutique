@@ -123,10 +123,28 @@ conc_demarrer_serveurs() {
   done
 
   for PORT in $CONC_PORT_A $CONC_PORT_B; do
+    # --no-reload est indispensable, pas une commodite.
+    #
+    # Sans cette option, `artisan serve` demarre le serveur en effacant les
+    # variables d'environnement du processus (ServeCommand.php : tout ce qui
+    # n'est pas dans $passthroughVariables — dont DB_HOST, DB_DATABASE,
+    # DB_USERNAME — est mis a false). Les serveurs talking alors a la base du
+    # .env et non a celle preparee par conc_preparer_base, et les scenarios
+    # echouent sur des reponses vides.
+    #
+    # Pourquoi cela n'apparaissait qu'en CI : l'effacement porte sur $_ENV,
+    # que Windows laisse vide (variables_order sans « E »). Le meme code
+    # transmettait donc tout l'environnement sous Windows, et le perdait sous
+    # Linux.
+    #
+    # L'option a un second effet : elle autorise PHP_CLI_SERVER_WORKERS, le
+    # serveur pode alors servir plusieurs requetes a la fois.
+    #
     # La sortie des serveurs est conservee, pas jetee : un serveur qui meurt
     # en cours de scenario ne laisse aucune trace, et l'echec se resume alors
     # a « HTTP 000 » sur deux appels — impossible a diagnostiquer.
-    php artisan serve --host=127.0.0.1 --port="$PORT" >"$CONC_TMP/serveur_$PORT.log" 2>&1 &
+    php artisan serve --host=127.0.0.1 --port="$PORT" --no-reload \
+      >"$CONC_TMP/serveur_$PORT.log" 2>&1 &
     CONC_PIDS="$CONC_PIDS $!"
   done
 
