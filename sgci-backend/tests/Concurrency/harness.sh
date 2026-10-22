@@ -28,6 +28,62 @@ CONC_PORT_A=8151
 CONC_PORT_B=8152
 CONC_PIDS=""
 
+# ── Compatibilite Windows / Linux ───────────────────────────────────────────
+# Le nettoyage des serveurs passe par taskkill et netstat, qui n'existent que
+# sur Windows : le harnais etait donc injouable sur ubuntu-latest, ou le CI
+# joue les scenarios. Ces deux fonctions sont les seules adaptations
+# necessaires — le reste du harnais (bash, curl, php, python) est identique.
+CONC_OS="windows"
+if command -v uname >/dev/null 2>&1; then
+  case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*) CONC_OS="windows" ;;
+    *) CONC_OS="linux" ;;
+  esac
+fi
+
+# Sur les distributions Linux recentes, le binaire `python` n'existe plus :
+# seuls `python3` est installe. Le harnais est SOURCE par les scenarios, donc
+# une fonction Shell redefinissant `python` suffit — elle vaut aussi dans les
+# sous-coquilles de pipeline, ou les scenarios extraient leurs identifiants.
+if ! command -v python >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
+  python() {
+    python3 "$@"
+  }
+fi
+
+# Tue un processus et ses enfants.
+conc_tuer_pid() {
+  local PID="$1"
+
+  if [ "$CONC_OS" = "windows" ]; then
+    taskkill //F //T //PID "$PID" >/dev/null 2>&1 || true
+  else
+    # Les enfants d'abord : `artisan serve` delegue le travail a un `php -S`
+    # enfant, tuer le seul parent laisserait le serveur en ecoute sur le port.
+    pkill -TERM -P "$PID" >/dev/null 2>&1 || true
+    kill -TERM "$PID" >/dev/null 2>&1 || true
+    sleep 0.3
+    pkill -KILL -P "$PID" >/dev/null 2>&1 || true
+    kill -KILL "$PID" >/dev/null 2>&1 || true
+  fi
+}
+
+# PID(s) qui ecoutent sur le port donne.
+conc_pids_du_port() {
+  local PORT="$1"
+
+  if [ "$CONC_OS" = "windows" ]; then
+    netstat -ano | grep -E ":$PORT[[:space:]].*LISTENING" \
+      | awk '{print $5}' | sort -u
+  elif command -v ss >/dev/null 2>&1; then
+    # users:(("php",pid=1234,fd=5)) : seul le pid est utile ici.
+    ss -lptnH "sport = :$PORT" 2>/dev/null \
+      | grep -oE 'pid=[0-9]+' | cut -d= -f2 | sort -u
+  else
+    lsof -ti tcp:"$PORT" -sTCP:LISTEN 2>/dev/null | sort -u
+  fi
+}
+
 # Les reponses sont ecrites dans le projet, pas dans /tmp.
 # Sous Git Bash, /tmp designe un dossier different de celui que resolvent PHP
 # et Python en version Windows : les deux outils lisaient donc des fichiers
@@ -105,10 +161,10 @@ trap conc_piege_arret EXIT INT TERM
 conc_arreter_serveurs() {
   local PID
   for PID in $CONC_PIDS; do
-    # //T tue aussi les enfants : `artisan serve` delegue le travail a un
+    # //F tue aussi les enfants : `artisan serve` delegue le travail a un
     # `php -S` enfant, et tuer le seul parent laisse le serveur en ecoute sur
     # le port. Le scenario suivant le reutiliserait alors par erreur.
-    taskkill //F //T //PID "$PID" >/dev/null 2>&1 || true
+    conc_tuer_pid "$PID"
   done
   CONC_PIDS=""
 
@@ -133,10 +189,9 @@ conc_arreter_serveurs() {
       # trouve rien et sort en erreur. Avec `set -o pipefail`, cette affectation
       # interromprait le scenario en cours de nettoyage — apres avoir deja
       # imprime ses resultats, ce qui masque le verdict.
-      RESTE=$(netstat -ano | grep -E ":$PORT[[:space:]].*LISTENING" \
-              | awk '{print $5}' | sort -u || true)
+      RESTE=$(conc_pids_du_port "$PORT" || true)
       for PID in $RESTE; do
-        taskkill //F //T //PID "$PID" >/dev/null 2>&1 || true
+        conc_tuer_pid "$PID"
       done
       sleep 1
     done
