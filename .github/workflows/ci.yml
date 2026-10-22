@@ -90,6 +90,11 @@ jobs:
   backend-concurrency:
     name: Backend - Scenarios de concurrence
     runs-on: ubuntu-latest
+    # Reserve a la nuit et a la demande : ces scenarios mesurent des attentes
+    # de verrou, donc leur resultat depend de la charge de la machine. Les
+    # faire tourner a chaque push exposerait la chaine de deploiement
+    # (Railway attend la reussite de ce workflow) a un faux echec de timing.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     # MySQL 8 : le harnais mesure les attentes de verrou via
     # performance_schema.data_lock_waits (MySQL 8) ou INNODB_LOCK_WAITS
     # (MariaDB) — la source presente est choisie automatiquement.
@@ -138,7 +143,17 @@ jobs:
       # Le harnais attend une base MySQL en 127.0.0.1:3306 avec root sans mot
       # de passe (valeurs codees en dur dans conc_preparer_base) : le service
       # ci-dessus est configure dans ce sens.
+      #
+      # Le cache passe en fichier : .env.example demande Redis, absent du CI,
+      # et le login comme le anti brute-force s'appuient sur le cache — sans
+      # lui, le premier appel echoue et tous les scenarios tombent.
       - name: Run concurrency scenarios
+        env:
+          APP_ENV: local
+          APP_DEBUG: "false"
+          CACHE_STORE: file
+          SESSION_DRIVER: database
+          QUEUE_CONNECTION: database
         run: |
           set -uo pipefail
           export CONC_RACINE="$(pwd)"
