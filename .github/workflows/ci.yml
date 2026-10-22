@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main, develop]
   workflow_dispatch:
+  # Les scenarios de concurrence jouent la nuit : ils mesurent des attentes
+  # de verrou, donc leur resultat depend de la charge de la machine. Les faire
+  # tourner a chaque push exposerait la chaine de deploiement (Railway attend
+  # la reussite de ce workflow) a un faux echec de timing.
+  schedule:
+    - cron: '17 3 * * *'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -45,9 +51,111 @@ jobs:
           php artisan key:generate
 
       # Les tests utilisent SQLite :memory: via phpunit.xml (RefreshDatabase),
-      # aucune migration manuelle ni service MySQL nécessaires.
+      # aucune migration manuelle ni service MySQL necessaires.
       - name: Run tests
         run: php artisan test
+
+  backend-style:
+    name: Backend - Pint (style)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sgci-backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP 8.2
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: dom, curl, libxml, mbstring, zip, pdo_sqlite, sqlite3
+          coverage: none
+
+      - name: Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/composer
+          key: composer-${{ runner.os }}-${{ hashFiles('sgci-backend/composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: composer install --no-progress --no-interaction --prefer-dist --optimize-autoloader
+
+      # Le style est verifie, jamais corrige ici : corriger en CI committerait
+      # du code non relu. Le developpeur lance `pint` en local.
+      - name: Check style
+        run: ./vendor/bin/pint --test
+
+  backend-concurrency:
+    name: Backend - Scenarios de concurrence
+    runs-on: ubuntu-latest
+    # MySQL 8 : le harnais mesure les attentes de verrou via
+    # performance_schema.data_lock_waits (MySQL 8) ou INNODB_LOCK_WAITS
+    # (MariaDB) — la source presente est choisie automatiquement.
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+          MYSQL_ROOT_HOST: "%"
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    defaults:
+      run:
+        working-directory: sgci-backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP 8.2
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: dom, curl, libxml, mbstring, zip, pdo_mysql, pdo_sqlite, sqlite3
+          coverage: none
+
+      - name: Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/composer
+          key: composer-${{ runner.os }}-${{ hashFiles('sgci-backend/composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: composer install --no-progress --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Prepare application
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      # Le harnais attend une base MySQL en 127.0.0.1:3306 avec root sans mot
+      # de passe (valeurs codees en dur dans conc_preparer_base) : le service
+      # ci-dessus est configure dans ce sens.
+      - name: Run concurrency scenarios
+        run: |
+          set -uo pipefail
+          export CONC_RACINE="$(pwd)"
+          echecs=0
+          total=0
+          for f in tests/Concurrency/*.sh; do
+            [ "$(basename "$f")" = "harness.sh" ] && continue
+            total=$((total+1))
+            if bash "$f"; then
+              echo "OK  $f"
+            else
+              echo "KO  $f"
+              echecs=$((echecs+1))
+            fi
+          done
+          echo "Scenarios : $((total-echecs))/$total reussis"
+          [ "$echecs" -eq 0 ]
 
   frontend-tests:
     name: Frontend - Jest & Build
@@ -66,6 +174,9 @@ jobs:
 
       - name: Install dependencies
         run: npm install
+
+      - name: Lint
+        run: npm run lint
 
       - name: Run tests
         run: npm test
@@ -98,11 +209,134 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
-  # Déploiement : natif aux plateformes (aucun job CI).
-  #  - Vercel : Git integration — déploie automatiquement au push sur main.
-  #  - Railway : GitHub App — le service sgci-backend est connecté au repo
-  #    branch main et auto-déploie au push (si "Wait for CI" est actif, il
-  #    attend la réussite de CE workflow, qui est désormais vert).
-  # Ne PAS réintroduire de job deploy basé sur railway up / vercel-action
-  # ici : railway up est cassé sur un service avec volume attaché, et les
-  # deux plateformes déploient nativement depuis GitHub.
+  mobile-tests:
+    name: Mobile - Jest & Lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sgci-mobile/mobile-vs-emulator
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: sgci-mobile/mobile-vs-emulator/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Le lint est execute par eslint directement, et non par `expo lint` :
+      # la commande Expo verifie ses dependances en ligne et echoue hors
+      # reseau, alors que la configuration eslint du projet est deja installee.
+      # Seuls les warnings sont toleres (59 a la date, tous preexistants) :
+      # une erreur, elle, bloque.
+      - name: Lint
+        run: npx eslint . --max-warnings 100
+
+      - name: Run tests
+        run: npm test
+
+  e2e:
+    name: E2E - Smoke Playwright
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sgci-frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP 8.2
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: dom, curl, libxml, mbstring, zip, pdo_sqlite, sqlite3
+          coverage: none
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install backend dependencies
+        working-directory: sgci-backend
+        run: composer install --no-progress --no-interaction --prefer-dist --optimize-autoloader
+
+      # Base SQLite : le smoke e2e n'a besoin que des comptes de demonstration
+      # (gerant@sgci.bj / password), des boutiques, des produits et des
+      # clients — pas d'un MySQL. Le cache passe en fichier et la file en
+      # synchrone : ni Redis ni worker ne sont disponibles dans le CI, et le
+      # middleware anti brute-force s'appuie sur le cache.
+      - name: Prepare backend database
+        working-directory: sgci-backend
+        env:
+          APP_ENV: local
+          APP_DEBUG: "false"
+          DB_CONNECTION: sqlite
+          DB_DATABASE: "${{ github.workspace }}/sgci-backend/database/database.sqlite"
+          CACHE_STORE: file
+          SESSION_DRIVER: database
+          QUEUE_CONNECTION: sync
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          touch database/database.sqlite
+          php artisan migrate --seed --force
+
+      # Le serveur doit repondre avant que Playwright ne lance le frontend.
+      - name: Start backend
+        working-directory: sgci-backend
+        env:
+          APP_ENV: local
+          APP_DEBUG: "false"
+          DB_CONNECTION: sqlite
+          DB_DATABASE: "${{ github.workspace }}/sgci-backend/database/database.sqlite"
+          CACHE_STORE: file
+          SESSION_DRIVER: database
+          QUEUE_CONNECTION: sync
+        run: |
+          PHP_CLI_SERVER_WORKERS=4 php artisan serve --host=127.0.0.1 --port=8000 > /tmp/backend.log 2>&1 &
+          for i in $(seq 1 40); do
+            if curl -sf http://127.0.0.1:8000/up > /dev/null; then
+              echo "Backend pret sur le port 8000"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Le backend n'a pas demarre :"
+          cat /tmp/backend.log
+          exit 1
+
+      - name: Install frontend dependencies
+        run: npm install
+
+      # NEXT_PUBLIC_API_URL est fige dans le bundle au moment du build : il
+      # doit viser l'API locale du job, pas l'URL de production.
+      - name: Build frontend
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: http://127.0.0.1:8000/api
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      # Le serveur de production est lance par Playwright (webServer dans
+      # playwright.config.ts) : en CI, la commande est `npm start`.
+      - name: Run e2e smoke
+        run: npx playwright test --project=chromium
+        env:
+          CI: "true"
+          NEXT_PUBLIC_API_URL: http://127.0.0.1:8000/api
+
+  # Deploiement : natif aux plateformes (aucun job CI).
+  #  - Vercel : Git integration — deploie automatiquement au push sur main.
+  #  - Railway : GitHub App — le service sgci-backend est connecte au repo
+  #    branch main et auto-deploie au push (si "Wait for CI" est actif, il
+  #    attend la reussite de CE workflow, qui est desormais vert).
+  # Ne PAS reintroduire de job deploy base sur railway up / vercel-action
+  # ici : railway up est casse sur un service avec volume attache, et les
+  # deux plateformes deployent nativement depuis GitHub.
