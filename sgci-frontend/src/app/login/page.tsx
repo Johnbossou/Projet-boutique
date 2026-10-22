@@ -227,6 +227,7 @@ export default function LoginPage() {
                   </label>
                   <input
                     type="email"
+                    data-testid="login-email"
                     autoComplete="email"
                     required
                     placeholder="gerant@sgci.bj"
@@ -249,6 +250,7 @@ export default function LoginPage() {
                   <div className="relative">
                     <input
                       type={showPassword ? 'text' : 'password'}
+                      data-testid="login-password"
                       autoComplete="current-password"
                       required
                       placeholder="••••••••"
@@ -292,6 +294,7 @@ export default function LoginPage() {
                 {/* Submit */}
                 <motion.button
                   type="submit"
+                  data-testid="login-submit"
                   disabled={isLoading}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
