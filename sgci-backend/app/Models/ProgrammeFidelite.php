@@ -14,6 +14,7 @@ class ProgrammeFidelite extends Model
         'nom',
         'description',
         'points_par_achat',
+        'points_par_100_fcfa',
         'valeur_point',
         'niveaux',
         'actif',
@@ -23,6 +24,7 @@ class ProgrammeFidelite extends Model
         'niveaux' => 'array',
         'actif' => 'boolean',
         'valeur_point' => 'decimal:2',
+        'points_par_100_fcfa' => 'integer',
     ];
 
     /**

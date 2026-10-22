@@ -88,6 +88,45 @@ class FideliteTest extends TestCase
             ->assertStatus(422);
     }
 
+    public function test_store_accepte_points_par_100_fcfa_et_defaut_0(): void
+    {
+        Sanctum::actingAs($this->gerant);
+
+        // Champ envoyé : stocké tel quel (mode prorata).
+        $this->postJson('/api/fidelite', $this->payloadProgramme() + ['points_par_100_fcfa' => 3])
+            ->assertCreated()
+            ->assertJsonPath('data.points_par_100_fcfa', 3);
+
+        // Champ absent : 0 = ancien mode (points fixes par achat).
+        $this->postJson('/api/fidelite', $this->payloadProgramme() + ['nom' => 'Sans prorata'])
+            ->assertCreated()
+            ->assertJsonPath('data.points_par_100_fcfa', 0);
+
+        // Valeur invalide : rejetée.
+        $this->postJson('/api/fidelite', $this->payloadProgramme() + ['points_par_100_fcfa' => -1])
+            ->assertStatus(422);
+    }
+
+    public function test_update_change_points_par_100_fcfa(): void
+    {
+        Sanctum::actingAs($this->gerant);
+
+        $programme = ProgrammeFidelite::create([
+            'boutique_id' => $this->boutique->id,
+            'nom' => 'À basculer',
+            'points_par_achat' => 5,
+            'valeur_point' => 1,
+            'niveaux' => [['nom' => 'Bronze', 'points_min' => 0, 'remise_pourcentage' => 0]],
+            'actif' => true,
+        ]);
+
+        $this->putJson("/api/fidelite/{$programme->id}", $this->payloadProgramme() + ['points_par_100_fcfa' => 2])
+            ->assertOk()
+            ->assertJsonPath('data.points_par_100_fcfa', 2);
+
+        $this->assertSame(2, $programme->refresh()->points_par_100_fcfa);
+    }
+
     public function test_index_liste_les_programmes_de_la_boutique_courante(): void
     {
         Sanctum::actingAs($this->gerant);

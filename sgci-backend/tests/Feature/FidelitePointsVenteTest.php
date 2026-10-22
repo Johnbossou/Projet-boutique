@@ -17,8 +17,14 @@ use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 /**
- * Crédit des points fidélité à la vente (décision actée : « créditer à
- * l'achat », libellé UI « pts/achat » = montant fixe par vente).
+ * Crédit des points fidélité à la vente.
+ *
+ * Deux modes (décision actée) :
+ *
+ * - prorata du panier (`points_par_100_fcfa > 0`) : points proportionnels au
+ *   montant HT après remise — le mode anti-farm ;
+ * - ancien mode (`points_par_100_fcfa = 0`, défaut des programmes existants)
+ *   : montant fixe `points_par_achat` par achat.
  *
  * Couvre les 3 chemins de création/finalisation d'une vente
  * (store direct, checkout puis terminer, sync offline), l'idempotence par
@@ -78,12 +84,13 @@ class FidelitePointsVenteTest extends TestCase
         ]);
     }
 
-    private function programmePour(Boutique $b, int $pointsParAchat = 10, bool $actif = true): ProgrammeFidelite
+    private function programmePour(Boutique $b, int $pointsParAchat = 10, bool $actif = true, int $pointsPar100Fcfa = 0): ProgrammeFidelite
     {
         return ProgrammeFidelite::create([
             'boutique_id' => $b->id,
             'nom' => 'Programme '.$b->nom,
             'points_par_achat' => $pointsParAchat,
+            'points_par_100_fcfa' => $pointsPar100Fcfa,
             'valeur_point' => 5,
             'niveaux' => [
                 ['nom' => 'Débutant', 'points_min' => 0, 'remise_pourcentage' => 0],
@@ -421,5 +428,118 @@ class FidelitePointsVenteTest extends TestCase
             TransactionPoints::where('vente_id', $venteId)->where('type', 'retrait')->count(),
             'Une seule transaction de retrait par vente'
         );
+    }
+
+    // ------------------------------------------------------- prorata panier
+
+    public function test_prorata_credite_des_points_proportionnels_au_montant(): void
+    {
+        $p = $this->proprio();
+        $b = $this->boutiqueDe($p, 'Boutique Prorata');
+        Sanctum::actingAs($p);
+
+        // 1 point par 100 FCFA : une vente de 1000 FCFA (base HT) = 10 pts.
+        // points_par_achat vaudrait 10 aussi, mais c'est bien la formule du
+        // prorata qui doit servir (prééance vérifiée par le test suivant).
+        $programme = $this->programmePour($b, pointsParAchat: 10, pointsPar100Fcfa: 1);
+        $client = $this->clientDans($b);
+        $produit = $this->produitDans($b, prix: 1000);
+
+        $this->postJson('/api/ventes', $this->venteDirecte($client, $produit, quantite: 1))
+            ->assertCreated();
+
+        $this->assertSame(10, $this->pointsDe($client, $programme)->points);
+    }
+
+    public function test_prorata_gagne_face_a_points_par_achat_et_suit_le_montant(): void
+    {
+        $p = $this->proprio();
+        $b = $this->boutiqueDe($p, 'Boutique Prorata 2');
+        Sanctum::actingAs($p);
+
+        // points_par_achat = 999 serait crédité en ancien mode : le prorata
+        // doit gagner, et le résultat doit suivre le montant, pas le fixe.
+        $programme = $this->programmePour($b, pointsParAchat: 999, pointsPar100Fcfa: 2);
+        $client = $this->clientDans($b);
+        $produit = $this->produitDans($b, prix: 1500);
+
+        $this->postJson('/api/ventes', $this->venteDirecte($client, $produit, quantite: 3))
+            ->assertCreated();
+
+        // 4500 FCFA × 2 / 100 = 90 pts (pas 999, pas 45).
+        $this->assertSame(90, $this->pointsDe($client, $programme)->points);
+    }
+
+    public function test_prorata_vente_trop_pette_ne_credite_rien(): void
+    {
+        $p = $this->proprio();
+        $b = $this->boutiqueDe($p, 'Boutique Micro');
+        Sanctum::actingAs($p);
+
+        // 50 FCFA × 1 / 100 = 0,5 → floor = 0 : rien à créditer, pas de
+        // compte ni de transaction vide (c'est le cœur du anti-farm).
+        $programme = $this->programmePour($b, pointsParAchat: 10, pointsPar100Fcfa: 1);
+        $client = $this->clientDans($b);
+        $produit = $this->produitDans($b, prix: 50);
+
+        $this->postJson('/api/ventes', $this->venteDirecte($client, $produit, quantite: 1))
+            ->assertCreated();
+
+        $this->assertNull($this->pointsDe($client, $programme));
+        $this->assertDatabaseCount('transaction_points', 0);
+    }
+
+    public function test_annulation_reprend_les_points_du_prorata(): void
+    {
+        $p = $this->proprio();
+        $b = $this->boutiqueDe($p, 'Boutique Prorata Annul');
+        Sanctum::actingAs($p);
+
+        $programme = $this->programmePour($b, pointsParAchat: 10, pointsPar100Fcfa: 1);
+        $client = $this->clientDans($b);
+        $produit = $this->produitDans($b, prix: 1000);
+
+        $venteId = $this->postJson('/api/ventes', $this->venteDirecte($client, $produit))
+            ->assertCreated()
+            ->json('id');
+
+        $this->assertSame(10, $this->pointsDe($client, $programme)->points);
+
+        $this->postJson("/api/ventes/{$venteId}/annuler", [])->assertOk();
+
+        $this->assertSame(0, $this->pointsDe($client, $programme)->points);
+        $this->assertDatabaseHas('transaction_points', [
+            'vente_id' => $venteId,
+            'type' => 'retrait',
+            'points' => 10,
+        ]);
+    }
+
+    public function test_mode_legacy_inchange_quand_prorata_absent_du_payload(): void
+    {
+        $p = $this->proprio();
+        $b = $this->boutiqueDe($p, 'Boutique Legacy');
+        Sanctum::actingAs($p);
+
+        // Programme créé via l'API sans points_par_100_fcfa → colonne à 0 →
+        // ancien mode : points_par_achat fixe, comportement antérieur.
+        $programme = ProgrammeFidelite::create([
+            'boutique_id' => $b->id,
+            'nom' => 'Programme Legacy',
+            'points_par_achat' => 7,
+            'valeur_point' => 5,
+            'niveaux' => [['nom' => 'Débutant', 'points_min' => 0, 'remise_pourcentage' => 0]],
+            'actif' => true,
+        ]);
+        $client = $this->clientDans($b);
+        $produit = $this->produitDans($b, prix: 1000);
+
+        $this->postJson('/api/ventes', $this->venteDirecte($client, $produit))
+            ->assertCreated();
+
+        // Relecture SQL : la valeur par défaut de colonne (0) n'apparaît que
+        // lors d'un SELECT, l'objet créé en mémoire ne l'a pas.
+        $this->assertSame(0, $programme->refresh()->points_par_100_fcfa, 'Défaut de colonne = ancien mode');
+        $this->assertSame(7, $this->pointsDe($client, $programme)->points);
     }
 }

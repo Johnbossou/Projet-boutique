@@ -53,6 +53,7 @@ interface ProgrammeFidelite {
   nom: string;
   description: string;
   points_par_achat: number;
+  points_par_100_fcfa: number;
   valeur_point: number;
   actif: boolean;
   niveaux: NiveauFidelite[];
@@ -64,6 +65,7 @@ interface ProgrammeFormData {
   nom: string;
   description: string;
   points_par_achat: number;
+  points_par_100_fcfa: number;
   valeur_point: number;
   actif: boolean;
   niveaux: NiveauFidelite[];
@@ -140,6 +142,7 @@ const emptyProgramForm: ProgrammeFormData = {
   nom: '',
   description: '',
   points_par_achat: 1,
+  points_par_100_fcfa: 1,
   valeur_point: 1,
   actif: true,
   niveaux: [{ nom: 'Bronze', points_min: 0, remise_pourcentage: 0 }],
@@ -256,6 +259,7 @@ export default function FidelitePage() {
       nom: p.nom,
       description: p.description,
       points_par_achat: p.points_par_achat,
+      points_par_100_fcfa: p.points_par_100_fcfa ?? 0,
       valeur_point: p.valeur_point,
       actif: p.actif,
       niveaux: p.niveaux.length > 0 ? [...p.niveaux] : [{ nom: 'Bronze', points_min: 0, remise_pourcentage: 0 }],
@@ -278,6 +282,7 @@ export default function FidelitePage() {
         nom: programForm.nom,
         description: programForm.description,
         points_par_achat: programForm.points_par_achat,
+        points_par_100_fcfa: programForm.points_par_100_fcfa,
         valeur_point: programForm.valeur_point,
         actif: programForm.actif,
         niveaux: programForm.niveaux,
@@ -612,7 +617,11 @@ export default function FidelitePage() {
                           <div className="flex items-center gap-2 text-sm">
                             <Star className="w-4 h-4 text-yellow-500" />
                             <span className="text-slate-600 dark:text-slate-400">
-                              <span className="font-semibold text-slate-900 dark:text-white">{prog.points_par_achat}</span> pts/achat
+                              {(prog.points_par_100_fcfa ?? 0) > 0 ? (
+                                <><span className="font-semibold text-slate-900 dark:text-white">{prog.points_par_100_fcfa}</span> pts / 100 FCFA</>
+                              ) : (
+                                <><span className="font-semibold text-slate-900 dark:text-white">{prog.points_par_achat}</span> pts/achat</>
+                              )}
                             </span>
                           </div>
                           <div className="flex items-center gap-2 text-sm">
@@ -978,7 +987,19 @@ export default function FidelitePage() {
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Points / 100 FCFA</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={programForm.points_par_100_fcfa}
+                    onChange={(e) => setProgramForm(prev => ({ ...prev, points_par_100_fcfa: Number(e.target.value) }))}
+                  />
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Points au prorata du panier. 0 = ancien mode : montant fixe par achat.
+                  </p>
+                </div>
                 <div className="space-y-2">
                   <Label>Points par achat *</Label>
                   <Input

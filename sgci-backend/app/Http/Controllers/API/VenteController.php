@@ -705,11 +705,19 @@ class VenteController extends Controller
      * Crédite les points fidélité d'une vente terminée, ou les reprend si elle
      * est annulée.
      *
-     * Le programme `points_par_achat` était paramétrable depuis l'UI mais
-     * jamais appliqué : seul le retrait à la réclamation de récompense
-     * existait. Un achat ne créditant rien, le programme était inerte — c'est
-     * le périmètre acté : crédit à chaque vente finalisée (libellé UI
-     * « pts/achat »), un montant fixe par vente, pas un taux sur le montant.
+     * Deux modes de calcul, choisis par le programme :
+     *
+     * - `points_par_100_fcfa > 0` : prorata du panier —
+     *   `floor(montant_total × points_par_100_fcfa / 100)`, sur la base HT
+     *   après remise. `points_par_achat` est alors ignoré. C'est le mode
+     *   anti-farm : un achat de 50 FCFA ne rapporte rien, un panier de 150
+     *   FCFA 1 point ;
+     * - `points_par_100_fcfa = 0` (défaut, programmes existants) : ancien
+     *   mode — montant fixe `points_par_achat` par achat, comportement
+     *   inchangé.
+     *
+     * Un crédit à 0 point est ignoré (aucune transaction, aucun compte
+     * créé) : pas de lignes vides dans l'historique.
      *
      * Deux propriétés font la sûreté du calcul :
      *
@@ -772,10 +780,21 @@ class VenteController extends Controller
                         return;
                     }
 
+                    $points = (int) $programme->points_par_100_fcfa > 0
+                        ? (int) floor(
+                            ((float) $verrouillee->montant_total)
+                            * (int) $programme->points_par_100_fcfa / 100
+                        )
+                        : (int) $programme->points_par_achat;
+
+                    if ($points <= 0) {
+                        return;
+                    }
+
                     $compte ??= $this->inscrireAuProgrammeFidelite($programme, $verrouillee->client_id);
 
                     $compte->ajouterPoints(
-                        (int) $programme->points_par_achat,
+                        $points,
                         'Achat vente #'.$verrouillee->id,
                         $verrouillee
                     );
