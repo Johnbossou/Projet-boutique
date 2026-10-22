@@ -167,6 +167,14 @@ jobs:
             else
               echo "KO  $f"
               echecs=$((echecs+1))
+              # Les journaux des serveurs PHP sont conserves par le harnais :
+              # sans eux, un serveur mort en cours de scenario se resume a
+              # « HTTP 000 » sur deux appels, sans aucune cause.
+              for log in storage/app/concurrency/serveur_*.log; do
+                [ -f "$log" ] || continue
+                echo "---- $log (fin) ----"
+                tail -25 "$log"
+              done
             fi
           done
           echo "Scenarios : $((total-echecs))/$total reussis"

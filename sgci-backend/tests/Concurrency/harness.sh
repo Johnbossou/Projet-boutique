@@ -123,7 +123,10 @@ conc_demarrer_serveurs() {
   done
 
   for PORT in $CONC_PORT_A $CONC_PORT_B; do
-    php artisan serve --host=127.0.0.1 --port="$PORT" >/dev/null 2>&1 &
+    # La sortie des serveurs est conservee, pas jetee : un serveur qui meurt
+    # en cours de scenario ne laisse aucune trace, et l'echec se resume alors
+    # a « HTTP 000 » sur deux appels — impossible a diagnostiquer.
+    php artisan serve --host=127.0.0.1 --port="$PORT" >"$CONC_TMP/serveur_$PORT.log" 2>&1 &
     CONC_PIDS="$CONC_PIDS $!"
   done
 
