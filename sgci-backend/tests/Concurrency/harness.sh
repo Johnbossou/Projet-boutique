@@ -99,6 +99,19 @@ conc_preparer_base() {
 
   php -r "\$p=new PDO('mysql:host=127.0.0.1;port=3306','root','');\$p->exec('CREATE DATABASE IF NOT EXISTS $CONC_BASE CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');"
 
+  # Le cache est vide avant chaque scenario.
+  #
+  # Les routes API sont protegees par un limiteur de debit (throttle:20,1) qui
+  # compte les appels dans le cache. Les compteurs survivent d'un scenario a
+  # l'autre : enchaines, les scenarios se barrent mutuellement la porte (HTTP
+  # 429) et echouent sur des anomalies sans rapport avec la concurrence — un
+  # stock non restitue, parce que l'annulation n'a jamais passe.
+  #
+  # En local, le cache vit dans la base et `migrate:fresh` le recree vide :
+  # le probleme n'apparait donc pas. Vider explicitement rend le harnais
+  # independant du driver de cache.
+  php artisan cache:clear >/dev/null 2>&1 || true
+
   if ! php artisan migrate:fresh --force >/dev/null; then
     echo "ECHEC : migrations impossibles sur $CONC_BASE" >&2
     return 1
