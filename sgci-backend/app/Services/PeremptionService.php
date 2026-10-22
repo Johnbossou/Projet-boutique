@@ -9,9 +9,7 @@ use Illuminate\Support\Facades\Log;
 
 class PeremptionService
 {
-    public function __construct(private readonly FcmService $fcmService)
-    {
-    }
+    public function __construct(private readonly FcmService $fcmService) {}
 
     /**
      * Vérifie et envoie des alertes pour les produits proches de la péremption
@@ -27,6 +25,7 @@ class PeremptionService
 
             if ($produitsPerimes->isEmpty()) {
                 Log::info("Aucun produit proche de la péremption pour la boutique {$boutiqueId}");
+
                 return;
             }
 
@@ -89,6 +88,7 @@ class PeremptionService
 
             if ($produitsPerimes->isEmpty()) {
                 Log::info("Aucun produit périmé pour la boutique {$boutiqueId}");
+
                 return;
             }
 
@@ -155,6 +155,7 @@ class PeremptionService
             ];
         } catch (\Throwable $e) {
             Log::error("Erreur lors de la synchronisation des alertes de péremption: {$e->getMessage()}");
+
             return [
                 'proches_peremption' => [],
                 'perimes' => [],

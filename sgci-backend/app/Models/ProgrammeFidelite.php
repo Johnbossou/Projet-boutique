@@ -65,7 +65,7 @@ class ProgrammeFidelite extends Model
     public function calculerNiveau(int $points): array
     {
         $niveaux = $this->niveaux ?? [];
-        
+
         foreach ($niveaux as $index => $niveau) {
             if ($points >= $niveau['points_min'] && $points <= ($niveau['points_max'] ?? PHP_INT_MAX)) {
                 return [

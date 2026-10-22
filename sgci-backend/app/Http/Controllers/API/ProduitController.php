@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers\API;
 
-use App\Http\Controllers\Controller;
 use App\Http\Controllers\Concerns\VerifieBoutique;
+use App\Http\Controllers\Controller;
 use App\Models\Produit;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Storage;
 
 class ProduitController extends Controller
@@ -29,8 +29,8 @@ class ProduitController extends Controller
         // Recherche
         if ($request->has('search') && $request->search) {
             $query->where(function ($q) use ($request) {
-                $q->where('nom', 'like', '%' . $request->search . '%')
-                  ->orWhere('code_qr', 'like', '%' . $request->search . '%');
+                $q->where('nom', 'like', '%'.$request->search.'%')
+                    ->orWhere('code_qr', 'like', '%'.$request->search.'%');
             });
         }
 
@@ -93,11 +93,11 @@ class ProduitController extends Controller
                 ->where('id', $validated['categorie_id'])
                 ->where(function ($q) use ($validated) {
                     $q->whereNull('boutique_id')
-                      ->orWhere('boutique_id', $validated['boutique_id']);
+                        ->orWhere('boutique_id', $validated['boutique_id']);
                 })
                 ->exists();
 
-            if (!$categorieValide) {
+            if (! $categorieValide) {
                 return response()->json([
                     'message' => 'La catégorie sélectionnée appartient à une autre boutique.',
                 ], 422);
@@ -117,6 +117,7 @@ class ProduitController extends Controller
         $this->verifierBoutiqueDe($produit);
 
         $produit->load('categorie');
+
         return response()->json($produit);
     }
 
@@ -168,8 +169,8 @@ class ProduitController extends Controller
     {
         try {
             $query = Produit::whereColumn('quantite_stock', '<', 'seuil_alerte')
-                            ->where('quantite_stock', '>', 0)
-                            ->with('categorie');
+                ->where('quantite_stock', '>', 0)
+                ->with('categorie');
 
             if (auth()->user()->current_boutique_id) {
                 $query->where('boutique_id', auth()->user()->current_boutique_id);
@@ -188,8 +189,8 @@ class ProduitController extends Controller
     {
         $query = Produit::with('categorie')
             ->where(function ($query) use ($search) {
-                $query->where('nom', 'like', '%' . $search . '%')
-                    ->orWhere('code_qr', 'like', '%' . $search . '%');
+                $query->where('nom', 'like', '%'.$search.'%')
+                    ->orWhere('code_qr', 'like', '%'.$search.'%');
             });
 
         if (auth()->user()->current_boutique_id) {
@@ -222,7 +223,7 @@ class ProduitController extends Controller
 
         $produit = $query->first();
 
-        if (!$produit) {
+        if (! $produit) {
             return response()->json(['message' => 'Produit introuvable pour ce code'], 404);
         }
 
@@ -241,7 +242,7 @@ class ProduitController extends Controller
         ]);
 
         $file = $request->file('image');
-        $path = $file->store('produits/' . $produit->id, 'public');
+        $path = $file->store('produits/'.$produit->id, 'public');
         $url = Storage::disk('public')->url($path);
 
         $produit->update(['image_url' => $url]);

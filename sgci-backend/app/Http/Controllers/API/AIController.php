@@ -3,18 +3,14 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
-use App\Models\Vente;
-use App\Models\Produit;
 use App\Models\LigneVente;
-use App\Models\Categorie;
-use App\Models\Client;
-use App\Models\User;
-use Illuminate\Support\Facades\Log;
+use App\Models\Produit;
+use App\Models\Vente;
+use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Http\JsonResponse;
-use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 
 class AIController extends Controller
 {
@@ -28,11 +24,13 @@ class AIController extends Controller
     {
         try {
             $boutiqueId = $request->user()->current_boutique_id;
+
             return $this->predictionsAlgorithmiquesAmeliorees($boutiqueId);
 
         } catch (\Exception $e) {
-            Log::error('Erreur prédictions IA: ' . $e->getMessage());
+            Log::error('Erreur prédictions IA: '.$e->getMessage());
             $boutiqueId = $request->user()->current_boutique_id;
+
             return $this->predictionsAlgorithmiquesAmeliorees($boutiqueId);
         }
     }
@@ -44,11 +42,13 @@ class AIController extends Controller
     {
         try {
             $boutiqueId = $request->user()->current_boutique_id;
+
             return $this->recommandationsAlgorithmiquesAvanceesV2($boutiqueId);
 
         } catch (\Exception $e) {
-            Log::error('Erreur recommandations IA: ' . $e->getMessage());
+            Log::error('Erreur recommandations IA: '.$e->getMessage());
             $boutiqueId = $request->user()->current_boutique_id;
+
             return $this->recommandationsAlgorithmiquesAvanceesV2($boutiqueId);
         }
     }
@@ -98,11 +98,11 @@ class AIController extends Controller
                     'recall' => round($precision * 0.96, 4),
                     'precision_score' => $precision,
                     'epochs' => 100,
-                    'training_time' => '2 secondes'
+                    'training_time' => '2 secondes',
                 ]),
                 'erreur' => null,
                 'created_at' => now(),
-                'updated_at' => now()
+                'updated_at' => now(),
             ]);
 
             return response()->json([
@@ -124,12 +124,12 @@ class AIController extends Controller
                 'metrics' => null,
                 'erreur' => $e->getMessage(),
                 'created_at' => now(),
-                'updated_at' => now()
+                'updated_at' => now(),
             ]);
 
             return response()->json([
                 'success' => false,
-                'message' => 'Erreur lors de l\'entraînement: ' . $e->getMessage()
+                'message' => 'Erreur lors de l\'entraînement: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -155,7 +155,7 @@ class AIController extends Controller
             $facteurPerissable = $produit->est_perissable ? 1.2 : 1.0;
 
             $demandePredite = ceil(
-                (($ventes7Jours * 0.4) + ($ventes30Jours * 0.4) + ($ventes90Jours/3 * 0.2))
+                (($ventes7Jours * 0.4) + ($ventes30Jours * 0.4) + ($ventes90Jours / 3 * 0.2))
                 * $facteurPerissable
                 * (1 + $tendance)
                 * $saisonnalite
@@ -183,7 +183,7 @@ class AIController extends Controller
                 'besoin_calcule' => $besoin,
                 'niveau_urgence' => $niveauUrgence,
                 'statut_stock' => $produit->statut_stock,
-                'mode_calcul' => 'algorithmique_avance_v2'
+                'mode_calcul' => 'algorithmique_avance_v2',
             ];
         });
 
@@ -229,7 +229,7 @@ class AIController extends Controller
                 ));
 
                 $reduction = $this->determinerReductionOptimaleAmelioree($scorePromo, $produit);
-                $prixSuggere = round($produit->prix * (1 - $reduction/100));
+                $prixSuggere = round($produit->prix * (1 - $reduction / 100));
 
                 $duree = $this->determinerDureePromotionAmelioree($scorePromo, $produit);
 
@@ -242,18 +242,18 @@ class AIController extends Controller
                         'categorie' => $produit->categorie?->nom ?? 'Sans catégorie',
                         'couleur_categorie' => $produit->categorie?->couleur,
                         'est_perissable' => $produit->est_perissable,
-                        'statut_stock' => $produit->statut_stock
+                        'statut_stock' => $produit->statut_stock,
                     ],
                     'ventes_30_jours' => $ventes30Jours,
                     'ratio_stock_ventes' => round($ratioStockVentes, 1),
                     'jours_stock' => round($joursStock, 1),
-                    'tendance_ventes' => round($tendance * 100, 1) . '%',
+                    'tendance_ventes' => round($tendance * 100, 1).'%',
                     'score_promotion' => round($scorePromo),
                     'prix_suggere' => $prixSuggere,
-                    'reduction_suggeree' => $reduction . '%',
+                    'reduction_suggeree' => $reduction.'%',
                     'duree_suggeree' => $duree,
                     'impact_estime' => $this->estimerImpactPromotionAmeliore($produit, $reduction, $duree),
-                    'mode_calcul' => 'algorithmique_avance_v2'
+                    'mode_calcul' => 'algorithmique_avance_v2',
                 ];
             })
             ->filter(function ($item) {
@@ -281,11 +281,22 @@ class AIController extends Controller
      */
     private function calculerScoreStock($ratioStockVentes, $joursStock): float
     {
-        if ($ratioStockVentes >= 6) return 100;
-        if ($ratioStockVentes >= 4) return 80;
-        if ($ratioStockVentes >= 3) return 60;
-        if ($ratioStockVentes >= 2) return 40;
-        if ($ratioStockVentes >= 1) return 20;
+        if ($ratioStockVentes >= 6) {
+            return 100;
+        }
+        if ($ratioStockVentes >= 4) {
+            return 80;
+        }
+        if ($ratioStockVentes >= 3) {
+            return 60;
+        }
+        if ($ratioStockVentes >= 2) {
+            return 40;
+        }
+        if ($ratioStockVentes >= 1) {
+            return 20;
+        }
+
         return 0;
     }
 
@@ -294,11 +305,22 @@ class AIController extends Controller
      */
     private function calculerScoreTendance($tendance): float
     {
-        if ($tendance <= -0.3) return 100;
-        if ($tendance <= -0.15) return 70;
-        if ($tendance <= -0.05) return 40;
-        if ($tendance >= 0.3) return 0;
-        if ($tendance >= 0.15) return 10;
+        if ($tendance <= -0.3) {
+            return 100;
+        }
+        if ($tendance <= -0.15) {
+            return 70;
+        }
+        if ($tendance <= -0.05) {
+            return 40;
+        }
+        if ($tendance >= 0.3) {
+            return 0;
+        }
+        if ($tendance >= 0.15) {
+            return 10;
+        }
+
         return 30;
     }
 
@@ -309,10 +331,19 @@ class AIController extends Controller
     {
         $saisonnalite = $this->calculerSaisonnaliteProduit($produitId, $boutiqueId);
 
-        if ($saisonnalite < 0.7) return 100;
-        if ($saisonnalite < 0.9) return 70;
-        if ($saisonnalite > 1.3) return 0;
-        if ($saisonnalite > 1.1) return 20;
+        if ($saisonnalite < 0.7) {
+            return 100;
+        }
+        if ($saisonnalite < 0.9) {
+            return 70;
+        }
+        if ($saisonnalite > 1.3) {
+            return 0;
+        }
+        if ($saisonnalite > 1.1) {
+            return 20;
+        }
+
         return 50;
     }
 
@@ -321,13 +352,28 @@ class AIController extends Controller
      */
     private function determinerReductionOptimaleAmelioree($scorePromo, $produit): int
     {
-        if ($scorePromo >= 90) return 25;
-        if ($scorePromo >= 80) return 20;
-        if ($scorePromo >= 70) return 18;
-        if ($scorePromo >= 60) return 15;
-        if ($scorePromo >= 50) return 12;
-        if ($scorePromo >= 40) return 10;
-        if ($scorePromo >= 30) return 8;
+        if ($scorePromo >= 90) {
+            return 25;
+        }
+        if ($scorePromo >= 80) {
+            return 20;
+        }
+        if ($scorePromo >= 70) {
+            return 18;
+        }
+        if ($scorePromo >= 60) {
+            return 15;
+        }
+        if ($scorePromo >= 50) {
+            return 12;
+        }
+        if ($scorePromo >= 40) {
+            return 10;
+        }
+        if ($scorePromo >= 30) {
+            return 8;
+        }
+
         return 5;
     }
 
@@ -336,9 +382,16 @@ class AIController extends Controller
      */
     private function determinerDureePromotionAmelioree($scorePromo, $produit): string
     {
-        if ($scorePromo >= 80) return '10 jours';
-        if ($scorePromo >= 60) return '7 jours';
-        if ($scorePromo >= 40) return '5 jours';
+        if ($scorePromo >= 80) {
+            return '10 jours';
+        }
+        if ($scorePromo >= 60) {
+            return '7 jours';
+        }
+        if ($scorePromo >= 40) {
+            return '5 jours';
+        }
+
         return '3 jours';
     }
 
@@ -355,9 +408,9 @@ class AIController extends Controller
 
         return [
             'ventes_attendues' => $ventesAttendues,
-            'augmentation_ventes' => round(($augmentationAttendue - 1) * 100) . '%',
+            'augmentation_ventes' => round(($augmentationAttendue - 1) * 100).'%',
             'stock_apres_promo' => max(0, $produit->quantite_stock - $ventesAttendues),
-            'chiffre_affaires_estime' => round($ventesAttendues * ($produit->prix * (1 - $reduction/100)))
+            'chiffre_affaires_estime' => round($ventesAttendues * ($produit->prix * (1 - $reduction / 100))),
         ];
     }
 
@@ -380,13 +433,28 @@ class AIController extends Controller
 
         $ratio = $produit->quantite_stock / $demandePredite;
 
-        if ($ratio >= 4.0) return 'Stock très excessif - Promotion urgente recommandée';
-        if ($ratio >= 2.5) return 'Stock excessif - Considérer promotion';
-        if ($ratio >= 1.8) return 'Stock confortable';
-        if ($ratio >= 1.2) return 'Stock suffisant';
-        if ($ratio >= 0.8) return 'Surveiller attentivement';
-        if ($ratio >= 0.5) return 'Commander modérément';
-        if ($ratio >= 0.2) return 'Commander rapidement';
+        if ($ratio >= 4.0) {
+            return 'Stock très excessif - Promotion urgente recommandée';
+        }
+        if ($ratio >= 2.5) {
+            return 'Stock excessif - Considérer promotion';
+        }
+        if ($ratio >= 1.8) {
+            return 'Stock confortable';
+        }
+        if ($ratio >= 1.2) {
+            return 'Stock suffisant';
+        }
+        if ($ratio >= 0.8) {
+            return 'Surveiller attentivement';
+        }
+        if ($ratio >= 0.5) {
+            return 'Commander modérément';
+        }
+        if ($ratio >= 0.2) {
+            return 'Commander rapidement';
+        }
+
         return 'Commander en urgence - Risque de rupture';
     }
 
@@ -397,7 +465,7 @@ class AIController extends Controller
     private function calculerVentesPeriode($produitId, $jours, $boutiqueId = null): int
     {
         return LigneVente::where('produit_id', $produitId)
-            ->whereHas('vente', function($query) use ($jours, $boutiqueId) {
+            ->whereHas('vente', function ($query) use ($jours, $boutiqueId) {
                 $query->terminees()->where('created_at', '>=', now()->subDays($jours));
                 if ($boutiqueId) {
                     $query->where('boutique_id', $boutiqueId);
@@ -409,6 +477,7 @@ class AIController extends Controller
     private function calculerMoyenneVentes($produitId, $jours, $boutiqueId = null): float
     {
         $ventes = $this->calculerVentesPeriode($produitId, $jours, $boutiqueId);
+
         return $ventes / $jours;
     }
 
@@ -417,10 +486,14 @@ class AIController extends Controller
         $ventes7Jours = $this->calculerVentesPeriode($produitId, 7, $boutiqueId);
         $ventes14Jours = $this->calculerVentesPeriode($produitId, 14, $boutiqueId);
 
-        if ($ventes14Jours == 0) return 0;
+        if ($ventes14Jours == 0) {
+            return 0;
+        }
 
         $ventes7Premiers = $ventes14Jours - $ventes7Jours;
-        if ($ventes7Premiers == 0) return 0;
+        if ($ventes7Premiers == 0) {
+            return 0;
+        }
 
         return ($ventes7Jours - $ventes7Premiers) / $ventes7Premiers;
     }
@@ -430,17 +503,28 @@ class AIController extends Controller
         $ventesMoisCourant = $this->calculerVentesPeriode($produitId, 30, $boutiqueId);
         $ventes3Mois = $this->calculerVentesPeriode($produitId, 90, $boutiqueId);
 
-        if ($ventes3Mois == 0) return 1.0;
+        if ($ventes3Mois == 0) {
+            return 1.0;
+        }
 
         return $ventesMoisCourant / ($ventes3Mois / 3);
     }
 
     private function determinerNiveauUrgence($besoin, $seuilAlerte): string
     {
-        if ($besoin > $seuilAlerte * 3) return 'critical';
-        if ($besoin > $seuilAlerte * 2) return 'high';
-        if ($besoin > $seuilAlerte) return 'medium';
-        if ($besoin > 0) return 'low';
+        if ($besoin > $seuilAlerte * 3) {
+            return 'critical';
+        }
+        if ($besoin > $seuilAlerte * 2) {
+            return 'high';
+        }
+        if ($besoin > $seuilAlerte) {
+            return 'medium';
+        }
+        if ($besoin > 0) {
+            return 'low';
+        }
+
         return 'none';
     }
 
@@ -490,7 +574,7 @@ class AIController extends Controller
             'augmentation_ca' => round($optimisationStock * 0.3, 1),
             'gain_temps' => round($optimisationStock * 0.5, 1),
             'produits_alerte_actuels' => $produitsEnAlerte,
-            'produits_rupture_actuels' => $produitsEnRupture
+            'produits_rupture_actuels' => $produitsEnRupture,
         ];
     }
 
@@ -505,7 +589,7 @@ class AIController extends Controller
             'precision_demandes' => $precisionBase * 0.96,
             'taux_confiance' => $precisionBase,
             'mode' => 'algorithmique_avance_v2',
-            'nombre_produits' => $totalProduits
+            'nombre_produits' => $totalProduits,
         ];
     }
 
@@ -533,7 +617,7 @@ class AIController extends Controller
         return $entrainement ? [
             'date' => $entrainement->date_fin,
             'precision' => $entrainement->precision,
-            'loss' => $entrainement->loss
+            'loss' => $entrainement->loss,
         ] : null;
     }
 
@@ -568,7 +652,7 @@ class AIController extends Controller
             'produits_rupture' => Produit::where('boutique_id', $boutiqueId)->enRupture()->count(),
             'ventes_du_jour' => Vente::where('boutique_id', $boutiqueId)->terminees()->duJour()->count(),
             'chiffre_affaires_jour' => Vente::where('boutique_id', $boutiqueId)->terminees()->duJour()->sum('montant_total'),
-            'mise_a_jour' => now()->toISOString()
+            'mise_a_jour' => now()->toISOString(),
         ];
     }
 }

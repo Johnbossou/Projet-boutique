@@ -85,7 +85,7 @@ class FcmController extends Controller
                 ->where('token', $validated['token'])
                 ->first();
 
-            if (!$token) {
+            if (! $token) {
                 return response()->json([
                     'message' => 'Token non trouvé',
                 ], 404);

@@ -19,7 +19,7 @@ return new class extends Migration
             $table->integer('delai_annulation_vente_minutes')->default(5);
             $table->foreignId('proprietaire_id')->constrained('users')->onDelete('cascade');
             $table->timestamps();
-            
+
             $table->index('proprietaire_id');
         });
     }

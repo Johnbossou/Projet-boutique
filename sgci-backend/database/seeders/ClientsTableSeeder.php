@@ -4,7 +4,6 @@ namespace Database\Seeders;
 
 use App\Models\Client;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Str;
 
 class ClientsTableSeeder extends Seeder
 {
@@ -103,7 +102,7 @@ class ClientsTableSeeder extends Seeder
                 'total_achats' => 2100000,
                 'nombre_commandes' => 15,
                 'derniere_commande' => now()->subDays(1),
-            ]
+            ],
         ];
 
         foreach ($clients as $client) {

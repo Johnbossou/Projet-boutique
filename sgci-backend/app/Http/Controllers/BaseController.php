@@ -2,16 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use Exception;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Auth\AuthenticationException;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Foundation\Validation\ValidatesRequests;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Routing\Controller as BaseController;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
-use Illuminate\Validation\ValidationException;
-use Illuminate\Auth\AuthenticationException;
-use Illuminate\Auth\Access\AuthorizationException;
-use Illuminate\Database\QueryException;
-use Exception;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 
 class Controller extends BaseController
 {
@@ -20,10 +21,7 @@ class Controller extends BaseController
     /**
      * Handle API errors and return consistent response
      *
-     * @param Exception $e
-     * @param string $message
-     * @param int $statusCode
-     * @return \Illuminate\Http\JsonResponse
+     * @return JsonResponse
      */
     protected function handleError(Exception $e, string $message = 'Erreur serveur', int $statusCode = 500)
     {
@@ -81,10 +79,8 @@ class Controller extends BaseController
     /**
      * Handle successful API response
      *
-     * @param mixed $data
-     * @param string $message
-     * @param int $statusCode
-     * @return \Illuminate\Http\JsonResponse
+     * @param  mixed  $data
+     * @return JsonResponse
      */
     protected function successResponse($data = null, string $message = 'Succès', int $statusCode = 200)
     {
@@ -97,10 +93,8 @@ class Controller extends BaseController
     /**
      * Handle error API response
      *
-     * @param string $message
-     * @param mixed $errors
-     * @param int $statusCode
-     * @return \Illuminate\Http\JsonResponse
+     * @param  mixed  $errors
+     * @return JsonResponse
      */
     protected function errorResponse(string $message, $errors = null, int $statusCode = 400)
     {
@@ -118,9 +112,6 @@ class Controller extends BaseController
     /**
      * Log audit trail for sensitive actions
      *
-     * @param string $action
-     * @param string $description
-     * @param array $metadata
      * @return void
      */
     protected function logAudit(string $action, string $description, array $metadata = [])

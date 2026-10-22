@@ -17,7 +17,7 @@ class VerifyBoutiqueManage
     {
         $user = $request->user();
 
-        if (!$user) {
+        if (! $user) {
             return response()->json(['message' => 'Non authentifié'], 401);
         }
 
@@ -29,7 +29,7 @@ class VerifyBoutiqueManage
         $boutique = $request->route('boutique');
         $boutiqueId = is_object($boutique) ? $boutique->id : $boutique;
 
-        if (!$boutiqueId) {
+        if (! $boutiqueId) {
             return $next($request);
         }
 

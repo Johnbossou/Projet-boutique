@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers\API;
 
-use App\Http\Controllers\Controller;
 use App\Events\NouveauMessageChat;
+use App\Http\Controllers\Controller;
 use App\Models\ConversationChat;
 use App\Models\MessageChat;
-use Illuminate\Http\Request;
+use App\Models\User;
+use App\Services\FcmService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class ChatController extends Controller
@@ -61,7 +63,7 @@ class ChatController extends Controller
             // Ajouter les autres participants
             foreach ($validated['participant_ids'] as $userId) {
                 if ($userId != $request->user()->id) {
-                    $conversation->ajouterParticipant(\App\Models\User::find($userId), 'membre');
+                    $conversation->ajouterParticipant(User::find($userId), 'membre');
                 }
             }
 
@@ -90,7 +92,7 @@ class ChatController extends Controller
             return response()->json(['message' => 'Non autorisé'], 403);
         }
 
-        if (!$conversation->estParticipant($request->user())) {
+        if (! $conversation->estParticipant($request->user())) {
             return response()->json(['message' => 'Vous n\'êtes pas participant de cette conversation'], 403);
         }
 
@@ -114,7 +116,7 @@ class ChatController extends Controller
             return response()->json(['message' => 'Non autorisé'], 403);
         }
 
-        if (!$conversation->estParticipant($request->user())) {
+        if (! $conversation->estParticipant($request->user())) {
             return response()->json(['message' => 'Vous n\'êtes pas participant de cette conversation'], 403);
         }
 
@@ -146,9 +148,9 @@ class ChatController extends Controller
             ->all();
 
         if ($participantIds !== []) {
-            app(\App\Services\FcmService::class)->sendToMultipleUsers(
+            app(FcmService::class)->sendToMultipleUsers(
                 $participantIds,
-                $conversation->titre . ' - ' . $request->user()->name,
+                $conversation->titre.' - '.$request->user()->name,
                 mb_substr($validated['message'], 0, 120),
                 [
                     'type' => 'nouveau_message',
@@ -178,7 +180,7 @@ class ChatController extends Controller
             ->wherePivot('role', 'admin')
             ->first();
 
-        if (!$participant) {
+        if (! $participant) {
             return response()->json(['message' => 'Seuls les administrateurs peuvent ajouter des participants'], 403);
         }
 
@@ -187,7 +189,7 @@ class ChatController extends Controller
             'role' => 'nullable|string|in:admin,membre',
         ]);
 
-        $user = \App\Models\User::find($validated['user_id']);
+        $user = User::find($validated['user_id']);
 
         if ($conversation->estParticipant($user)) {
             return response()->json(['message' => 'Cet utilisateur est déjà participant'], 400);
@@ -213,7 +215,7 @@ class ChatController extends Controller
             'user_id' => 'required|exists:users,id',
         ]);
 
-        $user = \App\Models\User::find($validated['user_id']);
+        $user = User::find($validated['user_id']);
 
         // Vérifier si l'utilisateur est admin ou si c'est lui-même
         $participant = $conversation->participants()
@@ -221,7 +223,7 @@ class ChatController extends Controller
             ->wherePivot('role', 'admin')
             ->first();
 
-        if (!$participant && $request->user()->id !== $validated['user_id']) {
+        if (! $participant && $request->user()->id !== $validated['user_id']) {
             return response()->json(['message' => 'Non autorisé'], 403);
         }
 
@@ -247,7 +249,7 @@ class ChatController extends Controller
             ->wherePivot('role', 'admin')
             ->first();
 
-        if (!$participant) {
+        if (! $participant) {
             return response()->json(['message' => 'Seuls les administrateurs peuvent supprimer une conversation'], 403);
         }
 
@@ -269,7 +271,7 @@ class ChatController extends Controller
             return response()->json(['message' => 'Non autorisé'], 403);
         }
 
-        if (!$conversation->estParticipant($request->user())) {
+        if (! $conversation->estParticipant($request->user())) {
             return response()->json(['message' => 'Vous n\'êtes pas participant'], 403);
         }
 
@@ -310,7 +312,7 @@ class ChatController extends Controller
             return response()->json(['message' => 'Non autorisé'], 403);
         }
 
-        if (!$conversation->estParticipant($request->user())) {
+        if (! $conversation->estParticipant($request->user())) {
             return response()->json(['message' => 'Vous n\'êtes pas participant'], 403);
         }
 
@@ -320,7 +322,7 @@ class ChatController extends Controller
             ->wherePivot('role', 'admin')
             ->exists();
 
-        if (!$estAuteur && !$estAdmin) {
+        if (! $estAuteur && ! $estAdmin) {
             return response()->json(['message' => 'Non autorisé à supprimer ce message'], 403);
         }
 

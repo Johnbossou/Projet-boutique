@@ -4,9 +4,9 @@ namespace App\Services;
 
 use App\Models\AppNotification;
 use App\Models\User;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Http;
 
 class NotificationService
 {
@@ -25,8 +25,9 @@ class NotificationService
     public function sendEmail(User $user, string $subject, string $content, array $data = []): bool
     {
         try {
-            if (!$user->email) {
+            if (! $user->email) {
                 Log::warning('Utilisateur sans email', ['user_id' => $user->id]);
+
                 return false;
             }
 
@@ -46,6 +47,7 @@ class NotificationService
                 'user_id' => $user->id,
                 'error' => $e->getMessage(),
             ]);
+
             return false;
         }
     }
@@ -56,8 +58,9 @@ class NotificationService
     public function sendSms(User $user, string $message): bool
     {
         try {
-            if (!$user->telephone) {
+            if (! $user->telephone) {
                 Log::warning('Utilisateur sans numéro de téléphone', ['user_id' => $user->id]);
+
                 return false;
             }
 
@@ -77,6 +80,7 @@ class NotificationService
                     'user_id' => $user->id,
                     'phone' => $user->telephone,
                 ]);
+
                 return true;
             }
 
@@ -91,6 +95,7 @@ class NotificationService
                 'user_id' => $user->id,
                 'error' => $e->getMessage(),
             ]);
+
             return false;
         }
     }
@@ -119,17 +124,17 @@ class NotificationService
      */
     public function sendStockAlert(User $user, string $productName, int $currentStock, int $threshold): array
     {
-        if (!$this->shouldNotify($user, 'alerte_stock')) {
+        if (! $this->shouldNotify($user, 'alerte_stock')) {
             return ['skipped' => true, 'reason' => 'preference_desactivee'];
         }
 
         $subject = "⚠️ Alert Stock: {$productName}";
-        
-        $emailContent = "Bonjour {$user->name},\n\n" .
-            "Le produit {$productName} est en alerte de stock.\n\n" .
-            "Stock actuel: {$currentStock}\n" .
-            "Seuil d'alerte: {$threshold}\n\n" .
-            "Veuillez procéder au réapprovisionnement.\n\n" .
+
+        $emailContent = "Bonjour {$user->name},\n\n".
+            "Le produit {$productName} est en alerte de stock.\n\n".
+            "Stock actuel: {$currentStock}\n".
+            "Seuil d'alerte: {$threshold}\n\n".
+            "Veuillez procéder au réapprovisionnement.\n\n".
             "Cordialement,\nL'équipe SGCI";
 
         $smsContent = "Alerte Stock: {$productName} (Stock: {$currentStock}, Seuil: {$threshold}). Merci de réapprovisionner.";
@@ -142,15 +147,15 @@ class NotificationService
      */
     public function sendStockRupture(User $user, string $productName): array
     {
-        if (!$this->shouldNotify($user, 'alerte_stock')) {
+        if (! $this->shouldNotify($user, 'alerte_stock')) {
             return ['skipped' => true, 'reason' => 'preference_desactivee'];
         }
 
         $subject = "🚨 Rupture Stock: {$productName}";
-        
-        $emailContent = "Bonjour {$user->name},\n\n" .
-            "Le produit {$productName} est en rupture de stock.\n\n" .
-            "Veuillez procéder au réapprovisionnement urgent.\n\n" .
+
+        $emailContent = "Bonjour {$user->name},\n\n".
+            "Le produit {$productName} est en rupture de stock.\n\n".
+            "Veuillez procéder au réapprovisionnement urgent.\n\n".
             "Cordialement,\nL'équipe SGCI";
 
         $smsContent = "Rupture Stock: {$productName}. Réapprovisionnement urgent requis.";
@@ -163,16 +168,16 @@ class NotificationService
      */
     public function sendPeremptionAlert(User $user, string $productName, string $expirationDate, int $daysRemaining): array
     {
-        if (!$this->shouldNotify($user, 'alerte_peremption')) {
+        if (! $this->shouldNotify($user, 'alerte_peremption')) {
             return ['skipped' => true, 'reason' => 'preference_desactivee'];
         }
 
         $subject = "⏰ Alert Péremption: {$productName}";
-        
-        $emailContent = "Bonjour {$user->name},\n\n" .
-            "Le produit {$productName} expire dans {$daysRemaining} jours.\n\n" .
-            "Date de péremption: {$expirationDate}\n\n" .
-            "Veuillez prendre les mesures nécessaires.\n\n" .
+
+        $emailContent = "Bonjour {$user->name},\n\n".
+            "Le produit {$productName} expire dans {$daysRemaining} jours.\n\n".
+            "Date de péremption: {$expirationDate}\n\n".
+            "Veuillez prendre les mesures nécessaires.\n\n".
             "Cordialement,\nL'équipe SGCI";
 
         $smsContent = "Alert Péremption: {$productName} expire dans {$daysRemaining} jours.";
@@ -185,17 +190,17 @@ class NotificationService
      */
     public function sendNewOrderAlert(User $user, string $orderNumber, string $clientName, float $amount): array
     {
-        if (!$this->shouldNotify($user, 'nouvelle_vente')) {
+        if (! $this->shouldNotify($user, 'nouvelle_vente')) {
             return ['skipped' => true, 'reason' => 'preference_desactivee'];
         }
 
         $subject = "📦 Nouvelle Commande: {$orderNumber}";
-        
-        $emailContent = "Bonjour {$user->name},\n\n" .
-            "Une nouvelle commande a été reçue.\n\n" .
-            "Numéro de commande: {$orderNumber}\n" .
-            "Client: {$clientName}\n" .
-            "Montant: {$amount} FCFA\n\n" .
+
+        $emailContent = "Bonjour {$user->name},\n\n".
+            "Une nouvelle commande a été reçue.\n\n".
+            "Numéro de commande: {$orderNumber}\n".
+            "Client: {$clientName}\n".
+            "Montant: {$amount} FCFA\n\n".
             "Cordialement,\nL'équipe SGCI";
 
         $smsContent = "Nouvelle commande {$orderNumber} de {$clientName} ({$amount} FCFA).";
@@ -208,16 +213,16 @@ class NotificationService
      */
     public function sendPaymentReceived(User $user, string $paymentNumber, float $amount): array
     {
-        if (!$this->shouldNotify($user, 'nouvelle_vente')) {
+        if (! $this->shouldNotify($user, 'nouvelle_vente')) {
             return ['skipped' => true, 'reason' => 'preference_desactivee'];
         }
 
         $subject = "💰 Paiement Reçu: {$paymentNumber}";
-        
-        $emailContent = "Bonjour {$user->name},\n\n" .
-            "Un paiement a été reçu.\n\n" .
-            "Numéro de paiement: {$paymentNumber}\n" .
-            "Montant: {$amount} FCFA\n\n" .
+
+        $emailContent = "Bonjour {$user->name},\n\n".
+            "Un paiement a été reçu.\n\n".
+            "Numéro de paiement: {$paymentNumber}\n".
+            "Montant: {$amount} FCFA\n\n".
             "Cordialement,\nL'équipe SGCI";
 
         $smsContent = "Paiement reçu: {$paymentNumber} ({$amount} FCFA).";
@@ -232,16 +237,16 @@ class NotificationService
     {
         // Nettoyer le numéro
         $clean = preg_replace('/[^0-9]/', '', $phone);
-        
+
         // Ajouter le code pays Bénin si nécessaire
         if (strlen($clean) === 8) {
-            return '+229' . $clean;
+            return '+229'.$clean;
         }
-        
+
         if (strlen($clean) === 10 && substr($clean, 0, 2) === '229') {
-            return '+' . $clean;
+            return '+'.$clean;
         }
-        
+
         return $clean;
     }
 
@@ -251,12 +256,12 @@ class NotificationService
     public function sendNotificationFromModel(AppNotification $notification): array
     {
         $user = $notification->user;
-        
-        if (!$user) {
+
+        if (! $user) {
             return ['email' => false, 'sms' => false];
         }
 
-        if (!$this->shouldNotify($user, $notification->type ?? 'systeme')) {
+        if (! $this->shouldNotify($user, $notification->type ?? 'systeme')) {
             return ['skipped' => true, 'reason' => 'preference_desactivee'];
         }
 

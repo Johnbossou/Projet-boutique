@@ -25,7 +25,7 @@ class VerifyBoutiqueOwnership
         $boutiqueId = $request->route('boutique') ?? $request->input('boutique_id') ?? $request->input('boutique');
 
         // Si pas de boutique ciblée, on ne bloque rien ici (préférence router vers le scope courant)
-        if (!$boutiqueId) {
+        if (! $boutiqueId) {
             return $next($request);
         }
 
@@ -33,7 +33,7 @@ class VerifyBoutiqueOwnership
             $boutiqueId = $boutiqueId->id;
         }
 
-        if (!$user->aAccesBoutique($boutiqueId)) {
+        if (! $user->aAccesBoutique($boutiqueId)) {
             Log::warning('Unauthorized boutique access attempt', [
                 'user_id' => $user->id,
                 'user_email' => $user->email,

@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers\API;
 
-use App\Http\Controllers\Controller;
 use App\Http\Controllers\Concerns\VerifieBoutique;
+use App\Http\Controllers\Controller;
 use App\Models\Categorie;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class CategorieController extends Controller
 {
@@ -58,6 +58,7 @@ class CategorieController extends Controller
         $this->verifierBoutiqueDe($categorie);
 
         $categorie->load('produits');
+
         return response()->json($categorie);
     }
 
@@ -69,7 +70,7 @@ class CategorieController extends Controller
         $this->verifierBoutiqueDe($categorie);
 
         $validated = $request->validate([
-            'nom' => 'sometimes|string|max:255|unique:categories,nom,' . $categorie->id,
+            'nom' => 'sometimes|string|max:255|unique:categories,nom,'.$categorie->id,
             'description' => 'nullable|string',
             'couleur' => 'nullable|string|max:7',
             'icone' => 'nullable|string|max:50',
@@ -90,7 +91,7 @@ class CategorieController extends Controller
         // Vérifier si la catégorie a des produits
         if ($categorie->produits()->count() > 0) {
             return response()->json([
-                'message' => 'Impossible de supprimer une catégorie qui contient des produits.'
+                'message' => 'Impossible de supprimer une catégorie qui contient des produits.',
             ], 422);
         }
 

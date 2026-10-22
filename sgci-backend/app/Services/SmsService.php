@@ -9,7 +9,9 @@ use Illuminate\Support\Facades\Log;
 class SmsService
 {
     protected string $apiKey;
+
     protected string $senderId;
+
     protected string $apiUrl;
 
     public function __construct()
@@ -21,7 +23,7 @@ class SmsService
 
     public function sendStockAlert(User $user, string $productName, int $currentStock): array
     {
-        if (!$user->telephone) {
+        if (! $user->telephone) {
             return [
                 'success' => false,
                 'message' => 'Aucun numéro de téléphone disponible',
@@ -35,7 +37,7 @@ class SmsService
 
     public function sendNewSaleNotification(User $user, string $saleNumber, float $amount): array
     {
-        if (!$user->telephone) {
+        if (! $user->telephone) {
             return [
                 'success' => false,
                 'message' => 'Aucun numéro de téléphone disponible',
@@ -49,7 +51,7 @@ class SmsService
 
     public function sendArrivalValidation(User $user, string $productName, int $quantity): array
     {
-        if (!$user->telephone) {
+        if (! $user->telephone) {
             return [
                 'success' => false,
                 'message' => 'Aucun numéro de téléphone disponible',
@@ -70,6 +72,7 @@ class SmsService
             // Simulation pour le développement (remplacer par vrai appel API en production)
             if (config('services.sms.simulation', true)) {
                 Log::info("SMS SIMULATION: Envoyé à {$phone} - Message: {$message}");
+
                 return [
                     'success' => true,
                     'message' => 'SMS simulé avec succès',
@@ -87,6 +90,7 @@ class SmsService
 
             if ($response->successful()) {
                 Log::info("SMS envoyé à {$phone}");
+
                 return [
                     'success' => true,
                     'message' => 'SMS envoyé avec succès',
@@ -94,7 +98,7 @@ class SmsService
                 ];
             }
 
-            Log::error("Erreur envoi SMS", [
+            Log::error('Erreur envoi SMS', [
                 'phone' => $phone,
                 'response' => $response->body(),
             ]);
@@ -105,7 +109,7 @@ class SmsService
                 'error' => $response->body(),
             ];
         } catch (\Exception $e) {
-            Log::error("Exception envoi SMS", [
+            Log::error('Exception envoi SMS', [
                 'phone' => $phoneNumber,
                 'error' => $e->getMessage(),
             ]);
@@ -124,12 +128,12 @@ class SmsService
         $phone = preg_replace('/[^0-9]/', '', $phone);
 
         // Ajouter le code pays si nécessaire
-        if (strlen($phone) === 8 && !str_starts_with($phone, '229')) {
-            $phone = '229' . $phone;
+        if (strlen($phone) === 8 && ! str_starts_with($phone, '229')) {
+            $phone = '229'.$phone;
         }
 
-        if (!str_starts_with($phone, '+')) {
-            $phone = '+' . $phone;
+        if (! str_starts_with($phone, '+')) {
+            $phone = '+'.$phone;
         }
 
         return $phone;

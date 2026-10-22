@@ -23,7 +23,7 @@ class PaiementMisAJour implements ShouldBroadcast
     public function broadcastOn(): array
     {
         return [
-            new PrivateChannel('boutique.' . $this->boutiqueId),
+            new PrivateChannel('boutique.'.$this->boutiqueId),
         ];
     }
 

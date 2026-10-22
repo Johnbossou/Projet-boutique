@@ -15,7 +15,7 @@ class AnalyticsCacheService
     /**
      * Get cached analytics data
      */
-    public function get(string $key, callable $callback, int $duration = null)
+    public function get(string $key, callable $callback, ?int $duration = null)
     {
         $cacheKey = $this->getCacheKey($key);
         $duration = $duration ?? $this->cacheDuration;
@@ -26,7 +26,7 @@ class AnalyticsCacheService
     /**
      * Get cached data with tags for easier invalidation
      */
-    public function getWithTags(string $key, array $tags, callable $callback, int $duration = null)
+    public function getWithTags(string $key, array $tags, callable $callback, ?int $duration = null)
     {
         $cacheKey = $this->getCacheKey($key);
         $duration = $duration ?? $this->cacheDuration;
@@ -65,6 +65,7 @@ class AnalyticsCacheService
     private function getCacheKey(string $key): string
     {
         $boutiqueId = auth()->user()?->current_boutique_id ?? 'global';
+
         return "analytics:{$boutiqueId}:{$key}";
     }
 
@@ -84,6 +85,7 @@ class AnalyticsCacheService
         try {
             if (config('cache.default') === 'redis') {
                 $info = Redis::info('stats');
+
                 return [
                     'hits' => $info['keyspace_hits'] ?? 0,
                     'misses' => $info['keyspace_misses'] ?? 0,

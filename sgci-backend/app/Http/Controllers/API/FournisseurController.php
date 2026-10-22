@@ -4,8 +4,8 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Models\Fournisseur;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class FournisseurController extends Controller
 {
@@ -19,9 +19,9 @@ class FournisseurController extends Controller
         // Recherche
         if ($request->has('search') && $request->search) {
             $query->where(function ($q) use ($request) {
-                $q->where('nom', 'like', '%' . $request->search . '%')
-                  ->orWhere('email', 'like', '%' . $request->search . '%')
-                  ->orWhere('telephone', 'like', '%' . $request->search . '%');
+                $q->where('nom', 'like', '%'.$request->search.'%')
+                    ->orWhere('email', 'like', '%'.$request->search.'%')
+                    ->orWhere('telephone', 'like', '%'.$request->search.'%');
             });
         }
 

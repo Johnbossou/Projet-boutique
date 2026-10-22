@@ -14,7 +14,9 @@ class PrivilegeTest extends TestCase
     use RefreshDatabase;
 
     private User $proprietaire;
+
     private User $gerant;
+
     private Boutique $boutique;
 
     protected function setUp(): void
@@ -117,7 +119,7 @@ class PrivilegeTest extends TestCase
             'password' => '7charss',
             'role' => 'caissier',
         ])->assertStatus(422)
-          ->assertJsonValidationErrors(['password']);
+            ->assertJsonValidationErrors(['password']);
     }
 
     public function test_proprietaire_passe_le_middleware_gerant(): void

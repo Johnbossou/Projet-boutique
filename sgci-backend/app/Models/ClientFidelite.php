@@ -97,7 +97,7 @@ class ClientFidelite extends Model
     public function mettreAJourNiveau(): void
     {
         $niveau = $this->programmeFidelite->calculerNiveau($this->points);
-        
+
         if ($niveau['nom'] !== $this->niveau_actuel) {
             $this->update(['niveau_actuel' => $niveau['nom']]);
         }
@@ -109,6 +109,7 @@ class ClientFidelite extends Model
     public function getRemiseApplicable(): float
     {
         $niveau = $this->programmeFidelite->calculerNiveau($this->points);
+
         return $niveau['remise_pourcentage'] ?? 0;
     }
 }

@@ -30,7 +30,7 @@ class EnvoyerFacture extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Votre facture #' . $this->facture->numero_facture,
+            subject: 'Votre facture #'.$this->facture->numero_facture,
         );
     }
 
@@ -52,13 +52,13 @@ class EnvoyerFacture extends Mailable
     /**
      * Get the attachments for the message.
      *
-     * @return array<int, \Illuminate\Mail\Mailables\Attachment>
+     * @return array<int, Attachment>
      */
     public function attachments(): array
     {
         return [
             Attachment::fromStorageDisk('public', $this->facture->chemin_pdf)
-                ->as('facture-' . $this->facture->numero_facture . '.pdf')
+                ->as('facture-'.$this->facture->numero_facture.'.pdf')
                 ->withMime('application/pdf'),
         ];
     }

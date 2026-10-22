@@ -9,9 +9,7 @@ use Illuminate\Support\Facades\Log;
 
 class StockAlertService
 {
-    public function __construct(private readonly FcmService $fcmService)
-    {
-    }
+    public function __construct(private readonly FcmService $fcmService) {}
 
     /**
      * Vérifie et envoie des alertes pour les produits en stock bas
@@ -26,6 +24,7 @@ class StockAlertService
 
             if ($produitsAlerte->isEmpty()) {
                 Log::info("Aucun produit en alerte de stock pour la boutique {$boutiqueId}");
+
                 return;
             }
 
@@ -85,6 +84,7 @@ class StockAlertService
 
             if ($produitsRupture->isEmpty()) {
                 Log::info("Aucun produit en rupture de stock pour la boutique {$boutiqueId}");
+
                 return;
             }
 
@@ -151,6 +151,7 @@ class StockAlertService
             ];
         } catch (\Throwable $e) {
             Log::error("Erreur lors de la synchronisation des alertes: {$e->getMessage()}");
+
             return [
                 'alerte' => 0,
                 'rupture' => 0,

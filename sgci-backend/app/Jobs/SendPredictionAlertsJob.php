@@ -3,10 +3,12 @@
 namespace App\Jobs;
 
 use App\Models\AiPrediction;
+use App\Models\Boutique;
+use App\Models\BoutiqueUser;
 use App\Models\Produit;
 use App\Models\User;
-use App\Services\FcmService;
 use App\Services\EmailService;
+use App\Services\FcmService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -19,6 +21,7 @@ class SendPredictionAlertsJob implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     protected FcmService $fcmService;
+
     protected EmailService $emailService;
 
     public function __construct()
@@ -37,11 +40,13 @@ class SendPredictionAlertsJob implements ShouldQueue
                 ->filter(function ($prediction) {
                     $produit = $prediction->produit;
                     $besoin = $prediction->demande_predite - $produit->quantite_stock;
+
                     return $besoin > $produit->seuil_alerte * 2; // Critique si besoin > 2x seuil
                 });
 
             if ($predictionsCritiques->isEmpty()) {
                 Log::info('Aucune prédiction critique à notifier');
+
                 return;
             }
 
@@ -60,12 +65,12 @@ class SendPredictionAlertsJob implements ShouldQueue
                 $destinataires = collect();
 
                 if ($boutiqueId) {
-                    $membreIds = \App\Models\BoutiqueUser::forBoutique($boutiqueId)
+                    $membreIds = BoutiqueUser::forBoutique($boutiqueId)
                         ->gerants()
                         ->pluck('user_id')
                         ->all();
 
-                    $proprietaireId = \App\Models\Boutique::where('id', $boutiqueId)->value('proprietaire_id');
+                    $proprietaireId = Boutique::where('id', $boutiqueId)->value('proprietaire_id');
 
                     $ids = array_unique(array_filter(array_merge($membreIds, $proprietaireId ? [$proprietaireId] : [])));
 
@@ -114,7 +119,7 @@ class SendPredictionAlertsJob implements ShouldQueue
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
-            
+
             $this->release(300); // Relancer après 5 minutes
         }
     }

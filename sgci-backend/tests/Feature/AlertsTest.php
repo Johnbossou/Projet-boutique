@@ -17,6 +17,7 @@ class AlertsTest extends TestCase
     use RefreshDatabase;
 
     private User $gerant;
+
     private Boutique $boutique;
 
     protected function setUp(): void
@@ -60,7 +61,7 @@ class AlertsTest extends TestCase
         ]);
 
         return Produit::create(array_merge([
-            'nom' => 'Produit ' . uniqid(),
+            'nom' => 'Produit '.uniqid(),
             'prix' => 1000,
             'quantite_stock' => 50,
             'seuil_alerte' => 5,

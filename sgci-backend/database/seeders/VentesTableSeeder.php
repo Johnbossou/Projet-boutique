@@ -2,12 +2,12 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
-use App\Models\Vente;
+use App\Models\Client;
 use App\Models\LigneVente;
 use App\Models\Produit;
 use App\Models\User;
-use App\Models\Client;
+use App\Models\Vente;
+use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
 class VentesTableSeeder extends Seeder
@@ -86,6 +86,7 @@ class VentesTableSeeder extends Seeder
             // Si aucune ligne de vente valide, supprimer la vente
             if ($montantTotal === 0) {
                 $vente->delete();
+
                 continue;
             }
 
@@ -146,7 +147,7 @@ class VentesTableSeeder extends Seeder
      */
     private function genererNotes(?int $clientId): ?string
     {
-        if (!$clientId) {
+        if (! $clientId) {
             return rand(0, 1) ? 'Client anonyme' : null;
         }
 
@@ -158,7 +159,7 @@ class VentesTableSeeder extends Seeder
             'Livraison à domicile',
             'Produits en promotion',
             'Client satisfait',
-            'Nouveau client'
+            'Nouveau client',
         ];
 
         return $notes[array_rand($notes)];

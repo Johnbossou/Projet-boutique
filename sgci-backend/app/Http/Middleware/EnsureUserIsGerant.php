@@ -12,7 +12,7 @@ class EnsureUserIsGerant
     {
         $user = $request->user();
 
-        if (!$user) {
+        if (! $user) {
             return response()->json(['message' => 'Accès réservé au gérant.'], 403);
         }
 
@@ -22,7 +22,7 @@ class EnsureUserIsGerant
         $boutiqueId = $user->current_boutique_id;
         $roleDansBoutique = $user->roleDansBoutique($boutiqueId);
 
-        if (!in_array($roleDansBoutique, ['gerant', 'proprietaire'], true)) {
+        if (! in_array($roleDansBoutique, ['gerant', 'proprietaire'], true)) {
             return response()->json([
                 'message' => 'Accès réservé au gérant.',
             ], 403);

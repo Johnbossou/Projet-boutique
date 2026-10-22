@@ -12,7 +12,7 @@ class EnsureUserIsActive
     {
         $user = $request->user();
 
-        if ($user && !$user->est_actif) {
+        if ($user && ! $user->est_actif) {
             $token = $user->currentAccessToken();
             if ($token && method_exists($token, 'delete')) {
                 $token->delete();

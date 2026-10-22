@@ -2,10 +2,10 @@
 
 namespace Tests\Feature;
 
-use App\Models\User;
+use App\Models\AiPrediction;
 use App\Models\Categorie;
 use App\Models\Produit;
-use App\Models\AiPrediction;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 

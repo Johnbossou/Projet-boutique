@@ -1,9 +1,10 @@
 <?php
+
 namespace App\Models;
+
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use App\Models\MouvementStock;
 
 class Produit extends Model
 {
@@ -70,8 +71,13 @@ class Produit extends Model
 
     public function getStatutStockAttribute()
     {
-        if ($this->estEnRupture()) return 'rupture';
-        if ($this->estEnAlerte()) return 'alerte';
+        if ($this->estEnRupture()) {
+            return 'rupture';
+        }
+        if ($this->estEnAlerte()) {
+            return 'alerte';
+        }
+
         return 'normal';
     }
 
@@ -79,8 +85,10 @@ class Produit extends Model
     {
         if ($this->quantite_stock >= $quantite) {
             $this->decrement('quantite_stock', $quantite);
+
             return true;
         }
+
         return false;
     }
 
@@ -125,18 +133,18 @@ class Produit extends Model
 
     public function estProchePeremption(int $jours = 7): bool
     {
-        return $this->est_perissable 
-            && $this->date_peremption 
-            && $this->date_peremption > now() 
+        return $this->est_perissable
+            && $this->date_peremption
+            && $this->date_peremption > now()
             && $this->date_peremption <= now()->addDays($jours);
     }
 
     public function getJoursRestantsAttribute(): ?int
     {
-        if (!$this->est_perissable || !$this->date_peremption) {
+        if (! $this->est_perissable || ! $this->date_peremption) {
             return null;
         }
-        
+
         return now()->diffInDays($this->date_peremption, false);
     }
 }

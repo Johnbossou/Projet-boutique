@@ -4,9 +4,8 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Services\NotificationService;
-use App\Models\User;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class NotificationChannelController extends Controller
 {
@@ -56,7 +55,7 @@ class NotificationChannelController extends Controller
 
         $user = $request->user();
 
-        if (!$user->telephone) {
+        if (! $user->telephone) {
             return response()->json([
                 'message' => 'Vous devez avoir un numéro de téléphone pour recevoir des SMS',
             ], 400);

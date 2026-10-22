@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
+use App\Models\AuditLog;
 use App\Services\AuditLogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,7 +19,7 @@ class AuditLogController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $query = \App\Models\AuditLog::with('user');
+        $query = AuditLog::with('user');
 
         // Filtre par boutique courante (multi-tenancy)
         if ($request->user()->current_boutique_id) {
@@ -58,14 +59,14 @@ class AuditLogController extends Controller
 
     public function show($id): JsonResponse
     {
-        $log = \App\Models\AuditLog::with('user')->findOrFail($id);
+        $log = AuditLog::with('user')->findOrFail($id);
 
         return response()->json($log);
     }
 
     public function stats(Request $request): JsonResponse
     {
-        $query = \App\Models\AuditLog::query();
+        $query = AuditLog::query();
 
         // Filtre par boutique courante (multi-tenancy)
         if ($request->user()->current_boutique_id) {
@@ -98,7 +99,7 @@ class AuditLogController extends Controller
 
     public function export(Request $request): JsonResponse
     {
-        $query = \App\Models\AuditLog::with('user');
+        $query = AuditLog::with('user');
 
         // Appliquer les mêmes filtres que index
         if ($request->has('user_id')) {
@@ -125,7 +126,7 @@ class AuditLogController extends Controller
 
         return response()->json([
             'data' => $logs,
-            'filename' => 'audit-logs-' . now()->format('Y-m-d') . '.json',
+            'filename' => 'audit-logs-'.now()->format('Y-m-d').'.json',
         ]);
     }
 }

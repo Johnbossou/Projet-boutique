@@ -27,7 +27,7 @@ class AIMetricsSeeder extends Seeder
                     'accuracy' => 0.872,
                     'f1_score' => 0.856,
                     'recall' => 0.841,
-                    'precision_score' => 0.872
+                    'precision_score' => 0.872,
                 ]),
                 'erreur' => null,
                 'created_at' => now()->subDays(2),
@@ -43,12 +43,12 @@ class AIMetricsSeeder extends Seeder
                 'metrics' => json_encode([
                     'accuracy' => 0.791,
                     'roi_moyen' => 18.5,
-                    'taux_succes' => 0.723
+                    'taux_succes' => 0.723,
                 ]),
                 'erreur' => null,
                 'created_at' => now()->subDays(1),
                 'updated_at' => now()->subDays(1)->addMinutes(45),
-            ]
+            ],
         ]);
 
         $this->command->info('✅ Métriques IA de démonstration créées !');

@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\ConversationChat;
 use Illuminate\Support\Facades\Broadcast;
 
 // Canal privé par boutique : tous les membres de la boutique reçoivent les événements
@@ -11,6 +12,7 @@ Broadcast::channel('boutique.{boutiqueId}', function ($user, $boutiqueId) {
             'role' => $user->role,
         ];
     }
+
     return false;
 });
 
@@ -21,9 +23,9 @@ Broadcast::channel('user.{userId}', function ($user, $userId) {
 
 // Canal de chat : les membres d'une conversation
 Broadcast::channel('chat.conversation.{conversationId}', function ($user, $conversationId) {
-    $conversation = \App\Models\ConversationChat::find($conversationId);
+    $conversation = ConversationChat::find($conversationId);
 
-    if (!$conversation) {
+    if (! $conversation) {
         return false;
     }
 

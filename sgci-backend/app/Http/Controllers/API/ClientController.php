@@ -2,21 +2,19 @@
 
 namespace App\Http\Controllers\API;
 
-use App\Http\Controllers\Controller;
 use App\Http\Controllers\Concerns\VerifieBoutique;
+use App\Http\Controllers\Controller;
 use App\Models\Client;
-use App\Models\Vente;
 use App\Traits\Auditable;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log; // ✅ AJOUT DE L'IMPORT
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 
 class ClientController extends Controller
 {
-    use VerifieBoutique, Auditable;
+    use Auditable, VerifieBoutique;
 
     /**
      * Liste des clients avec pagination, filtres et relations
@@ -36,8 +34,8 @@ class ClientController extends Controller
                 $search = $request->search;
                 $query->where(function ($q) use ($search) {
                     $q->where('nom', 'like', "%{$search}%")
-                      ->orWhere('email', 'like', "%{$search}%")
-                      ->orWhere('telephone', 'like', "%{$search}%");
+                        ->orWhere('email', 'like', "%{$search}%")
+                        ->orWhere('telephone', 'like', "%{$search}%");
                 });
             }
 
@@ -56,11 +54,11 @@ class ClientController extends Controller
             $sortDirection = strtolower($request->get('sort_direction', 'desc'));
 
             $allowedSortFields = ['created_at', 'nom', 'email', 'telephone', 'statut', 'nombre_commandes', 'total_achats'];
-            if (!in_array($sortField, $allowedSortFields)) {
+            if (! in_array($sortField, $allowedSortFields)) {
                 $sortField = 'created_at';
             }
 
-            if (!in_array($sortDirection, ['asc', 'desc'])) {
+            if (! in_array($sortDirection, ['asc', 'desc'])) {
                 $sortDirection = 'desc';
             }
 
@@ -80,7 +78,7 @@ class ClientController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Erreur lors du chargement des clients',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -111,7 +109,7 @@ class ClientController extends Controller
             if ($validator->fails()) {
                 return response()->json([
                     'message' => 'Données invalides',
-                    'errors' => $validator->errors()
+                    'errors' => $validator->errors(),
                 ], 422);
             }
 
@@ -131,13 +129,13 @@ class ClientController extends Controller
 
             return response()->json([
                 'message' => 'Client créé avec succès',
-                'client' => $this->formatClientData($client)
+                'client' => $this->formatClientData($client),
             ], 201);
 
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Erreur lors de la création du client',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -146,17 +144,17 @@ class ClientController extends Controller
      * Détails d'un client spécifique avec relations complètes
      */
     /**
- * Détails d'un client spécifique avec relations sécurisées
- */
+     * Détails d'un client spécifique avec relations sécurisées
+     */
     public function show(Client $client): JsonResponse
     {
         $this->verifierBoutiqueDe($client);
 
         try {
             // Vérifier d'abord si le client existe
-            if (!$client) {
+            if (! $client) {
                 return response()->json([
-                    'message' => 'Client non trouvé'
+                    'message' => 'Client non trouvé',
                 ], 404);
             }
 
@@ -206,12 +204,12 @@ class ClientController extends Controller
             return response()->json($clientData);
 
         } catch (\Exception $e) {
-            Log::error('Erreur détail client ID ' . ($client->id ?? 'inconnu') . ': ' . $e->getMessage());
-            Log::error('Stack trace: ' . $e->getTraceAsString());
+            Log::error('Erreur détail client ID '.($client->id ?? 'inconnu').': '.$e->getMessage());
+            Log::error('Stack trace: '.$e->getTraceAsString());
 
             return response()->json([
                 'message' => 'Erreur lors du chargement des détails du client',
-                'error' => config('app.debug') ? $e->getMessage() : 'Erreur interne du serveur'
+                'error' => config('app.debug') ? $e->getMessage() : 'Erreur interne du serveur',
             ], 500);
         }
     }
@@ -243,7 +241,7 @@ class ClientController extends Controller
             if ($validator->fails()) {
                 return response()->json([
                     'message' => 'Données invalides',
-                    'errors' => $validator->errors()
+                    'errors' => $validator->errors(),
                 ], 422);
             }
 
@@ -260,13 +258,13 @@ class ClientController extends Controller
 
             return response()->json([
                 'message' => 'Client modifié avec succès',
-                'client' => $this->formatClientData($client)
+                'client' => $this->formatClientData($client),
             ]);
 
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Erreur lors de la modification du client',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -286,7 +284,7 @@ class ClientController extends Controller
 
             if ($commandesEnCours) {
                 return response()->json([
-                    'message' => 'Impossible de supprimer ce client : il a des commandes en cours'
+                    'message' => 'Impossible de supprimer ce client : il a des commandes en cours',
                 ], 422);
             }
 
@@ -294,13 +292,13 @@ class ClientController extends Controller
             $client->delete();
 
             return response()->json([
-                'message' => 'Client supprimé avec succès'
+                'message' => 'Client supprimé avec succès',
             ]);
 
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Erreur lors de la suppression du client',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -362,7 +360,7 @@ class ClientController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Erreur lors du chargement des statistiques',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -378,13 +376,13 @@ class ClientController extends Controller
             // Vérifier si le client peut être promu VIP
             if ($client->statut === 'vip') {
                 return response()->json([
-                    'message' => 'Ce client est déjà VIP'
+                    'message' => 'Ce client est déjà VIP',
                 ], 422);
             }
 
             if ($client->nombre_commandes < 1) {
                 return response()->json([
-                    'message' => 'Le client doit avoir au moins une commande pour être promu VIP'
+                    'message' => 'Le client doit avoir au moins une commande pour être promu VIP',
                 ], 422);
             }
 
@@ -392,13 +390,13 @@ class ClientController extends Controller
 
             return response()->json([
                 'message' => 'Client promu VIP avec succès',
-                'client' => $this->formatClientData($client)
+                'client' => $this->formatClientData($client),
             ]);
 
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Erreur lors de la promotion du client',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -413,7 +411,7 @@ class ClientController extends Controller
         try {
             if ($client->statut !== 'vip') {
                 return response()->json([
-                    'message' => 'Ce client n\'est pas VIP'
+                    'message' => 'Ce client n\'est pas VIP',
                 ], 422);
             }
 
@@ -421,13 +419,13 @@ class ClientController extends Controller
 
             return response()->json([
                 'message' => 'Client rétrogradé avec succès',
-                'client' => $this->formatClientData($client)
+                'client' => $this->formatClientData($client),
             ]);
 
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Erreur lors de la rétrogradation du client',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -440,7 +438,7 @@ class ClientController extends Controller
         try {
             $query = $request->get('q');
 
-            if (!$query || strlen($query) < 2) {
+            if (! $query || strlen($query) < 2) {
                 return response()->json([]);
             }
 
@@ -460,7 +458,7 @@ class ClientController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Erreur lors de la recherche',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -483,8 +481,8 @@ class ClientController extends Controller
                 $search = $request->search;
                 $query->where(function ($q) use ($search) {
                     $q->where('nom', 'like', "%{$search}%")
-                      ->orWhere('email', 'like', "%{$search}%")
-                      ->orWhere('telephone', 'like', "%{$search}%");
+                        ->orWhere('email', 'like', "%{$search}%")
+                        ->orWhere('telephone', 'like', "%{$search}%");
                 });
             }
 
@@ -513,14 +511,14 @@ class ClientController extends Controller
             return response()->json([
                 'message' => 'Export généré avec succès',
                 'data' => $exportData,
-                'filename' => 'clients_' . now()->format('Y-m-d_H-i-s') . '.json',
-                'count' => $exportData->count()
+                'filename' => 'clients_'.now()->format('Y-m-d_H-i-s').'.json',
+                'count' => $exportData->count(),
             ]);
 
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Erreur lors de l\'export',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -585,7 +583,7 @@ class ClientController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Erreur lors du chargement des commandes',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ], 500);
         }
     }

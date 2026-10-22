@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
-use Illuminate\Http\JsonResponse;
 use App\Services\StockAlertService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class StockAlertController extends Controller
 {
@@ -23,8 +23,8 @@ class StockAlertController extends Controller
     {
         try {
             $boutiqueId = $request->user()->current_boutique_id;
-            
-            if (!$boutiqueId) {
+
+            if (! $boutiqueId) {
                 return response()->json([
                     'message' => 'Aucune boutique sélectionnée',
                 ], 400);
@@ -53,8 +53,8 @@ class StockAlertController extends Controller
     {
         try {
             $boutiqueId = $request->user()->current_boutique_id;
-            
-            if (!$boutiqueId) {
+
+            if (! $boutiqueId) {
                 return response()->json([
                     'message' => 'Aucune boutique sélectionnée',
                 ], 400);

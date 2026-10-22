@@ -3,12 +3,12 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
-use App\Models\ProgrammeFidelite;
 use App\Models\ClientFidelite;
-use App\Models\RecompenseFidelite;
+use App\Models\ProgrammeFidelite;
 use App\Models\ReclamationRecompense;
-use Illuminate\Http\Request;
+use App\Models\RecompenseFidelite;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class FideliteController extends Controller
@@ -173,7 +173,7 @@ class FideliteController extends Controller
             ->with(['programmeFidelite', 'transactions'])
             ->first();
 
-        if (!$clientFidelite) {
+        if (! $clientFidelite) {
             return response()->json(['message' => 'Client non inscrit au programme'], 404);
         }
 
@@ -228,7 +228,7 @@ class FideliteController extends Controller
             ->where('programme_fidelite_id', $recompense->programme_fidelite_id)
             ->first();
 
-        if (!$clientFidelite) {
+        if (! $clientFidelite) {
             return response()->json(['message' => 'Client non inscrit'], 404);
         }
 
@@ -252,7 +252,7 @@ class FideliteController extends Controller
             }
 
             // Retirer les points
-            $verrouille->retirerPoints($recompense->points_requis, 'Réclamation: ' . $recompense->nom);
+            $verrouille->retirerPoints($recompense->points_requis, 'Réclamation: '.$recompense->nom);
 
             // Créer la réclamation
             $reclamation = ReclamationRecompense::create([
@@ -282,7 +282,7 @@ class FideliteController extends Controller
                 ->where('boutique_id', $request->user()->current_boutique_id)
                 ->first();
 
-            if (!$programme) {
+            if (! $programme) {
                 return response()->json(['message' => 'Programme non trouvé'], 404);
             }
 

@@ -2,10 +2,10 @@
 
 namespace Database\Seeders;
 
+use App\Models\Categorie;
+use App\Models\Produit;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
-use App\Models\Produit;
-use App\Models\Categorie;
 
 class ProduitsTableSeeder extends Seeder
 {
@@ -18,8 +18,8 @@ class ProduitsTableSeeder extends Seeder
             $categoriesDef = [
                 ['nom' => 'Alimentaire', 'description' => 'Produits alimentaires', 'couleur' => '#3B82F6', 'icone' => '🍔'],
                 ['nom' => 'Boissons',    'description' => 'Boissons et jus',       'couleur' => '#EF4444', 'icone' => '🥤'],
-                ['nom' => 'Électronique','description' => 'Appareils électroniques','couleur' => '#10B981','icone' => '📱'],
-                ['nom' => 'Maison',      'description' => 'Articles pour la maison','couleur' => '#F59E0B','icone' => '🏠'],
+                ['nom' => 'Électronique', 'description' => 'Appareils électroniques', 'couleur' => '#10B981', 'icone' => '📱'],
+                ['nom' => 'Maison',      'description' => 'Articles pour la maison', 'couleur' => '#F59E0B', 'icone' => '🏠'],
                 ['nom' => 'Hygiène',     'description' => 'Produits d\'hygiène',    'couleur' => '#8B5CF6', 'icone' => '🧴'],
             ];
 
@@ -33,7 +33,7 @@ class ProduitsTableSeeder extends Seeder
             }
 
             // utilitaire : stocks autour de 400 (variation légère)
-            $stockInit = function() {
+            $stockInit = function () {
                 return rand(350, 450); // autour de 400
             };
 
@@ -90,9 +90,10 @@ class ProduitsTableSeeder extends Seeder
                 $p['categorie_id'] = $categorieIds[$categorieNom] ?? null;
                 unset($p['categorie']);
 
-                if (!$p['categorie_id']) {
+                if (! $p['categorie_id']) {
                     // si la catégorie n'existe pas pour une raison quelconque, sauter ce produit
                     $this->command->warn("⚠️ Catégorie manquante pour le produit : {$p['nom']} (skipped)");
+
                     continue;
                 }
 
@@ -115,7 +116,7 @@ class ProduitsTableSeeder extends Seeder
             $this->command->info("🚨 {$alertCount} produits en alerte de stock (après création).");
         } catch (\Throwable $e) {
             DB::rollBack();
-            $this->command->error('Erreur pendant le seeding : ' . $e->getMessage());
+            $this->command->error('Erreur pendant le seeding : '.$e->getMessage());
             throw $e;
         }
     }

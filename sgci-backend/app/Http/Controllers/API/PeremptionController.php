@@ -4,8 +4,8 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Services\PeremptionService;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class PeremptionController extends Controller
 {
@@ -24,8 +24,8 @@ class PeremptionController extends Controller
         try {
             $boutiqueId = $request->user()->current_boutique_id;
             $joursAvant = $request->input('jours_avant', 7);
-            
-            if (!$boutiqueId) {
+
+            if (! $boutiqueId) {
                 return response()->json([
                     'message' => 'Aucune boutique sélectionnée',
                 ], 400);
@@ -55,8 +55,8 @@ class PeremptionController extends Controller
         try {
             $boutiqueId = $request->user()->current_boutique_id;
             $joursAvant = $request->input('jours_avant', 7);
-            
-            if (!$boutiqueId) {
+
+            if (! $boutiqueId) {
                 return response()->json([
                     'message' => 'Aucune boutique sélectionnée',
                 ], 400);

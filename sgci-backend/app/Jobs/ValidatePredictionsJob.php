@@ -4,13 +4,13 @@ namespace App\Jobs;
 
 use App\Models\AiPrediction;
 use App\Models\LigneVente;
+use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
-use Carbon\Carbon;
 
 class ValidatePredictionsJob implements ShouldQueue
 {
@@ -31,6 +31,7 @@ class ValidatePredictionsJob implements ShouldQueue
 
             if ($predictions->isEmpty()) {
                 Log::info('Aucune prédiction à valider');
+
                 return;
             }
 
@@ -40,7 +41,7 @@ class ValidatePredictionsJob implements ShouldQueue
 
             foreach ($predictions as $prediction) {
                 $periodeJours = $this->getPeriodeJours($prediction->type_prediction);
-                
+
                 // Calculer les ventes réelles pour la période
                 $ventesReelles = $this->calculerVentesReelles(
                     $prediction->produit_id,
@@ -50,7 +51,7 @@ class ValidatePredictionsJob implements ShouldQueue
 
                 // Valider la prédiction
                 $prediction->calculerErreur($ventesReelles);
-                
+
                 $totalValidees++;
                 if ($prediction->estPrecise(20)) {
                     $totalPrecises++;
@@ -58,7 +59,7 @@ class ValidatePredictionsJob implements ShouldQueue
 
                 // Agréger par type
                 $type = $prediction->type_prediction;
-                if (!isset($resultatsParType[$type])) {
+                if (! isset($resultatsParType[$type])) {
                     $resultatsParType[$type] = [
                         'total' => 0,
                         'precises' => 0,
@@ -84,7 +85,7 @@ class ValidatePredictionsJob implements ShouldQueue
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
-            
+
             $this->release(300); // Relancer après 5 minutes
         }
     }
@@ -95,7 +96,7 @@ class ValidatePredictionsJob implements ShouldQueue
         $dateFin = $dateDebut->copy()->addDays($periodeJours);
 
         return LigneVente::where('produit_id', $produitId)
-            ->whereHas('vente', function($query) use ($dateDebut, $dateFin) {
+            ->whereHas('vente', function ($query) use ($dateDebut, $dateFin) {
                 $query->terminees()
                     ->whereBetween('created_at', [$dateDebut, $dateFin]);
             })
@@ -104,7 +105,7 @@ class ValidatePredictionsJob implements ShouldQueue
 
     private function getPeriodeJours($typePrediction): int
     {
-        return match($typePrediction) {
+        return match ($typePrediction) {
             'demande_hebdo' => 7,
             'demande_mensuelle' => 30,
             'reapprovisionnement' => 30,

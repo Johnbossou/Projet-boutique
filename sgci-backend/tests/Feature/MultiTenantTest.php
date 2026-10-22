@@ -18,7 +18,9 @@ class MultiTenantTest extends TestCase
     use RefreshDatabase;
 
     private User $gerantA;
+
     private Boutique $boutiqueA;
+
     private Boutique $boutiqueB;
 
     protected function setUp(): void

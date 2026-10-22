@@ -3,7 +3,6 @@
 namespace App\Events;
 
 use App\Models\Produit;
-use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
@@ -22,11 +21,12 @@ class StockAlerte implements ShouldBroadcast
 
     public function broadcastOn(): array
     {
-        if (!$this->boutiqueId) {
+        if (! $this->boutiqueId) {
             return [];
         }
+
         return [
-            new PrivateChannel('boutique.' . $this->boutiqueId),
+            new PrivateChannel('boutique.'.$this->boutiqueId),
         ];
     }
 
