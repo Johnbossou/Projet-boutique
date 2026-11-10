@@ -430,6 +430,9 @@ class MobileMoneyController extends Controller
      * Applique une transition de statut de manière atomique et idempotente :
      * seul un paiement encore "en_attente" peut changer d'état, et le montant
      * payé de la commande associée est incrémenté exactement une fois.
+     *
+     * Le crédit est plafonné au reste à payer TTC de la commande : une
+     * commande ne peut jamais être créditée au-delà de sa dette.
      */
     private function applyTransition(string $numeroPaiement, string $statut): ?Paiement
     {
@@ -449,9 +452,45 @@ class MobileMoneyController extends Controller
                 // scopée, une ligne Paiement incohérente (import, callback
                 // antérieur) ne doit jamais créditer une commande d'un autre
                 // tenant. whereKey() seul ne filtre rien.
-                CommandeClient::whereKey($paiement->commande_client_id)
+                //
+                // Verrou sur la commande : le plafond se calcule sur le reste
+                // à payer, et ce calcul doit être sérialisé. Sans verrou, deux
+                // callbacks concurrents (deux paiements distincts sur la même
+                // commande) lisaient le même reste et le créditaient chacun en
+                // entier. L'ordre de verrou est paiement → commande, le même
+                // partout ailleurs : CommandeClientController ne verrouille que
+                // la commande.
+                $commande = CommandeClient::whereKey($paiement->commande_client_id)
                     ->where('boutique_id', $paiement->boutique_id)
-                    ->increment('montant_paye', $paiement->montant);
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($commande) {
+                    // Le plafond porte sur le TTC dû (HT + TVA) : c'est ce que
+                    // le client a versé, pas la base HT.
+                    $reste = max(0, $commande->montant_a_payer - (float) $commande->montant_paye);
+                    $montant = (float) $paiement->montant;
+                    $credit = min($montant, $reste);
+
+                    if ($credit > 0) {
+                        $commande->increment('montant_paye', $credit);
+                    }
+
+                    if ($credit + 0.001 < $montant) {
+                        // Trop-perçu : le client a versé plus que sa dette
+                        // (dette réduite entre l'initiation et l'encaissement).
+                        // Seul le dû est crédité — la commande ne peut pas
+                        // devenir « payée deux fois » — et l'excédent reste à
+                        // rembourser par la boutique, d'où le journal.
+                        Log::warning('Paiement superieur au reste a payer : excedent non credite', [
+                            'paiement_id' => $paiement->id,
+                            'commande_id' => $commande->id,
+                            'montant_encaisse' => $montant,
+                            'credit' => $credit,
+                            'reste_avant_credit' => $reste,
+                        ]);
+                    }
+                }
             }
 
             $paiement->save();

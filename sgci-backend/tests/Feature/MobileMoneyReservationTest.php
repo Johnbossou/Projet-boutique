@@ -483,6 +483,60 @@ class MobileMoneyReservationTest extends TestCase
         $this->assertSame(1, Paiement::count());
     }
 
+    public function test_un_encaissement_superieur_a_la_dette_ne_credite_que_le_du(): void
+    {
+        // L'initiation refuse un montant supérieur au reste à payer, mais la
+        // ligne de paiement peut venir d'un import ou d'une dette réduite
+        // après coup (remise accordée entre l'initiation et l'encaissement).
+        // Le crédit, lui, ne peut jamais dépasser la dette.
+        Http::fake();
+        Sanctum::actingAs($this->user);
+
+        $commande = $this->commande(10000);
+
+        $paiement = $this->paiement($commande, ['montant' => 15000]);
+
+        $this->callbackSucces($paiement);
+
+        $this->assertSame('10000.00', $commande->fresh()->montant_paye,
+            'Le crédit ne peut pas dépasser la dette : la commande ne doit pas être payée deux fois.');
+    }
+
+    public function test_le_plafond_porte_sur_le_ttc_et_non_sur_la_base_ht(): void
+    {
+        Http::fake();
+        Sanctum::actingAs($this->user);
+
+        // Dû = 10 000 HT + 1 800 de TVA = 11 800. plafonner sur la base HT
+        // laisserait 1 800 à payer alors que le client a tout réglé.
+        $commande = $this->commande(10000);
+        $commande->update(['tva' => 1800]);
+
+        $paiement = $this->paiement($commande, ['montant' => 11800]);
+
+        $this->callbackSucces($paiement);
+
+        $this->assertSame('11800.00', $commande->fresh()->montant_paye,
+            'Le plafond doit porter sur le TTC dû, pas sur la base HT.');
+    }
+
+    public function test_deux_encaissements_reussis_ne_depassent_pas_la_dette(): void
+    {
+        Http::fake();
+        Sanctum::actingAs($this->user);
+
+        $commande = $this->commande(10000);
+
+        $premier = $this->paiement($commande, ['montant' => 6000]);
+        $second = $this->paiement($commande, ['montant' => 6000]);
+
+        $this->callbackSucces($premier);
+        $this->callbackSucces($second);
+
+        $this->assertSame('10000.00', $commande->fresh()->montant_paye,
+            'Deux encaissements de 6 000 sur une dette de 10 000 : le second est plafonné au reste dû.');
+    }
+
     public function test_le_montant_reste_libre_sans_commande_associate(): void
     {
         Http::fake([
@@ -629,6 +683,32 @@ class MobileMoneyReservationTest extends TestCase
     }
 
     // -------------------------------------------------- utilitaires
+
+    /**
+     * Simule le callback de succès du prestataire sur un paiement.
+     */
+    private function callbackSucces(Paiement $paiement): void
+    {
+        $corps = json_encode([
+            'transaction_id' => $paiement->reference_transaction,
+            'status' => 'successful',
+        ]);
+
+        $signature = hash_hmac('sha256', $corps, 'secret-callback-test');
+
+        $this->call(
+            'POST',
+            '/api/mobile-money/callback',
+            [],
+            [],
+            [],
+            $this->transformHeadersToServerVars([
+                'CONTENT_TYPE' => 'application/json',
+                'X-SGCI-Signature' => $signature,
+            ]),
+            $corps
+        )->assertOk();
+    }
 
     /**
      * @param  array<string, mixed>  $extra
