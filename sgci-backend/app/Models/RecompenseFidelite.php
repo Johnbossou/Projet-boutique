@@ -14,6 +14,7 @@ class RecompenseFidelite extends Model
         'nom',
         'description',
         'points_requis',
+        'points_requis_legacy',
         'type',
         'valeur',
         'actif',
@@ -21,6 +22,7 @@ class RecompenseFidelite extends Model
 
     protected $casts = [
         'points_requis' => 'integer',
+        'points_requis_legacy' => 'integer',
         'valeur' => 'decimal:2',
         'actif' => 'boolean',
     ];

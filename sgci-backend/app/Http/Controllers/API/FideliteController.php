@@ -7,6 +7,7 @@ use App\Models\ClientFidelite;
 use App\Models\ProgrammeFidelite;
 use App\Models\ReclamationRecompense;
 use App\Models\RecompenseFidelite;
+use App\Services\FideliteRecalibrage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -57,10 +58,19 @@ class FideliteController extends Controller
             'actif' => true,
         ]);
 
-        return response()->json([
+        $reponse = [
             'message' => 'Programme de fidélité créé avec succès',
             'data' => $programme,
-        ], 201);
+        ];
+
+        // En mode prorata, le gérant doit savoir si les seuils de récompenses
+        // qu'il va créer restent cohérents : l'aperçu donne le taux qui
+        // reproduirait l'ancien comportement et le recalage à appliquer.
+        if ((int) $programme->points_par_100_fcfa > 0) {
+            $reponse['recalibrage'] = app(FideliteRecalibrage::class)->apercu($programme);
+        }
+
+        return response()->json($reponse, 201);
     }
 
     /**
@@ -96,11 +106,70 @@ class FideliteController extends Controller
             'actif' => 'boolean',
         ]);
 
+        $avant = (int) $programme->points_par_100_fcfa;
+
         $programme->update($validated);
 
-        return response()->json([
+        $apres = (int) $programme->points_par_100_fcfa;
+
+        // Changement de mode : la référence de recalage des récompenses doit
+        // suivre. Au passage au prorata, le seuil courant de chaque récompense
+        // est figé en points « legacy » ; au retour au mode legacy, la
+        // référence est libérée (les seuils saisis font alors foi).
+        if ($avant !== $apres) {
+            app(FideliteRecalibrage::class)->figerReferentiel($programme, $apres > 0);
+        }
+
+        $reponse = [
             'message' => 'Programme de fidélité mis à jour',
             'data' => $programme,
+        ];
+
+        // Bascule vers le prorata : les seuils de récompenses existants
+        // deviennent fantômes (calibrés pour des points fixes par achat).
+        // L'aperçu dit au gérant ce qu'ils devraient devenir.
+        if ((int) $programme->points_par_100_fcfa > 0) {
+            $reponse['recalibrage'] = app(FideliteRecalibrage::class)->apercu($programme);
+        }
+
+        return response()->json($reponse);
+    }
+
+    /**
+     * Aperçu du recalage des seuils de récompenses, sans écriture.
+     */
+    public function apercuRecalibrage(Request $request, ProgrammeFidelite $programme): JsonResponse
+    {
+        if ($programme->boutique_id !== $request->user()->current_boutique_id) {
+            return response()->json(['message' => 'Non autorisé'], 403);
+        }
+
+        return response()->json([
+            'data' => app(FideliteRecalibrage::class)->apercu($programme),
+        ]);
+    }
+
+    /**
+     * Recale les seuils de récompenses du programme sur le prorata courant.
+     */
+    public function appliquerRecalibrage(Request $request, ProgrammeFidelite $programme): JsonResponse
+    {
+        if ($programme->boutique_id !== $request->user()->current_boutique_id) {
+            return response()->json(['message' => 'Non autorisé'], 403);
+        }
+
+        $recalibrage = app(FideliteRecalibrage::class)->appliquer($programme);
+
+        if (! $recalibrage['possible']) {
+            return response()->json([
+                'message' => $recalibrage['raison'] ?? 'Recalage impossible.',
+                'data' => $recalibrage,
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => 'Seuils de récompenses recalés',
+            'data' => $recalibrage,
         ]);
     }
 

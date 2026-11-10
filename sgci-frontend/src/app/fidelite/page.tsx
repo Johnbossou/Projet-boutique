@@ -94,6 +94,29 @@ interface RecompenseFormData {
   valeur: number;
 }
 
+/**
+ * Aperçu du recalage des seuils de récompenses après le passage au prorata.
+ * Renvoyé par l'API : sans lui, le gérant ne sait pas que ses récompenses
+ * sont devenues plus faciles (ou impossibles).
+ */
+interface RecalibrageApercu {
+  mode: 'legacy' | 'prorata';
+  points_par_achat: number;
+  points_par_100_fcfa: number;
+  panier_moyen: number | null;
+  taux_equivalent: number | null;
+  facteur: number | null;
+  possible: boolean;
+  raison: string | null;
+  recompenses: {
+    id: number;
+    nom: string;
+    points_requis: number;
+    points_requis_legacy: number | null;
+    points_requis_recalibre: number | null;
+  }[];
+}
+
 interface InscrireClientForm {
   programme_fidelite_id: string;
   client_id: string;
@@ -166,6 +189,59 @@ const emptyReclamerForm: ReclamerRecompenseForm = {
   client_id: '',
 };
 
+/**
+ * Bandeau « les seuils de récompenses ne correspondent plus ».
+ *
+ * Au passage au prorata, une récompense qui demandait 10 achats peut en
+ * demander 2 ou 50 : le gérant doit le voir, sinon les clients réclament
+ * des récompenses impossibles (ou trop faciles).
+ */
+function RecalibrageBannier({
+  apercu,
+  enCours,
+  onRecaler,
+}: {
+  apercu?: RecalibrageApercu;
+  enCours: boolean;
+  onRecaler: () => void;
+}) {
+  if (!apercu || !apercu.possible) return null;
+
+  const aRecaler = apercu.recompenses.filter(
+    (r) => r.points_requis_recalibre !== null && r.points_requis !== r.points_requis_recalibre
+  );
+
+  if (aRecaler.length === 0) return null;
+
+  return (
+    <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-700/60 dark:bg-amber-950/30">
+      <div className="flex items-start gap-2">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+            Les seuils de récompenses ne correspondent plus au prorata
+          </p>
+          <p className="text-xs text-amber-800 dark:text-amber-300/80">
+            Panier moyen de la boutique : {apercu.panier_moyen} FCFA. Pour exiger le même
+            effort qu&apos;avant, ces seuils doivent être ajustés :
+          </p>
+          <ul className="space-y-0.5 text-xs text-amber-800 dark:text-amber-300/80">
+            {aRecaler.map((r) => (
+              <li key={r.id}>
+                {r.nom} : {r.points_requis} → {r.points_requis_recalibre} pts
+              </li>
+            ))}
+          </ul>
+          <Button type="button" size="sm" variant="outline" onClick={onRecaler} disabled={enCours}>
+            {enCours ? <Loader2 className="h-4 w-4 animate-spin" /> : <TrendingUp className="h-4 w-4" />}
+            Recaler les seuils
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Page ───────────────────────────────────────────────────────────────────
 
 export default function FidelitePage() {
@@ -191,6 +267,10 @@ export default function FidelitePage() {
   const [showRecompenseModal, setShowRecompenseModal] = useState(false);
   const [recompenseForm, setRecompenseForm] = useState<RecompenseFormData>(emptyRecompenseForm);
   const [recompenseSaving, setRecompenseSaving] = useState(false);
+
+  // Recalage des seuils de récompenses (bascule vers le prorata)
+  const [recalibrages, setRecalibrages] = useState<Record<number, RecalibrageApercu>>({});
+  const [recalibrageSavingId, setRecalibrageSavingId] = useState<number | null>(null);
 
   // Points client
   const [searchClientId, setSearchClientId] = useState('');
@@ -244,6 +324,42 @@ export default function FidelitePage() {
 
   useEffect(() => { chargerProgrammes(); }, [chargerProgrammes]);
   useEffect(() => { chargerStats(); }, [chargerStats]);
+
+  // Aperçu du recalage, uniquement pour les programmes en prorata : c'est là
+  // que les seuils de récompenses ont pu changer de sens.
+  useEffect(() => {
+    const prorata = programmes.filter((p) => (p.points_par_100_fcfa ?? 0) > 0);
+
+    if (prorata.length === 0) {
+      setRecalibrages({});
+      return;
+    }
+
+    let annule = false;
+
+    (async () => {
+      const apercus = await Promise.all(
+        prorata.map(async (p) => {
+          const res = await apiFetch(`/fidelite/${p.id}/recalibrage`);
+          if (!res.ok) return null;
+          const json = await res.json();
+          return [p.id, json.data as RecalibrageApercu] as const;
+        })
+      );
+
+      if (annule) return;
+
+      const collect: Record<number, RecalibrageApercu> = {};
+      apercus.forEach((a) => {
+        if (a) collect[a[0]] = a[1];
+      });
+      setRecalibrages(collect);
+    })().catch(() => {
+      // L'aperçu est un confort : son absence ne doit pas casser la page.
+    });
+
+    return () => { annule = true; };
+  }, [programmes]);
 
   // ─── Programme CRUD ─────────────────────────────────────────────────────
 
@@ -313,6 +429,23 @@ export default function FidelitePage() {
       chargerProgrammes();
     } catch {
       toast.error('Erreur lors de la suppression');
+    }
+  };
+
+  const recalibrerRecompenses = async (programmeId: number) => {
+    setRecalibrageSavingId(programmeId);
+    try {
+      const res = await apiFetch(`/fidelite/${programmeId}/recalibrer`, { method: 'POST' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(json.message || 'Recalage impossible');
+      }
+      toast.success('Seuils de récompenses recalés');
+      await chargerProgrammes();
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Erreur lors du recalage');
+    } finally {
+      setRecalibrageSavingId(null);
     }
   };
 
@@ -631,6 +764,12 @@ export default function FidelitePage() {
                             </span>
                           </div>
                         </div>
+
+                        <RecalibrageBannier
+                          apercu={recalibrages[prog.id]}
+                          enCours={recalibrageSavingId === prog.id}
+                          onRecaler={() => recalibrerRecompenses(prog.id)}
+                        />
 
                         {prog.niveaux.length > 0 && (
                           <div className="space-y-2">
