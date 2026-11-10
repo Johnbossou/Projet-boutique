@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\AppNotification;
+use App\Models\CommandeClient;
 use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
@@ -31,6 +32,41 @@ class WorkflowNotificationService
             $title,
             $message,
             $data
+        );
+    }
+
+    /**
+     * Notifie les gérants/propriétaires d'une nouvelle commande client.
+     *
+     * L'auteur n'est pas notifié (il vient de créer la commande) et le
+     * montant annoncé est le TTC réellement dû (HT + TVA), pas la base HT.
+     *
+     * La préférence « nouvelle_vente » est respectée : un gérant qui l'a
+     * désactivée ne reçoit pas ces alertes.
+     */
+    public function notifierNouvelleCommande(CommandeClient $commande, User $auteur): int
+    {
+        $client = $commande->client?->nom ?? 'Client inconnu';
+
+        $destinataires = $this->gerantsDe($commande->boutique_id)
+            ->filter(fn (User $user) => $user->prefereNotification('nouvelle_vente'));
+
+        return $this->notifier(
+            $destinataires,
+            $auteur,
+            'Nouvelle commande '.$commande->numero_commande,
+            sprintf(
+                'Commande %s de %s — %s FCFA',
+                $commande->numero_commande,
+                $client,
+                number_format($commande->montant_a_payer, 0, ',', ' ')
+            ),
+            [
+                'type' => 'nouvelle_commande',
+                'commande_id' => $commande->id,
+                'numero_commande' => $commande->numero_commande,
+                'boutique_id' => $commande->boutique_id,
+            ]
         );
     }
 

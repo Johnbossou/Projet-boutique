@@ -119,6 +119,45 @@ class CommandeClientTest extends TestCase
         ]);
     }
 
+    public function test_une_nouvelle_commande_previent_les_autres_gerants(): void
+    {
+        // L'auteur de la commande n'est pas prévenu : c'est un autre gérant
+        // de la boutique qui doit savoir qu'une commande est entrée. Avant,
+        // l'alerte existait dans le code mais n'était appelée nulle part —
+        // et son canal (e-mail + SMS) n'était pas branché en production.
+        $auteur = User::create([
+            'name' => 'Gérant Auteur',
+            'email' => 'gerant-auteur-commande@sgci.bj',
+            'password' => Hash::make('password'),
+            'role' => 'gerant',
+            'est_actif' => true,
+        ]);
+        $auteur->boutiques()->attach($this->boutique->id, ['role_dans_boutique' => 'gerant']);
+        $auteur->update(['current_boutique_id' => $this->boutique->id]);
+
+        Sanctum::actingAs($auteur);
+
+        $this->postJson('/api/commandes-clients', [
+            'client_id' => $this->client->id,
+            'lignes' => [
+                [
+                    'produit_id' => $this->produit->id,
+                    'quantite' => 2,
+                    'prix_unitaire' => 10000,
+                ],
+            ],
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('app_notifications', [
+            'user_id' => $this->gerant->id,
+            'type' => 'nouvelle_commande',
+        ]);
+
+        $this->assertDatabaseMissing('app_notifications', [
+            'user_id' => $auteur->id,
+        ]);
+    }
+
     public function test_store_errors_de_validation(): void
     {
         Sanctum::actingAs($this->gerant);

@@ -6,13 +6,17 @@ use App\Http\Controllers\Concerns\TauxTva;
 use App\Http\Controllers\Controller;
 use App\Models\CommandeClient;
 use App\Models\LigneCommandeClient;
+use App\Services\WorkflowNotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class CommandeClientController extends Controller
 {
     use TauxTva;
+
+    public function __construct(private readonly WorkflowNotificationService $notifications) {}
 
     /**
      * Affiche la liste des commandes clients de la boutique courante
@@ -63,7 +67,7 @@ class CommandeClientController extends Controller
             'lignes.*.remise_pourcentage' => 'nullable|numeric|min:0|max:100',
         ]);
 
-        return DB::transaction(function () use ($request, $validated) {
+        $commande = DB::transaction(function () use ($request, $validated) {
             $commande = CommandeClient::create([
                 'client_id' => $validated['client_id'],
                 'boutique_id' => $request->user()->current_boutique_id,
@@ -108,11 +112,26 @@ class CommandeClientController extends Controller
                 'tva' => round($montantTotal * $this->tauxTva($request->user()->current_boutique_id), 2),
             ]);
 
-            return response()->json([
-                'message' => 'Commande client créée avec succès',
-                'data' => $commande->load('client', 'lignes.produit'),
-            ], 201);
+            return $commande;
         });
+
+        // La notification part APRÈS la transaction : le gérant ne doit pas
+        // être prévenu d'une commande qui n'a pas été enregistrée (transaction
+        // annulée). Une notification ratée ne doit pas faire échouer la
+        // création de la commande.
+        try {
+            $this->notifications->notifierNouvelleCommande($commande->load('client'), $request->user());
+        } catch (\Throwable $e) {
+            Log::warning('Notification de nouvelle commande non delivree', [
+                'commande_id' => $commande->id,
+                'erreur' => $e->getMessage(),
+            ]);
+        }
+
+        return response()->json([
+            'message' => 'Commande client créée avec succès',
+            'data' => $commande->load('client', 'lignes.produit'),
+        ], 201);
     }
 
     /**
