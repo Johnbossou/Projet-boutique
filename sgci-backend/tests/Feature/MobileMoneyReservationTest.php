@@ -243,7 +243,7 @@ class MobileMoneyReservationTest extends TestCase
                 'idempotency_key' => 'k-race',
                 'boutique_id' => $this->boutique->id,
                 'montant' => 5000,
-                'mode_paiement' => 'mobile_money_orange',
+                'mode_paiement' => 'mobile_money_mtn',
                 'telephone' => '97000000',
                 'date_paiement' => now(),
                 'statut' => 'en_attente',
@@ -719,7 +719,7 @@ class MobileMoneyReservationTest extends TestCase
         return array_merge([
             'amount' => 5000,
             'phone_number' => '97000000',
-            'provider' => 'orange',
+            'provider' => 'mtn',
         ], $extra);
     }
 
@@ -743,7 +743,7 @@ class MobileMoneyReservationTest extends TestCase
             'commande_client_id' => $commande->id,
             'boutique_id' => $this->boutique->id,
             'montant' => 4000,
-            'mode_paiement' => 'mobile_money_orange',
+            'mode_paiement' => 'mobile_money_mtn',
             'telephone' => '97000000',
             'reference_transaction' => 'TX-'.uniqid(),
             'date_paiement' => now(),

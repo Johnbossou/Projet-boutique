@@ -77,7 +77,7 @@ class MobileMoneyTest extends TestCase
             'commande_client_id' => $commande->id,
             'boutique_id' => $this->boutique->id,
             'montant' => 4000,
-            'mode_paiement' => 'mobile_money_orange',
+            'mode_paiement' => 'mobile_money_mtn',
             'reference_transaction' => 'TX-'.uniqid(),
             'date_paiement' => now(),
             'statut' => 'en_attente',
@@ -114,7 +114,7 @@ class MobileMoneyTest extends TestCase
         $this->postJson('/api/mobile-money/initiate', [
             'amount' => 5000,
             'phone_number' => '97000000',
-            'provider' => 'orange',
+            'provider' => 'mtn',
         ])->assertOk();
 
         $paiement = Paiement::firstOrFail();
@@ -137,7 +137,7 @@ class MobileMoneyTest extends TestCase
         $this->postJson('/api/mobile-money/initiate', [
             'amount' => 5000,
             'phone_number' => '97000000',
-            'provider' => 'orange',
+            'provider' => 'mtn',
         ])->assertStatus(400);
 
         $this->assertSame('echoue', Paiement::firstOrFail()->statut);
@@ -236,7 +236,7 @@ class MobileMoneyTest extends TestCase
             'commande_client_id' => null,
             'boutique_id' => $this->boutique->id,
             'montant' => 4000,
-            'mode_paiement' => 'mobile_money_orange',
+            'mode_paiement' => 'mobile_money_mtn',
             'date_paiement' => now(),
             'statut' => 'en_attente',
             'user_id' => $this->user->id,
@@ -246,7 +246,7 @@ class MobileMoneyTest extends TestCase
             'commande_client_id' => null,
             'boutique_id' => $autreBoutique->id,
             'montant' => 4000,
-            'mode_paiement' => 'mobile_money_orange',
+            'mode_paiement' => 'mobile_money_mtn',
             'date_paiement' => now(),
             'statut' => 'en_attente',
             'user_id' => $this->user->id,
@@ -288,7 +288,7 @@ class MobileMoneyTest extends TestCase
         $this->postJson('/api/mobile-money/initiate', [
             'amount' => 5000,
             'phone_number' => '97000000',
-            'provider' => 'orange',
+            'provider' => 'mtn',
             'commande_client_id' => $commandeEtrangere->id,
         ])->assertStatus(422);
 
@@ -326,7 +326,7 @@ class MobileMoneyTest extends TestCase
             'commande_client_id' => $commandeEtrangere->id,
             'boutique_id' => $this->boutique->id,
             'montant' => 4000,
-            'mode_paiement' => 'mobile_money_orange',
+            'mode_paiement' => 'mobile_money_mtn',
             'reference_transaction' => 'TX-XBOUTIQUE',
             'date_paiement' => now(),
             'statut' => 'en_attente',

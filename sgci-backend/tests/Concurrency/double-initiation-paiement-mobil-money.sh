@@ -69,14 +69,14 @@ echo "== deux initiations simultanees de 10000, cles d'idempotence distinctes ==
 curl -s -X POST "http://127.0.0.1:$CONC_PORT_A/api/mobile-money/initiate" \
   -H "Authorization: Bearer $CONC_TOKEN" -H 'Content-Type: application/json' \
   -H 'Accept: application/json' --max-time 40 \
-  -d "{\"amount\":10000,\"phone_number\":\"97000000\",\"provider\":\"orange\",\"commande_client_id\":$CID,\"idempotency_key\":\"cle-a\"}" \
+  -d "{\"amount\":10000,\"phone_number\":\"97000000\",\"provider\":\"mtn\",\"commande_client_id\":$CID,\"idempotency_key\":\"cle-a\"}" \
   -o "$CONC_TMP/dip_a.json" -w '%{http_code}' > "$CONC_TMP/dip_a.code" &
 INIT_A=$!
 
 curl -s -X POST "http://127.0.0.1:$CONC_PORT_B/api/mobile-money/initiate" \
   -H "Authorization: Bearer $CONC_TOKEN" -H 'Content-Type: application/json' \
   -H 'Accept: application/json' --max-time 40 \
-  -d "{\"amount\":10000,\"phone_number\":\"97000000\",\"provider\":\"orange\",\"commande_client_id\":$CID,\"idempotency_key\":\"cle-b\"}" \
+  -d "{\"amount\":10000,\"phone_number\":\"97000000\",\"provider\":\"mtn\",\"commande_client_id\":$CID,\"idempotency_key\":\"cle-b\"}" \
   -o "$CONC_TMP/dip_b.json" -w '%{http_code}' > "$CONC_TMP/dip_b.code" &
 INIT_B=$!
 

@@ -202,7 +202,17 @@ class MobileMoneyController extends Controller
         $result = $this->mobileMoneyService->initiatePayment($paymentData);
 
         if ($result['success']) {
-            $reference = $result['data']['transaction_id'] ?? $result['data']['payment_id'] ?? null;
+            // Les prestataires n'emploient pas le meme nom de champ : MTN
+            // renvoie transactionId, Orange paymentId ou transaction_id.
+            // Ne lire qu'un seul nom faisait passer une initiation reussie
+            // pour un paiement sans reference — donc jamais rapprochable, ni
+            // par le callback ni par la verification de statut.
+            $reference = $result['data']['transactionId']
+                ?? $result['data']['transaction_id']
+                ?? $result['data']['payment_id']
+                ?? $result['data']['paymentId']
+                ?? $result['data']['reference']
+                ?? null;
 
             if (! is_string($reference) || $reference === '') {
                 // Le prestataire a accepté sans rendre de référence : le
@@ -396,23 +406,46 @@ class MobileMoneyController extends Controller
             return response()->json(['message' => 'Callback non configuré — secret manquant'], 501);
         }
 
-        $signature = $request->header('X-SGCI-Signature');
-        $expected = hash_hmac('sha256', $request->getContent(), $secret);
-
-        if (! is_string($signature) || ! hash_equals($expected, $signature)) {
+        if (! $this->appelAuthentifie($request, $secret)) {
             return response()->json(['message' => 'Signature invalide'], 401);
         }
 
-        $transactionId = $request->input('transaction_id') ?? $request->input('payment_id');
-        $status = $request->input('status');
+        // Les prestataires ne parlent pas le meme format que notre propre
+        // rappel de test.
+        //
+        // MTN rappelle avec l identifiant externe que NOUS lui avons
+        // transmis — notre numero de paiement — et non avec sa propre
+        // reference : chercher celle-ci ne trouvait jamais rien, et
+        // l encaissement restait « en_attente » indefiniment. Orange et
+        // notre format de test utilisent la reference prestataire.
+        //
+        // Le statut suit la meme logique : MTN envoie SUCCESSFUL ou FAILED
+        // en majuscules, notre format de test des minuscules.
+        $reference = $request->input('externalId')
+            ?? $request->input('external_id')
+            ?? $request->input('transaction_id')
+            ?? $request->input('transactionId')
+            ?? $request->input('payment_id');
 
-        if (! $transactionId || ! is_string($status)
-            || ! in_array($status, ['successful', 'completed', 'failed', 'cancelled'], true)) {
+        $statutBrut = $request->input('status');
+
+        if (! is_string($reference) || $reference === '' || ! is_string($statutBrut)) {
             return response()->json(['message' => 'Données invalides'], 400);
         }
 
-        // Trouver le paiement correspondant
-        $paiement = Paiement::where('reference_transaction', $transactionId)->first();
+        $reussi = in_array(strtoupper($statutBrut), ['SUCCESSFUL', 'SUCCESS', 'COMPLETED', 'PAID'], true);
+        $echoue = in_array(strtoupper($statutBrut), ['FAILED', 'FAILURE', 'CANCELLED', 'CANCELED', 'REJECTED', 'EXPIRED'], true);
+
+        if (! $reussi && ! $echoue) {
+            return response()->json(['message' => 'Statut inconnu'], 400);
+        }
+
+        // Trouver le paiement correspondant : par notre identifiant externe
+        // (ce que MTN renvoie) ou par la reference prestataire (Orange, et
+        // notre format de test).
+        $paiement = Paiement::where('numero_paiement', $reference)
+            ->orWhere('reference_transaction', $reference)
+            ->first();
 
         if (! $paiement) {
             return response()->json(['message' => 'Paiement non trouvé'], 404);
@@ -420,10 +453,70 @@ class MobileMoneyController extends Controller
 
         // Transition idempotente : rejouer un callback ne ré-incrémente jamais
         // le montant payé de la commande.
-        $nouveauStatut = in_array($status, ['successful', 'completed'], true) ? 'reussi' : 'echoue';
-        $this->applyTransition($paiement->numero_paiement, $nouveauStatut);
+        $this->applyTransition($paiement->numero_paiement, $reussi ? 'reussi' : 'echoue');
 
         return response()->json(['message' => 'Callback traité avec succès']);
+    }
+
+    /**
+     * L appel est-il d'un prestataire de confiance ?
+     *
+     * Deux formes sont admises :
+     *
+     * - notre signature HMAC (X-SGCI-Signature), utilisee par notre propre
+     *   rappel de test et par les rappels que nous pilotons ;
+     * - l authentification du prestataire : MTN et Orange transmettent leur
+     *   cle (cle d abonnement, cle marchand) dans l en-tete Authorization.
+     *   Sans cela, le callback reel du prestataire serait rejete — et aucun
+     *   encaissement ne serait jamais confirme.
+     *
+     * La comparaison se fait en temps constant : une comparaison ordinary
+     * laisse filer le nombre d essais restants.
+     */
+    private function appelAuthentifie(Request $request, string $secret): bool
+    {
+        $signature = $request->header('X-SGCI-Signature');
+
+        if (is_string($signature) && $signature !== '') {
+            $expected = hash_hmac('sha256', $request->getContent(), $secret);
+
+            if (hash_equals($expected, $signature)) {
+                return true;
+            }
+        }
+
+        // Cle du prestataire : celle de MTN ou celle d Orange, selon le
+        // provider du paiement. Les deux sont comparees : un appel doit
+        // pouvoir etre accepte avec la cle de l un ou de l autre.
+        $autorisation = (string) $request->header('Authorization');
+
+        if (! str_starts_with($autorisation, 'Bearer ')) {
+            return false;
+        }
+
+        $cle = trim(substr($autorisation, 7));
+
+        foreach ($this->clesPrestataires() as $attendue) {
+            if ($attendue !== '' && hash_equals($attendue, $cle)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Cles que les prestataires utilisent pour s authentifier.
+     *
+     * @return array<int, string>
+     */
+    private function clesPrestataires(): array
+    {
+        return [
+            (string) config('services.mtn_money.subscription_key'),
+            (string) config('services.orange_money.merchant_key'),
+            (string) config('services.orange_money.client_secret'),
+        ];
     }
 
     /**
