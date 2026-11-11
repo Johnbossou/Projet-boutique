@@ -169,12 +169,23 @@ jobs:
               echecs=$((echecs+1))
               # Les journaux des serveurs PHP sont conserves par le harnais :
               # sans eux, un serveur mort en cours de scenario se resume a
-              # « HTTP 000 » sur deux appels, sans aucune cause.
+              # « HTTP 000 » sur deux appels, sans aucune cause. Le journal
+              # applicatif et la sortie du bloqueur de ligne s'y ajoutent :
+              # ils disent si la requete est arrivee, et si la course a
+              # reellement eu lieu.
               for log in storage/app/concurrency/serveur_*.log; do
                 [ -f "$log" ] || continue
                 echo "---- $log (fin) ----"
                 tail -25 "$log"
               done
+              if [ -f storage/app/concurrency/verrou.txt ]; then
+                echo "---- bloqueur de ligne ----"
+                cat storage/app/concurrency/verrou.txt
+              fi
+              if [ -f storage/logs/laravel.log ]; then
+                echo "---- journal applicatif (fin) ----"
+                tail -40 storage/logs/laravel.log
+              fi
             fi
           done
           echo "Scenarios : $((total-echecs))/$total reussis"

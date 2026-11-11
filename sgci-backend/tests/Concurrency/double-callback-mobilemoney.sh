@@ -124,6 +124,15 @@ B=$!
 wait $A || true
 wait $B || true
 
+# Un « HTTP 000 » sur les deux appels ne dit pas pourquoi : le processus du
+# serveur a-t-il disparu, ou n'ecoutait-il plus (bind impossible sur un port
+# encore tenu par un scenario precedent) ? Le harnais sait repondre, et la
+# reponse est la difference entre une panne du harnais et une regression
+# metier.
+echo "[etat] serveurs vivants : $(conc_serveurs_vifs)/2"
+echo "[etat] port $CONC_PORT_A occupe : $(conc_port_occupe "$CONC_PORT_A" && echo oui || echo non)"
+echo "[etat] port $CONC_PORT_B occupe : $(conc_port_occupe "$CONC_PORT_B" && echo oui || echo non)"
+
 conc_attendre_verrou "$VERROU"
 conc_arreter_serveurs
 

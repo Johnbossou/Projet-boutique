@@ -84,6 +84,40 @@ conc_pids_du_port() {
   fi
 }
 
+# Le port est-il occupe par un processus qui ECUTE ?
+#
+# La question doit etre posee sur l'ecoute, et non sur « une requete
+# repond-elle ? ». Un serveur occupe par une requete qui ne rend pas la main
+# (bloquee sur un verrou) ne repond plus : une detection par HTTP le
+# declarerait libre, alors qu'il tient toujours le port. Le serveur lance
+# ensuite echoue en silence sur le bind, et le scenario tourne contre un
+# etranger — ou contre rien, ce qui se traduit par « HTTP 000 » sur tous les
+# appels, sans cause visible.
+conc_port_occupe() {
+  local PORT="$1"
+  [ -n "$(conc_pids_du_port "$PORT" || true)" ]
+}
+
+# Tuer les processus qui ecoutent sur le port et attendre que le port soit
+# vraiment libere (aucun processus en ecoute).
+conc_liberer_port() {
+  local PORT="$1" RESTE i
+
+  for i in $(seq 1 15); do
+    RESTE=$(conc_pids_du_port "$PORT" || true)
+
+    if [ -z "$RESTE" ]; then
+      return 0
+    fi
+
+    for PID in $RESTE; do
+      conc_tuer_pid "$PID"
+    done
+
+    sleep 1
+  done
+}
+
 # Les reponses sont ecrites dans le projet, pas dans /tmp.
 # Sous Git Bash, /tmp designe un dossier different de celui que resolvent PHP
 # et Python en version Windows : les deux outils lisaient donc des fichiers
@@ -128,10 +162,15 @@ conc_demarrer_serveurs() {
   # conforme venue du mauvais serveur. Mieux vaut un echec franc.
   local PORT
   for PORT in $CONC_PORT_A $CONC_PORT_B; do
-    if curl -s -o /dev/null -m 1 "http://127.0.0.1:$PORT/up"; then
-      echo "ECHEC : le port $PORT est deja occupe par un serveur lance ailleurs." >&2
-      echo "Arretez-le (taskkill //F //IM php.exe) puis relancez." >&2
-      return 1
+    if conc_port_occupe "$PORT"; then
+      # Ce sont les serveurs d'un scenario precedent restees en ecoute : le
+      # harnais possede ces ports, on les tue plutot que d'echouer.
+      conc_liberer_port "$PORT"
+
+      if conc_port_occupe "$PORT"; then
+        echo "ECHEC : le port $PORT reste occupe par un processus etranger." >&2
+        return 1
+      fi
     fi
   done
 
@@ -170,8 +209,8 @@ conc_demarrer_serveurs() {
   # « port deja occupe », en chaine.
   local i
   for i in $(seq 1 30); do
-    if curl -s -o /dev/null -m 1 "http://127.0.0.1:$CONC_PORT_A/up" \
-       && curl -s -o /dev/null -m 1 "http://127.0.0.1:$CONC_PORT_B/up"; then
+    if curl -s -o /dev/null -m 5 "http://127.0.0.1:$CONC_PORT_A/up" \
+       && curl -s -o /dev/null -m 5 "http://127.0.0.1:$CONC_PORT_B/up"; then
       return 0
     fi
     sleep 1
@@ -179,6 +218,23 @@ conc_demarrer_serveurs() {
 
   echo "ECHEC : les deux serveurs ne repondent pas" >&2
   return 1
+}
+
+# Les serveurs lances par le harnais sont-ils encore vivants ?
+#
+# Un « HTTP 000 » sur tous les appels ne dit pas pourquoi. Cette fonction
+# distingue les deux causes qui se ressemblent : le processus du serveur a
+# disparu, ou il n'ecoute plus (le bind a echoue).
+conc_serveurs_vifs() {
+  local PID VIFS=0
+
+  for PID in $CONC_PIDS; do
+    if kill -0 "$PID" 2>/dev/null; then
+      VIFS=$((VIFS+1))
+    fi
+  done
+
+  echo "$VIFS"
 }
 
 # Un scenario qui s'interrompt — `set -e` sur un verdict, une erreur de
@@ -203,36 +259,24 @@ conc_arreter_serveurs() {
   CONC_PIDS=""
 
   # Filet de securite : le PID enregistre par bash n'est pas toujours celui
-  # qui detient le port — `artisan serve` peut avoir delegue a un `php -S`
+  # qui detient le port - `artisan serve` delegue le travail a un `php -S`
   # deja vivant. Identifier le detenteur reel du port est la seule maniere
   # fiable de rendre la machine propre, sans tuer les processus sans rapport
   # d'un developpeur qui travaille ailleurs.
   #
-  # On boucle jusqu'a ce que le port ne reponde plus, et non trois fois : trois
-  # secondes ne suffisaient pas toujours, le nettoyage rendait alors un
-  # « AVERTISSEMENT : le port toujours occupe », et le scenario suivant
-  # echouait sur « port deja occupe » — une panne de repetition, rapportee
-  # comme si elle etait le fait du deuxieme scenario.
-  local PORT RESTE i
+  # On boucle jusqu'a ce qu'aucun processus n'ecoute plus, et non jusqu'a ce
+  # que /up cesse de repondre : un serveur bloque sur un verrou ne repond
+  # plus tout en tenant toujours son port. Le test par la reponse HTTP
+  # declarait libre un port occupe, et le scenario suivant demarrait alors un
+  # serveur qui echouait en silence sur le bind - les appels partaient dans
+  # le vide (« HTTP 000 ») et l'echec n'avait aucune cause lisible.
+  local PORT
   for PORT in $CONC_PORT_A $CONC_PORT_B; do
-    for i in $(seq 1 15); do
-      if ! curl -s -o /dev/null -m 1 "http://127.0.0.1:$PORT/up"; then
-        break
-      fi
-      # `|| true` indispensable : quand le port est enfin libre, `grep` ne
-      # trouve rien et sort en erreur. Avec `set -o pipefail`, cette affectation
-      # interromprait le scenario en cours de nettoyage — apres avoir deja
-      # imprime ses resultats, ce qui masque le verdict.
-      RESTE=$(conc_pids_du_port "$PORT" || true)
-      for PID in $RESTE; do
-        conc_tuer_pid "$PID"
-      done
-      sleep 1
-    done
+    conc_liberer_port "$PORT"
   done
 
   for PORT in $CONC_PORT_A $CONC_PORT_B; do
-    if curl -s -o /dev/null -m 1 "http://127.0.0.1:$PORT/up"; then
+    if conc_port_occupe "$PORT"; then
       echo "AVERTISSEMENT : le port $PORT est toujours occupe." >&2
     fi
   done
@@ -526,8 +570,28 @@ conc_bloquer() {
 }
 
 conc_attendre_verrou() {
-  local pid="$1"
-  wait "$pid" 2>/dev/null || true
+  local pid="$1" i
+
+  # Le bloqueur n'est pas un enfant du shell du scenario : il a ete lance
+  # dans la sous-coquille de la substitution de commande (`VERROU=$(conc_bloquer
+  # ...)`), et `wait` sur un pid etranger echoue immediatement. La liberation
+  # se lit donc dans le protocole du bloqueur (verrou.txt), qui annonce
+  # « liberee » ; le scenario attend ce mot, et non un processus qu'il ne
+  # peut pas attendre. Sans cette attente, le scenario consultait la base
+  # pendant que le verrou tenait encore : le credit n'etait pas visible et
+  # le verdict etait « commande non payee » — une anomalie de concurrence
+  # qui n'existait pas.
+  for i in $(seq 1 300); do
+    if grep -q '^\[verrou\].*liberee' "$CONC_TMP/verrou.txt" 2>/dev/null; then
+      break
+    fi
+
+    if ! kill -0 "$pid" 2>/dev/null; then
+      break
+    fi
+
+    sleep 0.2
+  done
 
   # La sortie du bloqueur est son protocole : il y annonce le nombre d'appels
   # reellement bloques. L'ignorer reviendrait a accepter un scenario dont la
