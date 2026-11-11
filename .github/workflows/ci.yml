@@ -376,6 +376,56 @@ jobs:
           CI: "true"
           NEXT_PUBLIC_API_URL: http://127.0.0.1:8000/api
 
+  # Smoke de production : le meme parcours, mais contre l'application
+  # deployee. A declencher a la main (workflow_dispatch), apres un
+  # deploiement — un deploiement qui passe les tests en local peut rester
+  # casse en production (variable d'environnement oubliee, migration non
+  # appliquee, service endormi qui ne se reveille pas).
+  #
+  # Les identifiants viennent de secrets : les comptes de demonstration
+  # n'existent pas en production, et leur mot de passe est connu de tous.
+  smoke-production:
+    name: Smoke de production
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    defaults:
+      run:
+        working-directory: sgci-frontend
+    env:
+      E2E_BASE_URL: ${{ vars.E2E_BASE_URL || 'https://sgci-frontend.vercel.app' }}
+      E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
+      E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+      E2E_EMAIL_PROPRIETAIRE: ${{ secrets.E2E_EMAIL_PROPRIETAIRE }}
+      E2E_PASSWORD_PROPRIETAIRE: ${{ secrets.E2E_PASSWORD_PROPRIETAIRE }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: sgci-frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: |
+          npx playwright install --with-deps chromium || {
+            echo "::notice::Installation du navigateur echouee, nouvelle tentative dans 30 secondes"
+            sleep 30
+            npx playwright install --with-deps chromium
+          }
+
+      # Le build n'est pas necessaire pour un smoke : les tests jouent
+      # contre l'application deployee. Il n'est donc pas lance ici — on
+      # verifie ce qui est en ligne, pas ce qu'onlivrerait.
+      - name: Run smoke against production
+        run: npx playwright test --project=chromium
+        env:
+          CI: "true"
+
   # Deploiement : natif aux plateformes (aucun job CI).
   #  - Vercel : Git integration — deploie automatiquement au push sur main.
   #  - Railway : GitHub App — le service sgci-backend est connecte au repo
