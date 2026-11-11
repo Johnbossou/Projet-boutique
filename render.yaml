@@ -1,11 +1,30 @@
 # Recipe Render Blueprint pour SGCI Backend
 # Option "New + Blueprint" dans le dashboard Render, ou via CLI `render blueprint`.
 #
-# Contraintes au plan Free (0 €, sans carte) :
+# Trois services, parce que l'application en a trois :
+#   - le web (API Laravel) ;
+#   - un worker de file : les rapports quotidiens, les alertes de stock et les
+#     predictions sont des jobs en base. Sans worker, ils ne sont jamais
+#     traites — la commande se lit « traitée » alors qu'elle ne l'a pas été ;
+#   - un cron : le planificateur Laravel (alertes de stock horaires, rapports
+#     à 09:00, expiration des devis) a besoin d'être appelé chaque minute.
+#
+# Contraintes du plan Free (0 €, sans carte) :
 #   - s'endort après 15 min d'inactivité, se réveille à la prochaine requête (~1 min)
 #   - 750 h/mois par workspace
-#   - pas de disque persistant : les fichiers uploadés dans storage/ sont perdus
-#     à chaque redéploiement (images produits à re-uploader).
+#   - pas de disque persistant, pas de worker, pas de cron : le plan Free ne
+#     permet qu'un service web. Les trois services ci-dessous exigent un plan
+#     payant (Starter, 7 $/mois). Sans worker ni cron, l'application fonctionne
+#     mais en mode dégradé : ni rapports, ni alertes automatiques.
+#   - le disque exige lui aussi un plan payant. Sans lui, les fichiers
+#     uploadés (images produits) sont perdus à chaque redéploiement. L'autre
+#     solution est de brancher un stockage objet (FILESYSTEM_DISK=s3).
+#
+# Après le premier déploiement :
+#   php artisan sgci:verifier-prod
+# La commande liste ce qui manque encore (identifiants MTN, Orange, SMS, push,
+# URL de callback, e-mail) et sort en erreur tant qu'un point bloquant
+# n'est pas résolu.
 
 services:
   - type: web
@@ -16,7 +35,10 @@ services:
     rootDir: sgci-backend
     dockerfilePath: Dockerfile
     dockerContext: .
-    plan: free
+    plan: starter
+    # Les migrations sont appliquées par le conteneur au demarrage
+    # (docker-start.sh), avant que le service ne réponde.
+    healthCheckPath: /up
     envVars:
       - key: APP_ENV
         value: production
@@ -45,5 +67,114 @@ services:
       # URL complète MySQL (du proxy TCP public Railway), format :
       #   mysql://USER:PASS@HOST:PORT/DBNAME
       # à renseigner dans le dashboard Render (variable d'environnement).
+      - key: MYSQL_URL
+        sync: false
+      # Secret de signature des callbacks Mobile Money (HMAC SHA-256).
+      # Sans lui, le callback n'authentifie personne : n'importe qui peut
+      # déclarer un paiement réussi sur une commande.
+      - key: MOBILE_MONEY_CALLBACK_SECRET
+        generateValue: true
+      # Identifiants MTN MoMo et Orange Money : à renseigner dans le
+      # dashboard. Les URL de callback doivent pointer vers l'API publique.
+      - key: MTN_MOMO_SUBSCRIPTION_KEY
+        sync: false
+      - key: MTN_MOMO_API_USER
+        sync: false
+      - key: MTN_MOMO_API_KEY
+        sync: false
+      - key: MTN_MOMO_TARGET_ENV
+        value: target
+      - key: MTN_MOMO_CALLBACK_URL
+        sync: false
+      - key: ORANGE_MONEY_CLIENT_ID
+        sync: false
+      - key: ORANGE_MONEY_CLIENT_SECRET
+        sync: false
+      - key: ORANGE_MONEY_MERCHANT_KEY
+        sync: false
+      - key: ORANGE_MONEY_CALLBACK_URL
+        sync: false
+      # SMS (Africa's Talking) et push (Firebase).
+      - key: SMS_ENABLED
+        value: "true"
+      - key: SMS_SIMULATION
+        value: "false"
+      - key: SMS_SERVICE
+        value: africastalking
+      - key: SMS_API_KEY
+        sync: false
+      - key: SMS_USERNAME
+        sync: false
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_PRIVATE_KEY
+        sync: false
+      - key: FIREBASE_CLIENT_EMAIL
+        sync: false
+      - key: FIREBASE_CLIENT_ID
+        sync: false
+
+  # Worker de file : sans lui, les jobs en base ne sont jamais executes.
+  - type: worker
+    name: sgci-worker
+    runtime: docker
+    repo: https://github.com/Johnbossou/Projet-boutique
+    branch: main
+    rootDir: sgci-backend
+    dockerfilePath: Dockerfile
+    dockerContext: .
+    plan: starter
+    command: php artisan queue:work --sleep=3 --tries=3 --max-time=3600
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: false
+      - key: DB_CONNECTION
+        value: mysql
+      - key: LOG_CHANNEL
+        value: stack
+      - key: SESSION_DRIVER
+        value: database
+      - key: CACHE_STORE
+        value: database
+      - key: QUEUE_CONNECTION
+        value: database
+      - key: FILESYSTEM_DISK
+        value: local
+      - key: MYSQL_URL
+        sync: false
+
+  # Planificateur : appele chaque minute par Render, il declenche les
+  # alertes de stock (horaires), les rapports (quotidiens), les predictions et
+  # l'expiration des devis.
+  - type: cron
+    name: sgci-planificateur
+    runtime: docker
+    repo: https://github.com/Johnbossou/Projet-boutique
+    branch: main
+    rootDir: sgci-backend
+    dockerfilePath: Dockerfile
+    dockerContext: .
+    plan: starter
+    schedule: "*/5 * * * *"
+    command: php artisan schedule:run
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: false
+      - key: DB_CONNECTION
+        value: mysql
+      - key: LOG_CHANNEL
+        value: stack
+      - key: SESSION_DRIVER
+        value: database
+      - key: CACHE_STORE
+        value: database
+      - key: QUEUE_CONNECTION
+        value: database
+      - key: FILESYSTEM_DISK
+        value: local
       - key: MYSQL_URL
         sync: false
