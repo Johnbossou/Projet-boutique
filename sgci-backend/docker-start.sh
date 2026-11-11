@@ -40,9 +40,15 @@ php artisan migrate --force
 
 # Seed uniquement sur une base de données fraîche (aucune table remplie),
 # pour ne jamais écraser les données existantes à chaque redémarrage.
-SEEDED=$(php artisan tinker --execute="echo \\App\\Models\\User::count();" 2>/dev/null || echo "-1")
-if [ "$SEEDED" = "0" ] || [ "$SEEDED" = "-1" ]; then
-    php artisan db:seed --force 2>/dev/null || true
+# Jamais en production : les seeders creent des comptes de demonstration
+# dont le mot de passe est « password ». Sur une base neuve, le premier
+# demarrage en production aurait ouvert l application a quiconque connait
+# cette adresse. Le premier gerant se cree par la page d inscription.
+if [ "${APP_ENV:-local}" != "production" ]; then
+  SEEDED=$(php artisan tinker --execute="echo \\App\\Models\\User::count();" 2>/dev/null || echo "-1")
+  if [ "$SEEDED" = "0" ] || [ "$SEEDED" = "-1" ]; then
+      php artisan db:seed --force 2>/dev/null || true
+  fi
 fi
 
 wait $SERVER_PID
