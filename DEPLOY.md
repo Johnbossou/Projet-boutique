@@ -304,6 +304,45 @@ curl -I -H "Origin: https://sgci.yourdomain.com" \
 
 ---
 
+## Vérifier avant d'ouvrir
+
+Le déploiement n'est pas terminé quand le site répond : il l'est quand les
+paiements, les notifications et les rapports fonctionnent. Cette commande
+fait le tour et dit ce qui manque :
+
+```bash
+php artisan sgci:verifier-prod
+```
+
+Elle interroge la configuration et la base réelles, et **sort en erreur**
+tant qu'un point bloquant n'est pas résolu (les points à vérifier
+seulement sont signalés sans faire échouer la commande ; `--strict` les
+compte aussi).
+
+Ce qu'elle vérifie, et ce qu'il faut pour passer chaque point :
+
+| Point | Ce qu'il faut |
+|---|---|
+| `APP_ENV`, `APP_DEBUG`, `APP_URL` | `production`, `false`, une URL en HTTPS |
+| Base et migrations | MySQL, `php artisan migrate --force` appliqué |
+| Cache et file | `redis` ou `database` (un cache en fichier est propre à chaque instance) |
+| Worker et planificateur | `queue:work` et `schedule:run` qui tournent en continu |
+| **Comptes de démonstration** | aucun (ils ont le mot de passe `password`) — le premier gérant se crée par `/register` |
+| Secret des callbacks | `MOBILE_MONEY_CALLBACK_SECRET` (sans lui, n'importe qui peut déclarer un paiement réussi) |
+| MTN MoMo | `MTN_MOMO_SUBSCRIPTION_KEY`, `MTN_MOMO_API_USER`, `MTN_MOMO_API_KEY`, `MTN_MOMO_TARGET_ENV=target`, `MTN_MOMO_CALLBACK_URL` publique |
+| Orange Money | `ORANGE_MONEY_CLIENT_ID`, `ORANGE_MONEY_CLIENT_SECRET`, `ORANGE_MONEY_MERCHANT_KEY`, `ORANGE_MONEY_CALLBACK_URL` publique |
+| SMS | `SMS_ENABLED=true`, `SMS_SIMULATION=false`, `SMS_API_KEY`, `SMS_USERNAME` |
+| Push | `FIREBASE_PROJECT_ID`, `FIREBASE_PRIVATE_KEY`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_CLIENT_ID` |
+| Fichiers | `FILESYSTEM_DISK` pointant vers un stockage persistant (disque Render, ou `s3`) |
+| Frontend | `FRONTEND_URL` en HTTPS, présent dans `SANCTUM_STATEFUL_DOMAINS` |
+
+Les URL de callback doivent pointer vers l'API publique, par exemple
+`https://sgci-backend.onrender.com/api/mobile-money/callback`, et être
+déclarées chez le prestataire : sans elles, aucun encaissement n'est
+confirmé et les commandes restent impayées.
+
+---
+
 ## Rollback
 
 En cas de problème :
