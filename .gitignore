@@ -16,3 +16,6 @@ Thumbs.db
 *.tsbuildinfo
 npm-debug.log*
 node_modules/
+# APK d'une build EAS : ~117 Mo, et le lien de téléchargement EAS est
+# permanent. Les APK des versions precedentes restent dans l'historique.
+SGCI-*-apk-*.apk
