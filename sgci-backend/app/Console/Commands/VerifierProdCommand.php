@@ -252,11 +252,11 @@ class VerifierProdCommand extends Command
         $orange = (string) config('services.orange_money.client_id');
         $orangeSecret = (string) config('services.orange_money.client_secret');
         $orangeMerchant = (string) config('services.orange_money.merchant_key');
-        $this->verifier(
+        $this->avertir(
             'Orange Money est configure (client id, client secret, merchant key)',
             $orange !== '' && $orangeSecret !== '' && $orangeMerchant !== '',
             'client id, client secret et merchant key renseignes',
-            'Sans identifiants Orange, le paiement Mobile Money Orange ne peut pas partir.'
+            'Attention : Orange Money n\'a pas encore d\'implementation dans le code. Renseigner ses identifiants ne rend pas le service disponible : les identifiants ne serviront qu\'apres l\'ecriture de l\'integration Webpay.'
         );
 
         $callbackOrange = (string) config('services.orange_money.callback_url');

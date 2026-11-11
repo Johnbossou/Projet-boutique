@@ -53,6 +53,24 @@ class MobileMoneyService
      */
     public function initiatePayment(array $paymentData): array
     {
+        // Orange Money n'a pas d'implementation : l'API d'encaissement
+        // d'Orange (Webpay) n'a ni les memes endpoints ni les memes corps
+        // que MTN. Envoyer la charge utile de MTN a l'URL d Orange
+        // produisait une erreur incomprehensible pour l'utilisateur, sans
+        // dire que le prestataire n'est pas branche. On le dit.
+        if ($this->provider !== 'mtn') {
+            Log::warning('Prestataire Mobile Money non branche', ['provider' => $this->provider]);
+
+            return [
+                'success' => false,
+                // L'issue est connue : rien n'a ete debite, l'utilisateur
+                // peut changer de moyen de paiement sans risque.
+                'issue_connue' => true,
+                'message' => 'Ce moyen de paiement n\'est pas encore disponible sur cette installation.',
+                'error' => 'Prestataire non implemente : '.$this->provider,
+            ];
+        }
+
         try {
             $payload = [
                 'amount' => $paymentData['amount'],
