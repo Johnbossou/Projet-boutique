@@ -14,7 +14,6 @@ import {
   Search,
   DollarSign,
   Clock,
-  Star,
   Grid3x3,
   List,
   Loader2
@@ -42,7 +41,6 @@ interface Boutique {
   derniere_activite?: string | null;
   chiffre_affaires_mois?: number;
   performance?: 'excellente' | 'bonne' | 'moyenne' | 'faible';
-  est_favorite?: boolean;
   _count?: {
     users: number;
     produits: number;
@@ -93,12 +91,7 @@ export default function SelectionBoutiquePage() {
       }
     });
 
-    // Mettre les favorites en premier
-    return sorted.sort((a, b) => {
-      if (a.est_favorite && !b.est_favorite) return -1;
-      if (!a.est_favorite && b.est_favorite) return 1;
-      return 0;
-    });
+    return sorted;
   }, [boutiques, searchTerm, sortBy, filterPerformance]);
 
   const fetchBoutiques = async () => {
@@ -359,12 +352,7 @@ export default function SelectionBoutiquePage() {
                   <CardHeader>
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <CardTitle className="text-lg">{boutique.nom}</CardTitle>
-                          {boutique.est_favorite && (
-                            <Star className="w-4 h-4 text-yellow-500 fill-current" />
-                          )}
-                        </div>
+                        <CardTitle className="text-lg">{boutique.nom}</CardTitle>
                         {boutique.adresse && (
                           <CardDescription className="flex items-center text-xs mt-1">
                             <MapPin className="w-3 h-3 mr-1" />

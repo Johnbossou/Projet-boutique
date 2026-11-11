@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Models\Boutique;
 use App\Models\User;
+use App\Services\BoutiqueStatistiques;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -19,6 +20,10 @@ class BoutiqueController extends Controller
         // Source de vérité : possessions + pivot (pas le rôle global).
         $boutiques = $user->boutiquesAccessibles()
             ->loadCount(['users', 'produits', 'ventes']);
+
+        // Chiffre d'affaires du mois, derniere activite et performance :
+        // l'interface de selection trie et filtre dessus.
+        app(BoutiqueStatistiques::class)->enrichir($boutiques);
 
         return response()->json($boutiques);
     }

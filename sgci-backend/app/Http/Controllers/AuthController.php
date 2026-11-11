@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Boutique;
 use App\Models\User;
 use App\Services\AuditLogService;
+use App\Services\BoutiqueStatistiques;
 use App\Services\EmailService;
 use App\Services\TwoFactorAuthService;
 use Illuminate\Http\Request;
@@ -290,6 +291,10 @@ class AuthController extends Controller
 
             return $b;
         })->values();
+
+        // Mêmes statistiques que sur /boutiques : la page de selection
+        // s'appuie sur les memes champs, quel que soit le role.
+        app(BoutiqueStatistiques::class)->enrichir($boutiquesAvecRole);
 
         $data = [
             'id' => $user->id,
