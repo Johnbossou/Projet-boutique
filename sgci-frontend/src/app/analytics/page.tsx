@@ -300,7 +300,10 @@ export default function AnalyticsPage() {
               </p>
               <p className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
                 {isLoading ? (
-                  <div className="h-8 bg-slate-300 dark:bg-slate-600 rounded w-24 animate-pulse" />
+                  // Un <span> et non un <div> : un <p> ne peut contenir que
+                  // du contenu de phrase, et React le signale dans la console
+                  // (« <div> cannot appear as a descendant of <p> »).
+                  <span className="block h-8 bg-slate-300 dark:bg-slate-600 rounded w-24 animate-pulse" />
                 ) : (
                   value
                 )}
