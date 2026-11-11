@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { IDENTIFIANTS } from './identifiants';
 
 /**
  * Connexion — smoke de bout en bout.
@@ -17,10 +18,7 @@ import { test, expect } from '@playwright/test';
  * texte, ni de la structure visuelle, ni de la classe CSS.
  */
 
-const GERANT = {
-  email: 'gerant@sgci.bj',
-  password: 'password',
-};
+const GERANT = IDENTIFIANTS;
 
 test.describe('Connexion', () => {
   test('la page de connexion affiche le formulaire', async ({ page }) => {

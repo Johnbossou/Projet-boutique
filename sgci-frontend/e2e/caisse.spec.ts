@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { IDENTIFIANTS } from './identifiants';
 
 /**
  * Caisse — smoke de bout en bout.
@@ -12,10 +13,7 @@ import { test, expect } from '@playwright/test';
  * disponibilite.
  */
 
-const GERANT = {
-  email: 'gerant@sgci.bj',
-  password: 'password',
-};
+const GERANT = IDENTIFIANTS;
 
 test.describe('Caisse', () => {
   test('la caisse s affiche pour un gerant connecte', async ({ page }) => {

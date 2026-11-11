@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { IDENTIFIANTS_PROPRIETAIRE } from './identifiants';
 import { mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
@@ -28,10 +29,7 @@ import { dirname } from 'node:path';
  * page repond 403 — un comportement correct, mais un ecran que le parcours
  * ne peut pas visiter.
  */
-const COMPTE = {
-  email: 'proprietaire@sgci.bj',
-  password: 'password',
-};
+const COMPTE = IDENTIFIANTS_PROPRIETAIRE;
 
 /**
  * Etat de session partage : il est produit par la connexion de `beforeAll`,

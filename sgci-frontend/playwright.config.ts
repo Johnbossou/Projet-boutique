@@ -51,15 +51,24 @@ export default defineConfig({
 
   projects: projets,
 
-  webServer: {
-    // En local, le serveur de developpement est utilise. En CI, le build de
-    // production est fait en amont (etape dediee) et le serveur demarre ici.
-    command: process.env.CI ? 'npm start' : 'npm run dev',
-    url: 'http://localhost:3000',
-    reuseExistingServer: !process.env.CI,
-    timeout: 180000,
-    env: {
-      NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api',
-    },
-  },
+  // Le serveur de developpement n'est demarre que si les tests jouent
+  // contre l'application locale. Le smoke de production joue contre
+  // l'application deployee : demarrer un serveur ici serait inutile, et
+  // le port 3000 ne repondrait pas — le job echouerait sur une attente
+  // sterile.
+  ...(process.env.E2E_BASE_URL
+    ? {}
+    : {
+        webServer: {
+          // En local, le serveur de developpement est utilise. En CI, le build de
+          // production est fait en amont (etape dediee) et le serveur demarre ici.
+          command: process.env.CI ? 'npm start' : 'npm run dev',
+          url: 'http://localhost:3000',
+          reuseExistingServer: !process.env.CI,
+          timeout: 180000,
+          env: {
+            NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api',
+          },
+        },
+      }),
 });

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { IDENTIFIANTS } from './identifiants';
 
 /**
  * Tableau de bord et catalogue — smoke de bout en bout.
@@ -10,10 +11,7 @@ import { test, expect } from '@playwright/test';
  * des donnees seedees.
  */
 
-const GERANT = {
-  email: 'gerant@sgci.bj',
-  password: 'password',
-};
+const GERANT = IDENTIFIANTS;
 
 async function connecter(page: import('@playwright/test').Page) {
   await page.goto('/login');
