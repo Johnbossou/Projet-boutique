@@ -47,17 +47,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(data.user);
           localStorage.setItem('user_data', JSON.stringify(data.user));
           fetchBoutiqueSettings().catch(() => undefined);
-        } catch {
-          localStorage.removeItem('user_data');
-          localStorage.removeItem('sgci_token');
+        } catch (e) {
+          // Seule une reponse 401 nette ferme la session. Un incident
+          // reseau, une reponse illisible, une requete avortee par une
+          // navigation : rien de cela ne prouve que le jeton est mort.
+          // Vider la session sur un incident passager deconnectait
+          // l'utilisateur pour rien — et la fenetre de course entre la
+          // connexion et le chargement pouvait ejecter une session
+          // parfaitement valide.
+          const invalide =
+            e instanceof Error && e.message === 'Token invalide';
+
+          if (invalide) {
+            localStorage.removeItem('user_data');
+            localStorage.removeItem('sgci_token');
+          } else {
+            console.error('[auth] verification de session impossible', e);
+          }
+
           setUser(null);
         }
       } else {
         setUser(null);
       }
-    } catch {
-      localStorage.removeItem('user_data');
-      localStorage.removeItem('sgci_token');
+    } catch (e) {
+      console.error('[auth] verification de session impossible', e);
       setUser(null);
     } finally {
       setIsLoading(false);
