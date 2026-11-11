@@ -356,16 +356,17 @@ jobs:
           NEXT_PUBLIC_API_URL: http://127.0.0.1:8000/api
 
       - name: Install Playwright browser
-        # L'installation des dependances du navigateur passe par le miroir
-        # Ubuntu, et le runner echoue parfois d'y acceder (DNS, saturation).
-        # L'echec n'a rien a voir avec le code de l'application, mais il
-        # bloque la chaine de deploiement : une seconde tentative suffit le
-        # plus souvent.
+        # Pas de `--with-deps` : l'image des runners GitHub contient deja
+        # les dependances systeme du navigateur. L'option `--with-deps` passe
+        # par apt, et le miroir Ubuntu du runner est parfois injoignable
+        # (DNS, saturation) : le job echouait alors sur une panne de
+        # reseau qui n avait rien a voir avec le code de l'application, mais
+        # qui bloquait la chaine de deploiement.
         run: |
-          npx playwright install --with-deps chromium || {
+          npx playwright install chromium || {
             echo "::notice::Installation du navigateur echouee, nouvelle tentative dans 30 secondes"
             sleep 30
-            npx playwright install --with-deps chromium
+            npx playwright install chromium
           }
 
       # Le serveur de production est lance par Playwright (webServer dans
@@ -412,10 +413,10 @@ jobs:
 
       - name: Install Playwright browser
         run: |
-          npx playwright install --with-deps chromium || {
+          npx playwright install chromium || {
             echo "::notice::Installation du navigateur echouee, nouvelle tentative dans 30 secondes"
             sleep 30
-            npx playwright install --with-deps chromium
+            npx playwright install chromium
           }
 
       # Le build n'est pas necessaire pour un smoke : les tests jouent
