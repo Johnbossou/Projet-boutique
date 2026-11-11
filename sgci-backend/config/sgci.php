@@ -15,4 +15,10 @@ return [
     | Durée de validité des tokens Sanctum (minutes).
     */
     'token_ttl_minutes' => (int) env('SGCI_TOKEN_TTL_MINUTES', 120),
+
+    /*
+    | URL publique du frontend. Sert aux liens des e-mails, aux
+    | redirections apres connexion et au controle de mise en production.
+    */
+    'frontend_url' => rtrim((string) env('FRONTEND_URL', ''), '/'),
 ];
