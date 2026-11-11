@@ -58,7 +58,6 @@ interface ProgrammeFidelite {
   actif: boolean;
   niveaux: NiveauFidelite[];
   recompenses: Recompense[];
-  clients_fidelites_count?: number;
 }
 
 interface ProgrammeFormData {
