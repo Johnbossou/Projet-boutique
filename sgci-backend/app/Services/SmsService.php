@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\User;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -14,11 +15,14 @@ class SmsService
 
     protected string $apiUrl;
 
+    protected string $provider;
+
     public function __construct()
     {
         $this->apiKey = (string) config('services.sms.api_key', '');
         $this->senderId = (string) config('services.sms.sender_id', 'SGCI');
-        $this->apiUrl = (string) config('services.sms.api_url', 'https://api.smsprovider.com/send');
+        $this->provider = (string) config('services.sms.service', 'africas_talking');
+        $this->apiUrl = (string) config('services.sms.api_url', '');
     }
 
     public function sendStockAlert(User $user, string $productName, int $currentStock): array
@@ -63,11 +67,37 @@ class SmsService
         return $this->sendSms($user->telephone, $message);
     }
 
+    /**
+     * Envoie un SMS a un numero.
+     *
+     * Point d'entree public : les autres services (notifications, commandes
+     * fournisseur...) n'ont pas a connaitre les regles du canal.
+     *
+     * @return array{success: bool, message: string, phone?: string, error?: mixed}
+     */
+    public function envoyer(string $phoneNumber, string $message): array
+    {
+        return $this->sendSms($phoneNumber, $message);
+    }
+
     protected function sendSms(string $phoneNumber, string $message): array
     {
         try {
             // Nettoyer le numéro de téléphone
             $phone = $this->formatPhoneNumber($phoneNumber);
+
+            // Les SMS peuvent etre desactives entierement : c'est une
+            // decision de l exploitant, pas une erreur de configuration. Le
+            // service le dit, il ne part en erreur.
+            if (! config('services.sms.enabled', false)) {
+                Log::info('SMS desactive : message non envoye', ['phone' => $phone]);
+
+                return [
+                    'success' => false,
+                    'message' => 'Les SMS sont desactives sur cette installation',
+                    'phone' => $phone,
+                ];
+            }
 
             // Simulation pour le développement (remplacer par vrai appel API en production)
             if (config('services.sms.simulation', true)) {
@@ -80,13 +110,17 @@ class SmsService
                 ];
             }
 
-            // Appel API réel (exemple avec un provider générique)
-            $response = Http::post($this->apiUrl, [
-                'api_key' => $this->apiKey,
-                'sender' => $this->senderId,
-                'to' => $phone,
-                'message' => $message,
-            ]);
+            if ($this->apiKey === '') {
+                Log::error('Envoi SMS impossible : cle fournisseur absente');
+
+                return [
+                    'success' => false,
+                    'message' => 'Cle du fournisseur SMS absente',
+                    'phone' => $phone,
+                ];
+            }
+
+            $response = $this->appelFournisseur($phone, $message);
 
             if ($response->successful()) {
                 Log::info("SMS envoyé à {$phone}");
@@ -120,6 +154,49 @@ class SmsService
                 'error' => $e->getMessage(),
             ];
         }
+    }
+
+    /**
+     * Appel au fournisseur, selon le service configure.
+     *
+     * Africa's Talking n'est pas une API « cle + url + corps » : l'URL
+     * porte le nom d'utilisateur et le corps est forme. Poster la meme
+     * structure qu'un autre fournisseur renvoyait une erreur incomprehensible,
+     * et l'URL par defaut du projet etait un domaine d'exemple : aucun SMS
+     * n'aurait jamais pu partir.
+     */
+    protected function appelFournisseur(string $phone, string $message): Response
+    {
+        if ($this->provider === 'africas_talking') {
+            return Http::asForm()->post($this->urlAfricasTalking(), [
+                'username' => (string) config('services.sms.username', ''),
+                'api_key' => $this->apiKey,
+                'from' => $this->senderId,
+                'to' => $phone,
+                'message' => $message,
+            ]);
+        }
+
+        return Http::post($this->apiUrl !== '' ? $this->apiUrl : 'https://api.smsprovider.com/send', [
+            'api_key' => $this->apiKey,
+            'sender' => $this->senderId,
+            'to' => $phone,
+            'message' => $message,
+        ]);
+    }
+
+    /**
+     * URL Africa's Talking : le nom d'utilisateur est dans l'URL.
+     */
+    protected function urlAfricasTalking(): string
+    {
+        if ($this->apiUrl !== '') {
+            return $this->apiUrl;
+        }
+
+        $utilisateur = (string) config('services.sms.username', '');
+
+        return 'https://api.africastalking.com/'.($utilisateur !== '' ? $utilisateur : 'sandbox').'/';
     }
 
     protected function formatPhoneNumber(string $phone): string

@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\User;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
@@ -44,50 +43,34 @@ class NotificationService
 
     /**
      * Envoie une notification par SMS
+     *
+     * L'envoi passe par SmsService : c'est lui qui respecte l'activation du
+     * canal, le mode simulation et le format du fournisseur. Le code
+     * d'origine postait lui-meme vers une URL generique, sans regarder
+     * SMS_ENABLED ni SMS_SIMULATION : en production il tentait un envoi a
+     * chaque notification, vers un domaine d'exemple, et echouait a chaque
+     * fois en silence.
      */
     public function sendSms(User $user, string $message): bool
     {
-        try {
-            if (! $user->telephone) {
-                Log::warning('Utilisateur sans numéro de téléphone', ['user_id' => $user->id]);
-
-                return false;
-            }
-
-            // Utiliser un service SMS (ex: Twilio, Orange SMS, etc.)
-            $apiKey = config('services.sms.api_key');
-            $senderId = config('services.sms.sender_id', 'SGCI');
-
-            $response = Http::post(config('services.sms.api_url'), [
-                'api_key' => $apiKey,
-                'sender_id' => $senderId,
-                'phone_number' => $this->formatPhoneNumber($user->telephone),
-                'message' => $message,
-            ]);
-
-            if ($response->successful()) {
-                Log::info('SMS envoyé avec succès', [
-                    'user_id' => $user->id,
-                    'phone' => $user->telephone,
-                ]);
-
-                return true;
-            }
-
-            Log::error('Échec de l\'envoi SMS', [
-                'user_id' => $user->id,
-                'response' => $response->body(),
-            ]);
+        if (! $user->telephone) {
+            Log::warning('Utilisateur sans numéro de téléphone', ['user_id' => $user->id]);
 
             return false;
-        } catch (\Exception $e) {
-            Log::error('Erreur lors de l\'envoi du SMS', [
+        }
+
+        $resultat = app(SmsService::class)->envoyer($user->telephone, $message);
+
+        if (! ($resultat['success'] ?? false)) {
+            Log::error('Échec de l\'envoi du SMS', [
                 'user_id' => $user->id,
-                'error' => $e->getMessage(),
+                'raison' => $resultat['message'] ?? 'raison inconnue',
             ]);
 
             return false;
         }
+
+        return true;
     }
 
     /**
@@ -107,25 +90,5 @@ class NotificationService
         $results['sms'] = $this->sendSms($user, $smsContent);
 
         return $results;
-    }
-
-    /**
-     * Formate un numéro de téléphone pour l'envoi SMS
-     */
-    private function formatPhoneNumber(string $phone): string
-    {
-        // Nettoyer le numéro
-        $clean = preg_replace('/[^0-9]/', '', $phone);
-
-        // Ajouter le code pays Bénin si nécessaire
-        if (strlen($clean) === 8) {
-            return '+229'.$clean;
-        }
-
-        if (strlen($clean) === 10 && substr($clean, 0, 2) === '229') {
-            return '+'.$clean;
-        }
-
-        return $clean;
     }
 }

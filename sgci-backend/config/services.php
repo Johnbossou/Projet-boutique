@@ -41,11 +41,21 @@ return [
     |--------------------------------------------------------------------------
     */
     'sms' => [
+        // Le canal SMS est desactive par defaut : un envoi sans
+        // configuration doit echouer proprement, pas partir vers un
+        // fournisseur inexistant.
         'enabled' => env('SMS_ENABLED', false),
         'simulation' => env('SMS_SIMULATION', true),
+        // Fournisseur : africastalking (defaut) ou une API generique.
+        'service' => env('SMS_SERVICE', 'africas_talking'),
         'api_key' => env('SMS_API_KEY', ''),
+        // Nom d'utilisateur du fournisseur (Africa's Talking le porte dans
+        // son URL). « sandbox » cible l'environnement de test.
+        'username' => env('SMS_USERNAME', ''),
         'sender_id' => env('SMS_SENDER_ID', 'SGCI'),
-        'api_url' => env('SMS_API_URL', 'https://api.smsprovider.com/send'),
+        // URL complete, pour les fournisseurs generiques. Pour Africa's
+        // Talking, elle est deduite si elle est vide.
+        'api_url' => env('SMS_API_URL', ''),
     ],
 
     /*
